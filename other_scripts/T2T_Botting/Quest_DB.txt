@@ -1,0 +1,3 @@
+; Quest DB
+ID	Cmds
+Test	n, w, w, w, n, w, get shovel, look bush, trim bush, kill cat
