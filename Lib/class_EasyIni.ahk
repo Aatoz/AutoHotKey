@@ -406,14 +406,17 @@ class EasyIni
 		; Formatting is preserved in ini object
 		FileDelete, %sFile%
 
+		bIsFirstLine := true
 		for k, v in this.EasyIni_ReservedFor_TopComments
+		{
 			FileAppend, % (A_Index == 1 ? "" : "`n") (v == Chr(14) ? "" : v), %sFile%
+			bIsFirstLine := false
+		}
 
-		bIsFirstSec := true
 		for section, aKeysAndVals in this
 		{
-			FileAppend, % (bIsFirstSec ? "[" : "`n[") section "]", %sFile%
-			bIsFirstSec := false
+			FileAppend, % (bIsFirstLine ? "[" : "`n[") section "]", %sFile%
+			bIsFirstLine := false
 
 			bEmptySection := true
 			for key, val in aKeysAndVals
