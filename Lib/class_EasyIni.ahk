@@ -13,6 +13,7 @@ class EasyIni
 		if (sFile == A_Blank && sLoadFromStr == A_Blank)
 			return this
 
+		; Append ".ini" if it is not already there.
 		if (SubStr(sFile, StrLen(sFile)-3, 4) != ".ini")
 			this.EasyIni_ReservedFor_m_sFile := sFile := sFile ".ini"
 
@@ -21,24 +22,25 @@ class EasyIni
 			FileRead, sIni, %sFile%
 
 /*
-	Current design:
-	--------------------------------------------------------------------------------------------------------------------------------------------------
-	Comments at the top of the section apply to the file as a whole. They could be keyed off an internal section called "Internal_HeaderSection" or something.
-	Comments above section headers apply to the the last key of the previous section
+	Current design (not fully implemented):
+	---------------------------------------------------------------------------------------------------------------------------------------------------
+	Comments at the top of the section apply to the file as a whole. They are keyed off an internal section called "EasyIni_ReservedFor_TopComments."
+	Comments above section headers apply to the the last key of the previous section.
 	If a comment appears between two keys, then it will apply to the key above it -- this is consistent with the solution for comments above section headers.
-	Newlines will be stored in similar fashion to comments
-	--------------------------------------------------------------------------------------------------------------------------------------------------
+	Newlines will be stored in similar fashion to comments.
+	---------------------------------------------------------------------------------------------------------------------------------------------------
 
-	--------------------------------------------------------------------------------------------------------------------------------------------------
-	If full-support for comments needs to be added, then the design below should supersede the design above
-	--------------------------------------------------------------------------------------------------------------------------------------------------
+	---------------------------------------------------------------------------------------------------------------------------------------------------
+	If full-support for comments needs to be added, then the design below should supersede the design above.
+	By saying, "Full-support" I mean a way to directly access these comments based upon sections and keys.
+	---------------------------------------------------------------------------------------------------------------------------------------------------
 
-	--------------------------------------------------------------------------------------------------------------------------------------------------
-	Comments at the top of the section apply to the file as a whole. They could be keyed off an internal section called "Internal_HeaderSection" or something.
+	---------------------------------------------------------------------------------------------------------------------------------------------------
+	Comments at the top of the section apply to the file as a whole. They are keyed off an internal section called "EasyIni_ReservedFor_TopComments."
 	Comments above section headers apply to the section header. If people dislike this, I may instead chose to make the comments apply to the last key of the previous section if there a newline in-between the comment in question and the next section. I may come up with some decent solution as I experiment
 	If a comment appears between two keys, then it will apply to the key below it -- this is consistent with the solution for comments above section headers.
-	Newlines will be stored in similar fashion to comments
-	--------------------------------------------------------------------------------------------------------------------------------------------------
+	Newlines will be stored in similar fashion to comments.
+	---------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
 		Loop, Parse, sIni, `n, `r
@@ -110,7 +112,7 @@ class EasyIni
 	CreateIniObj(parms*)
 	{
 		; Define prototype object for ini arrays:
-		static base := {__Set: "EasyIni_Set", _NewEnum: "EasyIni_NewEnum", Remove: "EasyIni_Remove", Insert: "EasyIni_Insert", InsertBefore: "EasyIni_InsertBefore", AddSection: "EasyIni.AddSection", RenameSection: "EasyIni.RenameSection", DeleteSection: "EasyIni.DeleteSection", GetSections: "EasyIni.GetSections", FindSecs: "EasyIni.FindSecs", AddKey: "EasyIni.AddKey", RenameKey: "EasyIni.RenameKey", DeleteKey: "EasyIni.DeleteKey", GetKeys: "EasyIni.GetKeys", FindKeys: "EasyIni.FindKeys", GetVals: "EasyIni.GetVals", FindVals: "EasyIni.FindVals", HasVal: "EasyIni.HasVal", Copy: "EasyIni.Copy", Merge: "EasyIni.Merge", GetFileName: "EasyIni.GetFileName", IsEmpty:"EasyIni.IsEmpty", Reload: "EasyIni.Reload", GetIsSaved: "EasyIni.GetIsSaved", Save: "EasyIni.Save"}
+		static base := {__Set: "EasyIni_Set", _NewEnum: "EasyIni_NewEnum", Remove: "EasyIni_Remove", Insert: "EasyIni_Insert", InsertBefore: "EasyIni_InsertBefore", AddSection: "EasyIni.AddSection", RenameSection: "EasyIni.RenameSection", DeleteSection: "EasyIni.DeleteSection", GetSections: "EasyIni.GetSections", FindSecs: "EasyIni.FindSecs", AddKey: "EasyIni.AddKey", RenameKey: "EasyIni.RenameKey", DeleteKey: "EasyIni.DeleteKey", GetKeys: "EasyIni.GetKeys", FindKeys: "EasyIni.FindKeys", GetVals: "EasyIni.GetVals", FindVals: "EasyIni.FindVals", HasVal: "EasyIni.HasVal", Copy: "EasyIni.Copy", Merge: "EasyIni.Merge", GetFileName: "EasyIni.GetFileName", IsEmpty:"EasyIni.IsEmpty", Reload: "EasyIni.Reload", GetIsSaved: "EasyIni.GetIsSaved", Save: "EasyIni.Save", ToVar: "EasyIni.ToVar"}
 		; Create and return new object:
 		return Object("_keys", Object(), "base", base, parms*)
 	}
@@ -403,7 +405,7 @@ class EasyIni
 			}
 		}
 
-		; Formatting is preserved in ini object
+		; Formatting is preserved in ini object.
 		FileDelete, %sFile%
 
 		bIsFirstLine := true
@@ -438,6 +440,15 @@ class EasyIni
 			}
 		}
 		return true
+	}
+
+	ToVar()
+	{
+		sTmpFile := "$$$EasyIni_Temp.ini"
+		this.Save(sTmpFile, true)
+		FileRead, sIniAsVar, %sTmpFile%
+		FileDelete, %sTmpFile%
+		return sIniAsVar
 	}
 }
 
