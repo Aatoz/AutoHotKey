@@ -64,10 +64,10 @@ class EasyCSV
 		return Object("_keys", Object(), "base", base, parms*)
 	}
 
-	; if row is blank, the column is added to every row
+	; if row is blank, the column is added to every row.
 	AddCol(header, row="", field="", ByRef rsError="")
 	{
-		if (abs(row) == A_Blank) ; is not number doesn't seem to work
+		if (row != A_Blank && abs(row) == A_Blank) ; is not number doesn't seem to work
 		{
 			rsError := "Error: Could not add row " row " because that is not a number."
 			return false
