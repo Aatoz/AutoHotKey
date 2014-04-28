@@ -4866,7 +4866,7 @@ CenterWndOnOwner(hWnd, hOwner=0)
 	iX := Round((iXPct / 100) * iOwnerW + iOwnerX)
 	iY := Round((iYPct / 100) * iOwnerH + iOwnerY)
 
-	WinMove, ahk_id %hWnd%, , iX, iY
+	WinMove, ahk_id %hWnd%,, iX, iY
 
 	return
 }
