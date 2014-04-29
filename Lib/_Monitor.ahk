@@ -1,4 +1,4 @@
-_MonInfo()
+_Monitor()
 {
 	global g_vMonInfo := {}
 	global g_aMapOrganizedMonToSysMonNdx := []
