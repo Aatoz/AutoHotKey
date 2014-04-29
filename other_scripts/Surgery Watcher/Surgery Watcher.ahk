@@ -2,10 +2,19 @@
 #SingleInstance Force
 SetWorkingDir, %A_ScriptDir%
 
+; TODO: Find the right place to put this.
+	FileDelete, RawData.csv
+	; TODO: Make headers
+
+FileInstall, Clear.ico, Clear.ico
+FileInstall, Eye.ico, Eye.ico
+FileInstall, Record.ico, Record.ico
+FileInstall, Stop.ico, Stop.ico
+
 InitTray()
 
 ; Testing environment.
-if (true)
+if (false)
 {
 	InitGlobals(false)
 	InitGUI()
@@ -32,7 +41,7 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 	; Metrics needed:
 		; 1. Total path distance travelled. - Done.
 		; 2. Speed. - Done.
-		; 3. Acceleration. - Difference in velocity between two frames. Units are: units per-second per-second (i.e. 1 m/s/s).
+		; 3. Acceleration. - Difference in velocity between two frames. Units are: units per-second per-second (i.e. 1 m/s2).
 		; 4. Motion smoothness. -
 		; 5. Average distance between hands. - Done, but not tested. Using Trans, but maybe should compare Hand1X-Hand2X.
 
@@ -45,17 +54,30 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 	{
 		s_vPalmInfo.Hand1.TimeStartOffset := rLeapData.Hand1.TimeVisible
 		s_vPalmInfo.Hand2.TimeStartOffset := rLeapData.Hand2.TimeVisible
-		s_vPalmInfo.Hand1.TotalTimeVisible := 1
-		s_vPalmInfo.Hand2.TotalTimeVisible := 1
-		iTimeSinceLastCall_Hand1 := 1
-		iTimeSinceLastCall_Hand2 :=1
+		s_vPalmInfo.Hand1.TotalTimeVisible := 0.001 ; ms
+		s_vPalmInfo.Hand2.TotalTimeVisible := 0.001
+		iTimeSinceLastCall_Hand1 := 0.001
+		iTimeSinceLastCall_Hand2 :=0.001
 	}
 	else
 	{
 		Loop, %g_iHands_c% ; Set data on both hands.
 		{
 			sHandAsSec := "Hand" A_Index
-			iTimeVisible := rLeapData[sHandAsSec].TimeVisible -s_vPalmInfo[sHandAsSec].TimeStartOffset
+			iTimeVisible := rLeapData[sHandAsSec].TimeVisible - s_vPalmInfo[sHandAsSec].TimeStartOffset
+
+			if (A_Index == 2 && !rLeapData.HasKey(sHandAsSec))
+			{
+				; If hand2 has disappeared but we have tracked it before, just act as if TotalTimeVisible was never touched...
+					; but then we'll need to offset the time again, right?
+				if (s_vPalmInfo[sHandAsSec].TotalTimeVisible == A_Blank)
+				{
+					iTimeSinceLastCall_Hand%A_Index% := 1
+					s_vPalmInfo[sHandAsSec].TotalTimeVisible := 1
+					continue
+				}
+				else iTimeVisible := s_vPalmInfo[sHandAsSec].TotalTimeVisible
+			}
 
 			; Set the times at previous call before resetting TotalTimeVisible.
 			iTimeVisibleAtPrevCall := s_vPalmInfo[sHandAsSec].TotalTimeVisible
@@ -69,6 +91,8 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 	g_iCurSecForRawData++
 	if (!g_vRawData.AddSection(g_iCurSecForRawData, "", "", sError)) ; we'll notify about the problem here.
 		Msgbox 8192,, An error occurred. Please contact aatozb@gmail.com in order to fix this. Technical details are outlined below.`n`n%sError%
+	sRawHeaders := "TimeStamp (ms),"
+	sRawData := s_vPalmInfo["Hand1"].TotalTimeVisible ","
 
 	if (s_bIsFirstCallWithData)
 	{
@@ -92,12 +116,8 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		iHand := A_Index
 		sHandAsSec := "Hand" iHand
 
-		; If this hand isn't present, continue.
-		if (!rLeapData.HasKey(sHandAsSec))
-			continue
-
 		; 3D metrics.
-		s .= "Metrics for hand " iHand "`n"
+		s .= "`nMetrics for hand " iHand "`n"
 		Loop, Parse, g_s3DParse_c, |
 		{
 			sXYZ := A_LoopField
@@ -108,8 +128,12 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 			sMetricKey := "Trans" sXYZ
 			IncVarInMetrics(rLeapData, sHandAsSec, sMetricKey, sHandAsSec, sIniKey, true, iVar)
 
-			s .= "------Distance traveled " sXYZ ": " g_vMetrics[sHandAsSec][sIniKey] * iUnitConversionFactor " " g_sUnits "`n"
+			sLabel := "Distance traveled " sXYZ
+			s .= "------" sLabel ": " g_vMetrics[sHandAsSec][sIniKey] * iUnitConversionFactor " " g_sUnits "`n"
 			g_vRawData.AddKey(g_iCurSecForRawData, sIniKey, iVar, sError)
+			if (s_bIsFirstCallWithData)
+				sRawHeaders .= sLabel ","
+			sRawData .= iVar ","
 
 			; TODO: Make functions out of these because there is too much cloning.
 			
@@ -121,9 +145,18 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 			TimeWgtVarInMetrics(rLeapData, sHandAsSec, sLeapKey, sHandAsSec, sMetricKey
 				, true, iTimeSinceLastCall_Hand%iHand%, s_vPalmInfo[sHandAsSec].TotalTimeVisible, iVar)
 
-			s .= "------Current speed: " rLeapData[sHandAsSec][sLeapKey] * iUnitConversionFactor " " g_sUnits "/s`n"
-			s .= "------Avg. speed: " iVar * iUnitConversionFactor " " g_sUnits "/s`n"
+			sCurSpeedLabel := "Current speed: "
+			s .= "------" sCurSpeedLabel (abs(rLeapData[sHandAsSec][sLeapKey]) * iUnitConversionFactor) " " g_sUnits "/s`n"
+			sRawData .= rLeapData[sHandAsSec][sLeapKey] ","
+			sAvgSpeedLabel := "Avg. speed: "
+			s .= "------" sAvgSpeedLabel (iVar * iUnitConversionFactor) " " g_sUnits "/s`n"
 			g_vRawData.AddKey(g_iCurSecForRawData, sMetricKey, iVar)
+			sRawData .= iVar ","
+			if (s_bIsFirstCallWithData)
+			{
+				sRawHeaders .= sCurSpeedLabel ","
+				sRawHeaders .= sAvgSpeedLabel ","
+			}
 
 			; Time-weighted average acceleration.
 			; TODO: See if manually time-weighting acceleration is any different than
@@ -139,11 +172,20 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 			;~ TimeWgtVarInMetrics(rLeapData, sHandAsSec, sLeapKey, sHandAsSec, sMetricKey
 				;~ , true, iTimeSinceLastCall_Hand%iHand%, s_vPalmInfo[sHandAsSec].TotalTimeVisible, iVar)
 
-			s .= "------Current acceleration: " iCurrentAccel * iUnitConversionFactor " " g_sUnits "/s/s`n"
+			sCurrentAccelLabel := "Current avg. acceleration: "
+			s .= "------" sCurrentAccelLabel (iCurrentAccel * iUnitConversionFactor) " " g_sUnits "/s2`n"
 			g_vRawData.AddKey(g_iCurSecForRawData, "RawAccel" A_LoopField, iCurrentAccel)
-			s .= "------Avg. acceleration: " iTimeWgtAccel * iUnitConversionFactor " " g_sUnits "/s/s`n"
+			sRawData .= iCurrentAccel ","
+			sAvgAccelLabel := "Avg. acceleration: "
+			s .= "------" sAvgAccelLabel (iTimeWgtAccel * iUnitConversionFactor) " " g_sUnits "/s2`n"
 			g_vRawData.AddKey(g_iCurSecForRawData, "WgtAvgAccel" A_LoopField, iTimeWgtAccel)
+			sRawData .= iTimeWgtAccel ","
 			g_vMetrics[sHandAsSec]["WgtAvgAccel" A_LoopField] := iTimeWgtAccel
+			if (s_bIsFirstCallWithData)
+			{
+				sRawHeaders .= sCurrentAccelLabel ","
+				sRawHeaders .= sAvgAccelLabel ","
+			}
 
 			s_vPalmInfo[sHandAsSec].m_vPrevSpeed[A_LoopField] := rLeapData[sHandAsSec]["Velocity" sXYZ]
 		}
@@ -153,11 +195,22 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		Loop, Parse, g_sPalmMetricsParse_c, |
 		{
 			sMetricKey := "WgtAvg" A_LoopField
-			TimeWgtVarInMetrics(rLeapData, sHandAsSec, A_LoopField, sHandAsSec, sMetricKey, false, iTimeSinceLastCall_Hand%iHand%, s_vPalmInfo[sHandAsSec].TotalTimeVisible, iVar)
+			sLeapKey := A_LoopFIeld
+			TimeWgtVarInMetrics(rLeapData, sHandAsSec, sLeapKey, sHandAsSec, sMetricKey, false, iTimeSinceLastCall_Hand%iHand%, s_vPalmInfo[sHandAsSec].TotalTimeVisible, iVar)
 
-			s .= "---Current " A_LoopFIeld ": " rLeapData[sHandAsSec][sLeapKey] * iUnitConversionFactor " " g_sUnits "`n"
-			s .= "---Avg. " A_LoopField ": " iVar " " g_sUnits "`n"
+			sCurrentLabel := "Current " sLeapKey
+			s .= "---" sCurrentLabel ": " (rLeapData[sHandAsSec][sLeapKey]) Chr(176) "`n" ; Note: degrees, so don't use iUnitConversionFactor.
+			sRawData .= rLeapData[sHandAsSec][sLeapKey] ","
+
+			sAvgLabel := "---Avg. " sLeapKey
+			s .= sAvgLabel ": " iVar Chr(176) "`n"
 			g_vRawData.AddKey(g_iCurSecForRawData, sIniKey, iVar)
+			sRawData .= iVar ","
+			if (s_bIsFirstCallWithData)
+			{
+				sRawHeaders .= "Current " sLeapKey ","
+				sRawHeaders .= "Avg. " sLeapKey ","
+			}
 		}
 	}
 
@@ -166,14 +219,25 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 	Loop, Parse, g_s3DParse_c, |
 	{
 		sLeapSec := "Header"
-		sLeapKey := "Trans" A_LoopFIeld
-		TimeWgtVarInMetrics(rLeapData, sLeapSec, sLeapKey, "Other", "WgtAvgDistFromPalms" A_LoopField, true, iTimeSinceLastCall_Hand1, s_vPalmInfo.Hand1.TotalTimeVisible, iVar)
+		sLeapKey := "PalmDiff" A_LoopFIeld
+		sMetricSec := "Other"
+		sMetricKey := "WgtAvgDistFromPalms" A_LoopField
+		; This is a special case since the keys in the header are not always persent.
+		if (rLeapData[sLeapSec].HasKey(sLeapKey))
+			TimeWgtVarInMetrics(rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey, true, iTimeSinceLastCall_Hand1, s_vPalmInfo.Hand1.TotalTimeVisible, iVar)
+		else iVar := g_vMetrics[sMetricSec][sMetricKey]
 
-		s .= "---Avg. Distance Betw. Hand " A_LoopFIeld ": " iVar * iUnitConversionFactor " " g_sUnits "`n"
+		s .= "---Avg. Distance Betw. Hand " A_LoopFIeld ": " (iVar * iUnitConversionFactor) "`n"
 		g_vRawData.AddKey(g_iCurSecForRawData, sLeapKey, iVar)
+		sRawHeaders .= "Avg. Distance Betw. Hand " A_LoopFIeld ","
+		sRawData .= iVar ","
 	}
 
 	SurgeryWatcher_OutputToGUI(s)
+
+	if (s_bIsFirstCallWithData)
+		FileAppend, %sRawHeaders%`n, RawData.csv
+	FileAppend, %sRawData%`n, RawData.csv
 
 	s_bIsFirstCallWithData := false
 	s_iLastSecForRawData := g_iCurSecForRawData
@@ -188,7 +252,7 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		Purpose: To locaize logic of adding metrics to our metrics db.
 	Parameters
 		rLeapData
-		sLeapSec: A valid section in rLeapData
+		sLeapSec: A (possibly) valid section in rLeapData
 		sLeapKey: A valid key in rLeapData
 		sMetricSec: A valid section in g_vMetrics (usually the same as sLeapSec)
 		sMetricKey: A valid section in g_vMetrics (usually the same as sLeapKey)
@@ -198,8 +262,9 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 IncVarInMetrics(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey, bUseAbsVal, ByRef riVar="")
 {
 	global
+	riVar := 0
 
-	; Validate all sectons and keys.
+	; Validate all sections and keys.
 	ValidateLeapAndMetricSecsAndKeys(rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey)
 
 	riVar := rLeapData[sLeapSec][sLeapKey]
@@ -211,6 +276,7 @@ IncVarInMetrics(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey, bUs
 
 		g_vMetrics[sMetricSec][sMetricKey] += riVar
 	}
+	else riVar := g_vMetrics[sMetricSec][sMetricKey]
 
 	return
 }
@@ -223,7 +289,7 @@ IncVarInMetrics(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey, bUs
 		Purpose: Handles general logic for time-weighting a variable tracking in our Leap procedures.
 	Parameters
 		rLeapData
-		sLeapSec: A valid section in rLeapData
+		sLeapSec: A (possibly) valid section in rLeapData
 		sLeapKey: A valid key in rLeapData
 		sMetricSec: A valid section in g_vMetrics (usually the same as sLeapSec)
 		sMetricKey: A valid section in g_vMetrics (usually the same as sLeapKey)
@@ -237,10 +303,10 @@ TimeWgtVarInMetrics(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey,
 	global
 	riVar := 0
 
-	; Validate all sectons and keys.
+	; Validate all sections and keys.
 	ValidateLeapAndMetricSecsAndKeys(rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey)
 
-	local iVar := rLeapData[sLeapSec][sLeapKey]
+	iVar := rLeapData[sLeapSec][sLeapKey]
 
 	if (iVar != A_Blank)
 	{
@@ -264,9 +330,9 @@ TimeWgtVarInMetrics(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec, sMetricKey,
 		; Divide the aggregated vars by the total time elapsed.
 		g_vMetrics[sMetricSec][sMetricKey] := (iVar + iPrevAggRawVal) / iTotalTime_Denom ; Here's where we time-weight denom.
 		g_vRawData[g_iCurSecForRawData][sLeapKey "_FinalVal"] := g_vMetrics[sMetricSec][sMetricKey]
-
-		riVar := g_vMetrics[sMetricSec][sMetricKey]
 	}
+
+	riVar := g_vMetrics[sMetricSec][sMetricKey]
 
 	return
 }
@@ -288,10 +354,15 @@ ValidateLeapAndMetricSecsAndKeys(ByRef rLeapData, sLeapSec, sLeapKey, sMetricSec
 {
 	global g_vMetrics
 
-	if (!(rLeapData.HasKey(sLeapSec) && rLeapData[sLeapSec].HasKey(sLeapKey)
-			&& g_vMetrics.HasKey(sMetricSec) && g_vMetrics[sMetricSec].HasKey(sMetricKey)))
+	; It's ok if Hand1 is present but Hand2 is not; in those cases, we just use 0.
+	; Key must be present in header OR Hand1. If sLeapSec is Hand2, that is ok because keys are identical between both hands.
+	; sMetricSec and sMetricKey must be valid.
+	bMetricHasSec := g_vMetrics.HasKey(sMetricSec)
+	bMetricHasKey := g_vMetrics[sMetricSec].HasKey(sMetricKey)
+	if (!((rLeapData.Header.HasKey(sLeapKey) || (rLeapData.HasKey("Hand1") && rLeapData["Hand1"].HasKey(sLeapKey)))
+			&& bMetricHasSec && bMetricHasKey))
 	{
-		FatalErrorMsg("Error: Script is trying to retrieve data from the Leap engine using invalid sections or keys`n`nLeap data section:`t" sLeapSec "`nLeap data key:`t" sLeapKey "`nMetric data section:`t" sMetricSec "`nMetric data key:`t" sMetricKey)
+		FatalErrorMsg("Error: Program is trying to retrieve data from the Leap engine using invalid sections or keys`n`nLeap data section:`t" sLeapSec "(" rLeapData.Header.HasKey(sLeapKey) "-" rLeapData.HasKey("Hand1") "-" rLeapData["Hand1"].HasKey(sLeapKey) ")`nLeap data key:`t" sLeapKey "(" rLeapData[sLeapSec].HasKey(sLeapKey) ")`nMetric data section:`t" sMetricSec "(" bMetricHasSec ")`nMetric data key:`t" sMetricKey "(" bMetricHasKey ")")
 	}
 
 	return
@@ -376,7 +447,7 @@ InitGUI()
 
 		if (g_bIsRecording)
 		{
-			if (!g_vMetrics.IsEmpty()) ; g_bMetricsDataWasExported ?
+			if (!g_vMetrics.IsEmpty() && !g_bMetricsDataWasExported)
 			{
 				MsgBox, 8228, Start Recording?, If you start recording`, all data from previous simulation will be removed.
 				IfMsgBox Yes
@@ -404,6 +475,7 @@ InitGUI()
 			Menu, SurgeryWatcher_EditMenu, Rename, Stop &Recording`tCtrl + R, &Record`tCtrl + R
 			Menu, SurgeryWatcher_EditMenu, Icon, &Record`tCtrl + R, Record.ico,, 16
 			g_vLeap.SetTrackState(false)
+			g_bMetricsDataWasExported := false
 		}
 
 		return
@@ -446,6 +518,7 @@ InitGUI()
 		}
 
 		Msgbox 8192,, Export has completed.`n`nSaved to: %A_WorkingDir%\Export.csv
+		g_bMetricsDataWasExported := true
 		return
 	}
 
@@ -467,14 +540,31 @@ InitGUI()
 	Reload:
 	SurgeryWatcher_Exit:
 	{
-		;~ g_vLeap.OSD_PostMsg("Data is being logged...")
-		;~ g_vRawData.Save() ; This will take some time
-
-		gosub SurgeryWatcher_GUIClose
-		;g_vLeap :=
-		ExitApp
+		SurgeryWatcher_Exit()
 		return
 	}
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: SurgeryWatcher_Exit
+		Purpose: To exit gracefully.
+	Parameters
+		
+*/
+SurgeryWatcher_Exit()
+{
+	global
+	;~ g_vLeap.OSD_PostMsg("Data is being logged...")
+	;~ g_vRawData.Save() ; This will take some time
+
+	GUI, SurgeryWatcher_:Destroy
+	g_vLeap.m_bInit := true ; Since I have so much trouble getting this to freaking delete.
+	g_vLeap.__Delete()
+	ExitApp
+	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -575,6 +665,7 @@ InitGlobals(bInitLeap=true)
 		WgtAvgYaw=0
 	)"
 	g_vMetrics := class_EasyIni("", sMetrics)
+	g_bMetricsDataWasExported := true ; because there's nothing to export when we first start.
 
 	; Sections will be corresponding to the point in time that the frame came into being.
 	; Keys will contain the frame data.
@@ -632,9 +723,9 @@ RunUnitTests()
 		[Header]
 		hWnd=0x0
 		DataType=Update
-		TransX=100
-		TransY=100
-		TransZ=100
+		PalmDiffX=100
+		PalmDiffY=100
+		PalmDiffZ=100
 
 		[Hand1]
 		TransX=0
@@ -693,7 +784,7 @@ RunUnitTests()
 FatalErrorMsg(sError)
 {
 	global g_vRawData, g_vLeap
-	Msgbox 8192,, %sError%`n`nPlease contact aatozb@gmail.com in order to fix this.`n`n   The program will exit after this message is dismissed.
+	Msgbox 8192,, %sError%`n`nPlease contact aatozb@gmail.com in order to fix this.`n`nThe program will exit after this message is dismissed.
 
 	g_vLeap.OSD_PostMsg("Data is being logged...")
 	; g_vRawData serves as a kind of log.
@@ -701,13 +792,13 @@ FatalErrorMsg(sError)
 	g_vLeap.OSD_PostMsg("Data has been saved. The application will now exit.")
 	Sleep 1500
 
-	ExitApp
+	return SurgeryWatcher_Exit()
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 /*
 -----------------------------------------------------------------------------------------------------------------------------------
----------------------------------------------------------DEPENDENCIES---------------------------------------------------------
+---------------------------------------------------------DEPENDENCIES--------------------------------------------------
 -----------------------------------------------------------------------------------------------------------------------------------
 */
 
