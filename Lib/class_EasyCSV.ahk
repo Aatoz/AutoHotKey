@@ -1,19 +1,20 @@
-class_EasyCSV(sFile="", sLoadFromStr="", bHasHeader=true)
+class_EasyCSV(sFile="", sLoadFromStr="", bHasHeader=false)
 {
 	return new EasyCSV(sFile, sLoadFromStr, bHasHeader)
 }
 
 class EasyCSV
 {
-	__New(sFile="", sLoadFromStr="", bHasHeader=true) ; Loads ths file into memory.
+	__New(sFile="", sLoadFromStr="", bHasHeader=false) ; Loads ths file into memory.
 	{
-		this := this.CreateCSVObj("EasyCSV_ReservedFor_m_sFile", sFile, "EasyCSV_ReservedFor_m_bHasHeader", bHasHeader)
+		this := this.CreateCSVObj("EasyCSV_ReservedFor_m_sFile", sFile
+			, "EasyCSV_ReservedFor_m_bHasHeader", bHasHeader)
 
 		if (sFile == A_Blank && sLoadFromStr == A_Blank)
 			return this
 
 		if (SubStr(sFile, StrLen(sFile)-3, 4) != ".csv")
-			sFile .= ".csv"
+			this.EasyIni_ReservedFor_m_sFile := sFile := (sFile . ".csv")
 
 		sCSV := sLoadFromStr
 		if (sCSV == A_Blank)
@@ -27,6 +28,10 @@ class EasyCSV
 	header1, header2
 	Field1    ,  Field2
 	Field1    ,  Field2
+
+	; TODO: Store by column, then row.
+		This is because there *must* be a row for each column,
+		 but there doesn't have to be a column for each row.
 
 	for iRow, aRowData in vCSV
 		for iCol, val in aRowData
@@ -44,13 +49,18 @@ class EasyCSV
 	--------------------------------------------------------------------------------------------------------------------------------------------------
 */
 
+		if (this.GetHasHeader())
+			this[1, this.GetHeaderRow()] := ; This allows us to
+
 		Loop, Parse, sCSV, `n, `r
 		{
 			iRow := A_Index
-			this[iRow] := EasyCSV_CreateBaseObj()
-
 			Loop, Parse, A_LoopField, CSV
-				this[iRow].Insert(A_Index, A_LoopField)
+			{
+				if (iRow == 1 && this.GetHasHeader())
+					this[A_Index, this.GetHeaderRow()] := A_LoopField
+				else this[A_Index, iRow] := A_LoopField
+			}
 		}
 
 		return this
@@ -59,118 +69,173 @@ class EasyCSV
 	CreateCSVObj(parms*)
 	{
 		; Define prototype object for CSV arrays:
-		static base := {__Set: "EasyCSV_Set", _NewEnum: "EasyCSV_NewEnum", Remove: "EasyCSV_Remove", Insert: "EasyCSV_Insert", InsertBefore: "EasyCSV_InsertBefore", AddSection: "EasyCSV.AddSection", RenameSection: "EasyCSV.RenameSection", DeleteSection: "EasyCSV.DeleteSection", GetSections: "EasyCSV.GetSections", FindSecs: "EasyCSV.FindSecs", AddKey: "EasyCSV.AddKey", RenameKey: "EasyCSV.RenameKey", DeleteKey: "EasyCSV.DeleteKey", GetKeys: "EasyCSV.GetKeys", FindKeys: "EasyCSV.FindKeys", GetVals: "EasyCSV.GetVals", FindVals: "EasyCSV.FindVals", HasVal: "EasyCSV.HasVal", Copy: "EasyCSV.Copy", Merge: "EasyCSV.Merge", Save: "EasyCSV.Save"}
+		static base := {__Set: "EasyCSV_Set", _NewEnum: "EasyCSV_NewEnum", Remove: "EasyCSV_Remove"
+			, Insert: "EasyCSV_Insert" , InsertBefore: "EasyCSV_InsertBefore"
+			; Cols
+			, AddCol: "EasyCSV.AddCol", DeleteCol: "EasyCSV.DeleteCol", GetCol: "EasyCSV.GetCol", GetNumCols: "EasyCSV.GetNumCols"
+			; Rows
+			, AddRow: "EasyCSV.AddRow", DeleteRow: "EasyCSV.DeleteRow", GetRow: "EasyCSV.GetRow", GetNumRows: "EasyCSV.GetNumRows"
+			, FindSecs: "EasyCSV.FindSecs", FindKeys: "EasyCSV.FindKeys", GetVals: "EasyCSV.GetVals", FindVals: "EasyCSV.FindVals"
+			, HasVal: "EasyCSV.HasVal", Copy: "EasyCSV.Copy", Merge: "EasyCSV.Merge", Save: "EasyCSV.Save"
+			, GetFileName: "EasyCSV.GetFileName", GetHasHeader: "EasyCSV.GetHasHeader", GetHeaderRow: "EasyCSV.GetHeaderRow"}
+
 		; Create and return new object:
 		return Object("_keys", Object(), "base", base, parms*)
 	}
 
-	; if row is blank, the column is added to every row.
-	AddCol(header, row="", field="", ByRef rsError="")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddCol
+			Purpose: To add a column
+		Parameters
+			sHeader="": Should only be non-blank when EasyCSV has been set to have a header.
+			rsError
+	*/
+	AddCol(sHeader="", ByRef rsError="")
 	{
-		if (row != A_Blank && abs(row) == A_Blank) ; is not number doesn't seem to work
+		; TODO: Int/Header support (I'm thinking headers are stored at 0, and they may be referenced literally).
+		; I think headers should be stored in a separate object, too.
+
+		if (sHeader && !this.GetHasHeader())
 		{
-			rsError := "Error: Could not add row " row " because that is not a number."
+			rsError := "Error: trying to set header, """ sHeader """ on a non-header CSV object."
 			return false
 		}
 
-		if (row == A_Blank)
-			for iRow in this
-				this[iRow].Insert(field)
-		else
-		{
-			if (this.HasKey(row))
-				this[row].Insert(field)
-			else
-			{
-				rsError := "Error: Could not add row " row " because it already exists."
-				return false
-			}
-		}
+		this.Insert(EasyCSV_CreateBaseObj())
+		iCol := this.MaxIndex()
 
-		return true
+		if (sHeader)
+			this[iCol, this.GetHeaderRow()] := sHeader
+
+		return iCol
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	RenameCol(oldCol, newCol, ByRef rsError="")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: DeleteCol
+			Purpose: To delete a column
+		Parameters
+			iCol: Column to delete
+	*/
+	DeleteCol(iCol)
 	{
-		if (!this.HasKey(oldCol))
-		{
-			rsError := "Error: Could not rename section [" oldCol "], because it does not exist."
-			return false
-		}
-
-		aKeyValsCopy := this[oldCol]
-		this.DeleteSection(oldCol)
-		this[newCol] := aKeyValsCopy
-		return true
-	}
-
-	DeleteSection(sec)
-	{
-		this.Remove(sec)
+		this.Remove(iCol)
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	GetSections(sDelim="`n")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetCol
+			Purpose: Gets data for iCol
+		Parameters
+			iCol
+			sDelim=","
+	*/
+	GetCol(iCol, sDelim=",")
 	{
-		for sec in this
-			secs .= (A_Index == 1 ? sec : sDelim sec)
-		return secs
+		for iRow, cell in this[iCol]
+			sCol .= (A_Index > 1 ? sDelim : "") . cell
+
+		return sCol
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	FindSecs(sExp, iMaxSecs="")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetNumCols
+			Purpose:
+		Parameters
+			
+	*/
+	GetNumCols()
 	{
-		aSecs := []
-		for sec in this
-		{
-			if (RegExMatch(sec, sExp))
-			{
-				aSecs.Insert(sec)
-				if (iMaxSecs&& aSecs.MaxIndex() == iMaxSecs)
-					return aSecs
-			}
-		}
-		return aSecs
+		return this.MaxIndex()
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	AddKey(sec, key, val="", ByRef rsError="")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddRow
+			Purpose:
+		Parameters
+			rsError=""
+	*/
+	AddRow(ByRef rsError)
 	{
-		if (this.HasKey(sec))
+		for iCol in this
+			this[iCol].Insert("") ; Insert adds new row.
+
+		iRow := this.1.MaxIndex()
+		if (iRow == A_Blank)
 		{
-			if (this[sec].HasKey(key))
-			{
-				rsError := "Error: Could not add key because there is an key in the same section:`n`[" sec "]`n" key
-				return false
-			}
+			rsError := "Error: Thre is no row for column 1.`nThis usually happens when you have not added a column first."
+			return
 		}
-		else
-		{
-			rsError := "Error: Could not add key`, " key " because Section " sec " does not exist."
-			return false
-		}
-		this[sec, key] := val
-		return true
+		return iRow
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	RenameKey(sec, OldKey, NewKey, ByRef rsError="")
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: DeleteRow
+			Purpose: Deletes a iRow from *all* columns, of course.
+		Parameters
+			iRow
+	*/
+	DeleteRow(iRow)
 	{
-		if (!this[sec].HasKey(OldKey))
-		{
-			rsError := "Error: The specified key " OldKey " could not be modified because it does not exist."
-			return false
-		}
+		if (!this.1.HasKey(iRow))
+			return ; Nothing to delete.
 
-		ValCopy := this[sec][OldKey]
-		this.DeleteKey(sec, OldKey)
-		this.AddKey(sec, NewKey)
-		this[sec][NewKey] := ValCopy
-		return true
-	}
-
-	DeleteKey(sec, key)
-	{
-		this[sec].Remove(key)
+		for iCol, in this
+			this[iCol].Remove(iRow)
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetRow
+			Purpose: Gets data for iRow
+		Parameters
+			iRow
+			sDelim=","
+	*/
+	GetRow(iRow, sDelim=",")
+	{
+		for iCol, aRowData in this
+			sRow .= (sRow == A_Blank ? "" : sDelim) . aRowData[iRow]
+
+		return sRow
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetNumRows
+			Purpose: Returns total number of rows.
+		Parameters
+			
+	*/
+	GetNumRows()
+	{
+		iRows := this.1.MaxIndex()
+		if (this.GetHasHeader)
+			iRows++
+		return iRows
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	GetKeys(sec, sDelim="`n")
 	{
@@ -259,7 +324,7 @@ class EasyCSV
 		{
 			if (!this.HasKey(sec))
 				if (bRemoveNonMatching)
-					this.DeleteSection(sec)
+					this.DeleteRow(sec)
 				else this.AddSection(sec)
 
 			; key=val
@@ -267,11 +332,83 @@ class EasyCSV
 				if (!this[sec].HasKey(key))
 					if (bRemoveNonMatching)
 						this.DeleteKey(sec, key)
-					else this.AddKey(sec, key, val)
+					else this.AddCol(sec, key, val)
 		}
 		return
 	}
 	;;;;;;;;;;;;;;
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetFileName
+			Purpose: Wrapper to return the extremely long named member var, EasyCSV_ReservedFor_m_sFile
+		Parameters
+			None
+	*/
+	GetFileName()
+	{
+		return this.EasyCSV_ReservedFor_m_sFile
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetHasHeader
+			Purpose: Wrapper to return the extremely long named member var, EasyCSV_ReservedFor_m_bHasHeader
+		Parameters
+			
+	*/
+	GetHasHeader()
+	{
+		return this.EasyCSV_ReservedFor_m_bHasHeader
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetHeaderRow
+			Purpose: To keep hard-coding for header row in one place.
+		Parameters
+			
+	*/
+	GetHeaderRow()
+	{
+		return 0
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: IsEmpty
+			Purpose: To indicate whether or not this csv has data
+		Parameters
+			None
+	*/
+	IsEmpty()
+	{
+		return (this.GetColumns() == A_Blank) ; No columns.
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: Reload
+			Purpose: Reloads object from csv file. This is necessary when other routines may be modifying the same csv file.
+		Parameters
+			None
+	*/
+	Reload()
+	{
+		if (FileExist(this.GetFileName()))
+			this := class_EasyCSV(this.GetFileName(), this.GetHasHeader())
+		return this ; else nothing to reload.
+	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; TODO: Option to store load and save times in comment at bottom of CSV?
@@ -284,14 +421,18 @@ class EasyCSV
 
 		; Formatting is preserved in CSV class object
 		FileDelete, %sFile%
-
-		for iRow, aRowData in this
+		bIsFirstLine := true
+		iRows := this.GetNumRows()
+		Loop %iRows%
 		{
-			if (A_Index > 1)
-				FileAppend, `n, %sFile%
+			iRow := (this.GetHasHeader() ? A_Index - 1 : A_Index)
+			sRow := this.GetRow(iRow)
 
-			for iCol, val in aRowData
-				FileAppend, % (A_Index > 1 ? "," : "") val, %sFile%
+			if (bIsFirstLine)
+				FileAppend, %sRow%, %sFile%
+			else FileAppend, `n%sRow%, %sFile%
+
+			bIsFirstLine := false
 		}
 
 		return
