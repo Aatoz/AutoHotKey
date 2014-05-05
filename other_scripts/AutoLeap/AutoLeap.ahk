@@ -42,9 +42,6 @@ class AutoLeap
 		if (!FileExist("AutoLeap"))
 			FileCreateDir, AutoLeap
 
-		; License.
-		FileInstall, AutoLeap\License.txt, AutoLeap\License.txt, 1
-
 		; Exes and Leap.dll.
 		FileInstall, AutoLeap\Leap Forwarder_32.exe, AutoLeap\Leap Forwarder_32.exe, 1
 		FileInstall, AutoLeap\Leap Forwarder_64.exe, AutoLeap\Leap Forwarder_64.exe, 1
@@ -142,7 +139,7 @@ class AutoLeap
 	{
 		static WM_CLOSE:=16
 
-		; If we post a message after this.SendMessageToExe, then there's not enough time to actually see this message.
+		; If we post a message after this.OSD_PostMsg, then there's not enough time to actually see this message.
 		if (bUpdateOSD)
 			this.OSD_PostMsg("Leap Motion(™) listener is closing")
 
@@ -1041,8 +1038,8 @@ class LeapDlgs
 		FileInstall, AutoLeap\Add.ico, AutoLeap\Add.ico, 1
 		FileInstall, AutoLeap\Delete.ico, AutoLeap\Delete.ico, 1
 		; License and other help files.
-		FileInstall, License.txt, License.txt, 1
-		FileInstall, ReadMe.txt, ReadMe.txt, 1
+		FileInstall, AutoLeap\License.txt, AutoLeap\License.txt, 1
+		;~ FileInstall, AutoLeap\ReadMe.txt, AutoLeap\ReadMe.txt, 1
 
 		sOldWorkingDir := A_WorkingDir
 		SetWorkingDir, % this.m_sLeapWorkingDir
