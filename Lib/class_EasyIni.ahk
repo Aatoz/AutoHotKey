@@ -15,7 +15,7 @@ class EasyIni
 
 		; Append ".ini" if it is not already there.
 		if (SubStr(sFile, StrLen(sFile)-3, 4) != ".ini")
-			this.EasyIni_ReservedFor_m_sFile := sFile := sFile ".ini"
+			this.EasyIni_ReservedFor_m_sFile := sFile := (sFile . ".ini")
 
 		sIni := sLoadFromStr
 		if (sIni == A_Blank)
