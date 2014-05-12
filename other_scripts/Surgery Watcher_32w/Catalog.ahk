@@ -24,71 +24,72 @@ LoadCatalog()
 	sCatalog := "
 		(LTrim
 			[Roll]
-			Label=Current |A_ThisSec|
-			AvgLabel=Average |A_ThisSec|
+			Label=Current $(A_ThisSec)
+			AvgLabel=Average $(A_ThisSec)
 			StoreAs=TimeWeighted
 			Units=°
 			UseAbsVal=0
 			LeapSec=Hand
-			LeapKey=|A_ThisSec|
+			LeapKey=$(A_ThisSec)
 			MetricSec=Hand
-			MetricKey=WgtAvg|A_ThisSec|
+			MetricKey=WgtAvg$(A_ThisSec)
 			3D=0
 			CloneTo=Pitch|Yaw
 			m_bCloned=0
 			LastVal=
 
 			[DistanceTraveled]
-			Label=Distance traveled |A_ThisDim|
-			AvgLabel=
-			StoreAs=Raw
-			Units=|g_sUnits|
+			Label=Distance traveled $(A_ThisDim)
+			StoreAs=RawInc
+			Units=$(g_sUnits)
 			UseAbsVal=1
 			LeapSec=Hand
-			LeapKey=Trans|A_ThisDim|
+			LeapKey=PalmDelta$(A_ThisDim)
 			MetricSec=Hand
-			MetricKey=|A_ThisSec|
+			MetricKey=$(A_ThisSec)
 			3D=1
 			Dim= ; X,Y, or Z
 			m_bCloned=0
 
 			[Speed]
-			Label=Current speed |A_ThisDim|
-			AvgLabel=Average speed |A_ThisDim|
+			Label=Current speed $(A_ThisDim)
+			AvgLabel=Average speed $(A_ThisDim)
 			StoreAs=TimeWeighted
-			Units=|g_sUnits|/s
+			Units=$(g_sUnits)/s
 			UseAbsVal=0
 			LeapSec=Hand
-			LeapKey=Velocity|A_ThisDim|
+			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
-			MetricKey=WgtAvg|A_ThisSec|
+			MetricKey=WgtAvg$(A_ThisSec)
 			3D=1
 			Dim=
 			m_bCloned=0
 
 			[Acceleration]
-			Label=Current acceleration |A_ThisDim|
-			AvgLabel=Average acceleration |A_ThisDim|
+			Label=Current acceleration $(A_ThisDim)
+			AvgLabel=Average acceleration $(A_ThisDim)
 			StoreAs=ValFromMetrics
-			Units=|g_sUnits|/s2
+			Units=$(g_sUnits)/s2
 			LeapSec=Hand
-			LeapKey=Velocity|A_ThisDim|
+			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
-			MetricKey=WgtAvg|A_ThisSec|
+			MetricKey=WgtAvg$(A_ThisSec)
+			MetricKeyForDiff=WgtAvgSpeed$(A_ThisDim)
 			3D=1
 			Dim=
 			m_bCloned=0
 
 			[Distance between hands]
-			Label=Current distance between hands |A_ThisDim|
-			AvgLabel=Average distance between hands |A_ThisDim|
+			Label=Current distance between hands $(A_ThisDim)
+			AvgLabel=Average distance between hands $(A_ThisDim)
 			StoreAs=TimeWeighted
-			Units=|g_sUnits|
+			Units=$(g_sUnits)
 			UseAbsVal=1
 			LeapSec=Header
-			LeapKey=PalmDiff|A_ThisDim|
+			LeapKey=PalmDiff$(A_ThisDim)
+			; TODO: Keep leap and metric sections the same.
 			MetricSec=Other
-			MetricKey=WgtAvgDistFromHands|A_ThisDim|
+			MetricKey=WgtAvgDistFromHands$(A_ThisDim)
 			3D=1
 
 		)"
@@ -100,7 +101,7 @@ LoadCatalog()
 	; so we must store this information and change it afterwards.
 	aDataChanges := []
 
-	; Resolve |A_ThisSec|
+	; Resolve $(A_ThisSec)
 	for sec, aData in g_vCatalog
 	{
 		; 3D=1
@@ -167,14 +168,14 @@ LoadCatalog()
 	{
 		for k, v in aData
 		{
-			if (InStr(v, "|A_ThisSec|"))
+			if (InStr(v, "$(A_ThisSec)"))
 			{
-				StringReplace, v, v, |A_ThisSec|, %sec%, All
+				StringReplace, v, v, $(A_ThisSec), %sec%, All
 				g_vCatalog[sec][k] := v
 			}
-			if (InStr(v, "|A_ThisDim|"))
+			if (InStr(v, "$(A_ThisDim)"))
 			{
-				StringReplace, v, v, |A_ThisDim|, % aData.Dim, All
+				StringReplace, v, v, $(A_ThisDim), % aData.Dim, All
 				g_vCatalog[sec][k] := v
 			}
 		}
