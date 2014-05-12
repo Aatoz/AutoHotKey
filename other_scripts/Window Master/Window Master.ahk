@@ -5280,7 +5280,7 @@ monitorDimensionsAtMouse(){
 }
 */
 
-MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo = 0)
+MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 {
 	global g_aMapOrganizedMonToSysMonNdx, g_DictMonInfo
 
@@ -5333,10 +5333,19 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo = 0)
 	; Use resolution difference to scale X and Y
 	iX := iDestMonX + (iX-iMonX) * (iDestMonW/iMonW)
 	iY := iDestMonY + (iY-iMonY) * (iDestMonH/iMonH)
+	iNewW := iW
+	iNewH := iH
 
-	GetDimFromPct(iIgnored, iIgnored, iSourceWPct, iSourceHPct, iIgnored, iIgnored, iW, iH, hWnd, iMonToMoveTo)
+	GetDimFromPct(iIgnored, iIgnored, iSourceWPct, iSourceHPct, iIgnored, iIgnored, iNewW, iNewH, hWnd, iMonToMoveTo)
 
-	WinMove, ahk_id %hWnd%,, iX, iY, iW, iH
+	if (!IsResizable(hWnd))
+	{
+		; TODO: Scale W and H, somehow?
+		iNewW := iW
+		iNewH := iH
+	}
+
+	WinMove, ahk_id %hWnd%,, iX, iY, iNewW, iNewH
 
 	return
 }
@@ -5684,8 +5693,10 @@ IsResizable(hwnd="A")
 	MakeValidHwnd(hWnd)
 
 	WinGetClass, Class, ahk_id %hwnd%
-	if Class in Chrome_XPFrame,MozillaUIWindowClass,MozillaWindowClass,wndclass_desked_gsk,QPasteClass
+	if Class in Chrome_XPFrame,MozillaUIWindowClass,MozillaWindowClass,wndclass_desked_gsk,QPasteClass,Notepad++,SciTEWindow
+	{
 		return true
+	}
 	WinGet, CurStyle, Style, ahk_id %hwnd%
 	return (CurStyle & 0x40000) ; WS_SIZEBOX
 }
