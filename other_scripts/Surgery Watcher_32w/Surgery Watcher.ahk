@@ -2,6 +2,11 @@
 #SingleInstance Force
 SetWorkingDir, %A_ScriptDir%
 
+; For speed...
+SetBatchLines, -1
+SetWinDelay, -1
+Process, Priority,, H
+
 FileInstalls()
 InitTray()
 
@@ -27,101 +32,49 @@ return
 
 LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
+	; Important: Ensure this format is retained each time we do calculations.
+	SetFormat, FloatFast, 0.15
+
 	global g_vMetrics, g_vCatalog, g_vUnitsInfo, g_sUnits
 		; Raw data.
-		, g_vRawData_Ini, g_iCurSecForRawData, g_vRawDataCSV, g_iCSVCol, g_iCSVRow
+		, g_vRawDataCSV, g_vColLabelToNum, g_iCSVRow
 		; Helper vars for fields.
-		, g_iHands_c, g_s3DParse_c, g_sPalmMetricsParse_c
-	static s_bIsFirstCallWithData := true, s_iLastSecForRawData
-		, s_vPalmInfo := {Hand1:{TimeStartOffset:0, TotalTimeVisible:0, m_vPrevSpeed:{X:0, Y:0, Z:0}}, Hand2:{}} ; Hand2 should be identical to Hand1, not explicitly settings vars to reduce cloning.
+		, g_iHands_c, g_s3DParse_c, g_sLeapSecsParse_c
+	static s_bIsFirstCallWithData := true
+		; Time information relevant to each hand.
+		, s_vTimeInfo := {Hand1:{TimeStartOffset:0, TotalTimeVisible:0, TimeSinceLastCall:0}
+			, Hand2:{}, Header:{}} ; Hand2 and Header should be identical to Hand1, not explicitly settings vars to reduce cloning.
 
 	; Metrics needed:
 		; 1. Total path distance travelled. - Done.
 		; 2. Speed. - Done.
-		; 3. Acceleration. - Difference in velocity between two frames. Units are: units per-second per-second (i.e. 1 m/s2).
-		; 4. Motion smoothness. -
-		; 5. Average distance between hands. - Done, but not tested. Using PalmDiff[XYZ], but maybe should compare Hand1[XYZ]-Hand2[XYZ].
+		; 3. Acceleration. - Difference in velocity between two frames. Units are: m/s2.
+		; 4. Motion smoothness. - Difference in acceleration between two frames. Units are: m/s3.
+		; 5. Average distance between hands. - Done. Using PalmDiff[XYZ]_US
+			; which C++ compares hand1 stable vs. Hand2.
 
 	; If no hands are present, there is no data to process.
-	if (!rLeapData.HasKey("Hand1"))
+	if (sMsg = "Post" || !rLeapData.HasKey("Hand1"))
 		return
 
-	iHandsPresent := 2
-	if (!rLeapData.HasKey("Hand2"))
-		iHandsPresent := 1
-
-	; For the very first frame, we have to make certain adjustments so that time-weighted metrics don't get skewed.
-	if (s_bIsFirstCallWithData) ; On the first call, we have to force the total to be 1 in order for averaging to be right.
-	{
-		s_vPalmInfo.Hand1.TimeStartOffset := rLeapData.Hand1.TimeVisible
-		s_vPalmInfo.Hand2.TimeStartOffset := rLeapData.Hand2.TimeVisible
-		s_vPalmInfo.Hand1.TotalTimeVisible := 0.001 ; ms
-		s_vPalmInfo.Hand2.TotalTimeVisible := 0.001
-		iTimeSinceLastCall_Hand1 := 0.001
-		iTimeSinceLastCall_Hand2 :=0.001
-	}
-	else
-	{
-		Loop, %g_iHands_c% ; Set data on *both* hands, regardless of whether they are present or not.
-		{
-			sHandAsSec := "Hand" A_Index
-			iTimeVisible := rLeapData[sHandAsSec].TimeVisible - s_vPalmInfo[sHandAsSec].TimeStartOffset
-
-			if (A_Index == 2 && !rLeapData.HasKey(sHandAsSec))
-			{
-				; If Hand2 has disappeared but we have tracked it before, just act as if TotalTimeVisible was never touched...
-					; but then we'll need to offset the time again, right?
-				if (s_vPalmInfo[sHandAsSec].TotalTimeVisible == A_Blank)
-				{
-					iTimeSinceLastCall_Hand%A_Index% := 1
-					s_vPalmInfo[sHandAsSec].TotalTimeVisible := 1
-					continue
-				}
-				else iTimeVisible := s_vPalmInfo[sHandAsSec].TotalTimeVisible
-			}
-
-			; Set the times at previous call before resetting TotalTimeVisible.
-			iTimeVisibleAtPrevCall := s_vPalmInfo[sHandAsSec].TotalTimeVisible
-			iTimeSinceLastCall_Hand%A_Index% := iTimeVisible - iTimeVisibleAtPrevCall
-
-			; Now reset TotalTimeVisible.
-			s_vPalmInfo[sHandAsSec].TotalTimeVisible := iTimeVisible
-		}
-	}
+	; Time start, time visible, time since last call.
+	SetTimeInfo(s_bIsFirstCallWithData, rLeapData, s_vTimeInfo)
 
 	; Populate the CSV as we go.
-	g_iCSVCol := 1 ; Have to reset each time.
-	g_iCSVRow := g_vRawDataCSV.AddRow(sError)
-	if (sError)
-		FatalErrorMsg(sError)
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := s_vPalmInfo.Hand1.TotalTimeVisible
+	g_iCSVRow++
 
-	g_iCurSecForRawData++
-	if (!g_vRawData_Ini.AddSection(g_iCurSecForRawData, "", "", sError)) ; we'll notify about the problem here.
-		Msgbox 8192,, An error occurred. Please contact aatozb@gmail.com in order to fix this. Technical details are outlined below.`n`n%sError%
-
-	if (s_bIsFirstCallWithData)
-	{
-		g_vRawData_Ini[g_iCurSecForRawData].TimeStartOffset_Hand1 := s_vPalmInfo.Hand1.TimeStartOffset
-		g_vRawData_Ini[g_iCurSecForRawData].TimeStartOffset_Hand2 := s_vPalmInfo.Hand2.TimeStartOffset
-	}
-
-	; Perform some sanity checks for our time-weighted vars.
-	;~ if (!iTimeSinceLastFrame)
-		;~ FatalErrorMsg("Error: There is an issue with calculating the time since the last frame " iTimeSinceLastFrame)
-	;~ if (iTotalTimeElapsed == 0)
-		;~ FatalErrorMsg("Error: There is an issue with the time-weighting denominator.")
-	;~ else if (iTimeSinceLastFrame > iTotalTimeElapsed)
-		;~ FatalErrorMsg("Error: There is an issue with the time-weighting numerator.")
+	g_vRawDataCSV[g_vColLabelToNum["H1 TimeStamp (ms)"], g_iCSVRow] := s_vTimeInfo.Hand1.TotalTimeVisible
+	g_vRawDataCSV[g_vColLabelToNum["H2 TimeStamp (ms)"], g_iCSVRow] := s_vTimeInfo.Hand2.TotalTimeVisible
 
 	g_iUnitConversionFactor := g_vUnitsInfo[g_sUnits].FromMM
-
 /*
 ------------------------------------------------------------
 -----------LOOP OVER ALL CATALOG FIELDS-----------
 ------------------------------------------------------------
 */
 
+	iHandsLoop := (rLeapData.HasKey("Hand2") ? 2 : 1)
+	asGUIOutput := ["", "", ""]
 	aFieldsToRecall := {}
 	for sFieldID, aFieldInfo in g_vCatalog
 	{
@@ -133,44 +86,53 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		StringReplace, sUnits, sUnits, $(g_sUnits), %g_sUnits%, All
 		aFieldInfo_Copy.Units := sUnits
 
-		iLoop := iHandsPresent
 		if (aFieldInfo_Copy.LeapSec = "Header")
-			iLoop := 1
+			iHandsLoop := 1
 
-		Loop, %iLoop%
+		Loop, %iHandsLoop%
 		{
 			iHand := A_Index
-			sHandAsSec := "Hand" iHand
+			; Hand1 and Hand2 have identical column names, but we need UIDs for g_vColLabelToNum,
+			sRawDataColPrefix := "H" A_Index " "
+			sGUIOutput :=
 
-			if (A_Index == 1 && iFieldLoop == 1)
-				sGUIOutput .= "Metrics for hand " iHand "`n"
+			iGUIOutputNdx := iHand
+			if (aFieldInfo_Copy.LeapSec = "Header")
+			{
+				; No UID needed for hand differences.
+				sRawDataColPrefix :=
+				iGUIOutputNdx := 3
+			}
 
-			if (A_Index == 2 && !rLeapData.HasKey(sHandAsSec))
-				continue
-
-			if (aFieldInfo_Copy.LeapSec = "Hand")
-				aFieldInfo_Copy.LeapSec .= iHand
-			if (aFieldInfo_Copy.MetricSec = "Hand")
-				aFieldInfo_Copy.MetricSec .= iHand
+			if (aFieldInfo.LeapSec = "Hand")
+				aFieldInfo_Copy.LeapSec := aFieldInfo.LeapSec . iHand
+			if (aFieldInfo.MetricSec = "Hand")
+				aFieldInfo_Copy.MetricSec := aFieldInfo.MetricSec . iHand
 
 			if (aFieldInfo_Copy.StoreAs = "TimeWeighted")
 			{
 				AddTimeWgtVar(rLeapData, aFieldInfo_Copy
-					, iTimeSinceLastCall_Hand%iHand%, s_vPalmInfo[sHandAsSec].TotalTimeVisible, sIndent, sGUIOutput)
+					, s_vTimeInfo[aFieldInfo_Copy.LeapSec].TimeSinceLastCall
+					, s_vTimeInfo[aFieldInfo_Copy.LeapSec].TotalTimeVisible
+					, sRawDataColPrefix, sIndent, sGUIOutput)
 			}
 			else if (aFieldInfo_Copy.StoreAs = "ValFromMetrics")
-				AddVarFromMetricsDiff(rLeapData, aFieldInfo_Copy, sIndent, sGUIOutput)
+				AddVarFromMetricsDiff(rLeapData, aFieldInfo_Copy, sRawDataColPrefix, sIndent, sGUIOutput)
 			else if (aFieldInfo_Copy.StoreAs = "RawInc")
-				AddRawVar(rLeapData, aFieldInfo_Copy, sIndent, sGUIOutput)
+				AddRawVar(rLeapData, aFieldInfo_Copy, sRawDataColPrefix, sIndent, sGUIOutput)
 			else FatalErrorMsg("Invalid data storage type encountered: " . aFieldInfo_Copy.StoreAs)
 
 			; Store values so that the next call can reference these values as "Prev" vals.
+			; If we updated the vals now, subsequent fields would not be referencing actual previous vals.
 			aFieldsToRecall[aFieldInfo_Copy.MetricSec, sFieldID, "MetricKey"] := aFieldInfo_Copy.MetricKey
 			aFieldsToRecall[aFieldInfo_Copy.MetricSec, sFieldID, "LeapKey"] := aFieldInfo_Copy.LeapKey
+
+			asGUIOutput[iGUIOutputNdx] .= sGUIOutput
 		}
 	}
 
-	SurgeryWatcher_OutputToGUI(sGUIOutput)
+	SurgeryWatcher_OutputToGUI("Metrics for hand 1`n" . asGUIOutput.1
+		. "`nMetrics for hand 2`n" . asGUIOutput.2 . "`nMetrics between hands`n" . asGUIOutput.3)
 
 	; Now loop over data to store previous values.
 	for sec, vField in aFieldsToRecall
@@ -181,7 +143,73 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		}
 
 	s_bIsFirstCallWithData := false
-	s_iLastSecForRawData := g_iCurSecForRawData
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: SetTimeInfo
+		Purpose: Set up palm info object that helps us with time
+	Parameters
+		bIsFirstCallWithData
+		rLeapData
+		rvTimeInfo
+*/
+SetTimeInfo(bIsFirstCallWithData, ByRef rLeapData, ByRef rvTimeInfo)
+{
+	global g_sLeapSecsParse_c
+	static s_bHand2IsHand1 := false
+
+	Loop, Parse, g_sLeapSecsParse_c, |
+	{
+		; On the first call with data, we have to force the total to be 0.001 in order for averaging to be right.
+		; I have thought this through, and I think it is best to give such a small weight (as opposed to 1) for the first frame
+		; Since this could very well be a jerky motion due to hands coming into view, we want this to affect
+		; averaging as little as possible.
+		if (bIsFirstCallWithData)
+		{
+			rvTimeInfo[A_LoopField].TimeStartOffset := rLeapData[A_LoopField].TimeVisible ; ms
+			rvTimeInfo[A_LoopField].TotalTimeVisible := 0.001
+			rvTimeInfo[A_LoopField].TimeSinceLastCall := 0.001
+			rvTimeInfo.Header.TimeStartOffset := rLeapData.Hand1.TimeVisible ; Hand1/2 is arbitrary.
+		}
+		else
+		{
+			if (A_LoopField = "Header")
+				iTotalTimeVisible := rLeapData.Hand1.TimeVisible - rvTimeInfo[A_LoopField].TimeStartOffset
+			else iTotalTimeVisible := rLeapData[A_LoopField].TimeVisible - rvTimeInfo[A_LoopField].TimeStartOffset
+
+			; If Hand2 drops out of view, then start using time from Hand1.
+			; This isn't necessarily the most perfect approach, but it is fast,
+			; and it likely won't skew calculations too bad since both hands
+			; likely came into view around the same time.
+			if (A_LoopField = "Hand2" && (s_bHand2IsHand1 || !rLeapData.HasKey(A_LoopField)))
+			{
+				rvTimeInfo.Hand2 := rvTimeInfo.Hand1
+				s_bHand2IsHand1 := true
+				continue
+			}
+
+			; Set the times at previous call before resetting TotalTimeVisible.
+			rvTimeInfo[A_LoopField].TimeSinceLastCall := iTotalTimeVisible - rvTimeInfo[A_LoopField].TotalTimeVisible
+
+			; Now reset TotalTimeVisible.
+			rvTimeInfo[A_LoopField].TotalTimeVisible := iTotalTimeVisible
+		}
+	}
+
+	; TODO: Reinstate?
+	; Perform some sanity checks for our time-weighted vars.
+	;~ if (!iTimeSinceLastFrame)
+		;~ FatalErrorMsg("Error: There is an issue with calculating the time since the last frame " iTimeSinceLastFrame)
+	;~ if (iTotalTimeElapsed == 0)
+		;~ FatalErrorMsg("Error: There is an issue with the time-weighting denominator.")
+	;~ else if (iTimeSinceLastFrame > iTotalTimeElapsed)
+		;~ FatalErrorMsg("Error: There is an issue with the time-weighting numerator.")
+
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -194,19 +222,20 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 	Parameters
 		rLeapData
 		raFieldInfo: Field info from g_vCatalog
+		sRawDataColPrefix: Hand1 and Hand2 have identical column names, but we need UIDs for g_vColLabelToNum,
+			This string should be "H1 " or "H2 "
 		sIndent: Indentation for labels (needed for rsDataForGUI)
 		rsDataForGUI: Visual string data outputted to GUI
 */
-AddRawVar(ByRef rLeapData, ByRef raFieldInfo, sIndent, ByRef rsDataForGUI)
+AddRawVar(ByRef rLeapData, ByRef raFieldInfo, sRawDataColPrefix, sIndent, ByRef rsDataForGUI)
 {
 	global
 
 	IncVarInMetrics(rLeapData, raFieldInfo, iVar)
 
 	; Log this information.
-	rsDataForGUI .= sIndent . raFieldInfo.Label ": " iVar * g_iUnitConversionFactor " " raFieldInfo.Units "`n"
-	g_vRawData_Ini.AddKey(g_iCurSecForRawData, raFieldInfo.MetricKey, iVar, sError)
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := iVar
+	rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iVar * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iVar
 
 	return
 }
@@ -234,7 +263,7 @@ IncVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, ByRef riVar="")
 
 	if (iLeapVar != A_Blank)
 	{
-		if (bUseAbsVal)
+		if (raFieldInfo.UseAbsVal)
 			iLeapVar := abs(iLeapVar)
 
 		g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] += iLeapVar
@@ -254,24 +283,26 @@ IncVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, ByRef riVar="")
 	Parameters
 		rLeapData
 		raFieldInfo: Field info from g_vCatalog
+		sRawDataColPrefix: Hand1 and Hand2 have identical column names, but we need UIDs for g_vColLabelToNum,
+			This string should be "H1 " or "H2 "
 		sIndent: Indentation for labels (needed for rsDataForGUI)
 		rsDataForGUI: Visual string data outputted to GUI
 */
-AddVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, sIndent, ByRef rsDataForGUI)
+AddVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, sRawDataColPrefix, sIndent, ByRef rsDataForGUI)
 {
 	global
 
 	CalcVarFromMetricsDiff(rLeapData, raFieldInfo, iCurLeapDiff, iMetricDiff)
 
 	; Log this information.
-	g_vRawData_Ini.AddKey(g_iCurSecForRawData, raFieldInfo.MetricKey . "_Cur", iCurLeapDiff, sError)
-	rsDataForGUI .= sIndent . raFieldInfo.Label ": " iCurLeapDiff * g_iUnitConversionFactor " " raFieldInfo.Units "`n"
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := iCurLeapDiff
+	if (raFieldInfo.MetricKeyForDiff = ("WgtAvgSpeed" . raFieldInfo.Dim))
+	{	; Only worth the trouble to calculate current acceleration.
+		rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iCurLeapDiff * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+		g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iCurLeapDiff
+	}
 
-	g_vRawData_Ini.AddKey(g_iCurSecForRawData, raFieldInfo.MetricKey . "", iMetricDiff, sError)
-	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " iMetricDiff * g_iUnitConversionFactor " " raFieldInfo.Units "`n"
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := iMetricDiff
-
+	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " Round(iMetricDiff * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.AvgLabel], g_iCSVRow] := iMetricDiff
 
 	return
 }
@@ -296,13 +327,44 @@ CalcVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, ByRef riLeapDiff, ByR
 	; Validate all sections and keys.
 	ValidateLeapAndMetricSecsAndKeys(rLeapData, raFieldInfo)
 
-	iCurLeapVal := rLeapData[raFieldInfo.LeapSec, raFieldInfo.LeapKey]
-	iPrevLeapVal := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.LeapKey "_Prev"] ; We store previous vals in g_vMetrics
-	riLeapDiff := iCurLeapVal - iPrevLeapVal
+	if (raFieldInfo.MetricKeyForDiff = ("WgtAvgSpeed" . raFieldInfo.Dim))
+	{
+		iCurLeapVal := rLeapData[raFieldInfo.LeapSec, raFieldInfo.LeapKey]
+		iPrevLeapVal := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.LeapKey "_Prev"]
+
+		; If we didn't have a previous value, then the effective value is the current value.
+		if (iCurLeapVal == A_Blank)
+			riLeapDiff := A_Blank
+		else
+		{
+			; If we don't respect abs val, then we will get reversed values since _Prev is always stored as abs val.
+			; Note: That comment will likely make no sense to me weeks from now -- Verdlin: 5/26/14.
+			if (raFieldInfo.UseAbsValForMetricKey)
+			{
+				iCurLeapVal := abs(iCurLeapVal)
+				iPrevLeapVal := abs(iPrevLeapVal)
+			}
+			riLeapDiff := (iCurLeapVal - iPrevLeapVal)
+		}
+	}
 
 	iCurMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKeyForDiff]
 	iPrevMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKeyForDiff "_Prev"]
-	riMetricDiff := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] := (iCurMetric - iPrevMetric)
+	if (iPrevMetric == A_Blank)
+		riMetricDiff := iCurLeapVal
+	else if (iCurMetric == A_Blank)
+		riMetricDiff := A_Blank
+	else
+	{
+		if (raFieldInfo.UseAbsValForMetricKey)
+		{
+			iCurMetric := abs(iCurMetric)
+			iPrevMetric := iPrevMetric
+		}
+		riMetricDiff := (iCurMetric - iPrevMetric)
+	}
+
+	g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] := riMetricDiff
 
 	return
 }
@@ -318,10 +380,12 @@ CalcVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, ByRef riLeapDiff, ByR
 		raFieldInfo: Field info from g_vCatalog
 		iNum: Numerator
 		iDenom: Denominator
+		sRawDataColPrefix: Hand1 and Hand2 have identical column names, but we need UIDs for g_vColLabelToNum,
+			This string should be "H1 " or "H2 "
 		sIndent: Indentation for labels (needed for rsDataForGUI)
 		rsDataForGUI: Visual string data outputted to GUI
 */
-AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sIndent, ByRef rsDataForGUI)
+AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sRawDataColPrefix, sIndent, ByRef rsDataForGUI)
 {
 	global
 
@@ -329,13 +393,13 @@ AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sIndent, ByRef r
 
 	; Log this information.
 	iCurVal := rLeapData[raFieldInfo.LeapSec][raFieldInfo.LeapKey]
-	g_vRawData_Ini.AddKey(g_iCurSecForRawData, raFieldInfo.MetricKey "_Cur", iCurVal)
-	rsDataForGUI .= sIndent . raFieldInfo.Label ": " (iCurVal * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := iCurVal
+	if (raFieldInfo.UseAbsVal)
+		iCurVal := Abs(iCurVal)
+	rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iCurVal * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iCurVal
 
-	g_vRawData_Ini.AddKey(g_iCurSecForRawData, raFieldInfo.MetricKey, iVar)
-	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " (iVar * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
-	g_vRawDataCSV[g_iCSVCol++, g_iCSVRow] := iVar
+	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " Round(iVar * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.AvgLabel], g_iCSVRow] := iVar
 
 	return
 }
@@ -357,7 +421,7 @@ TimeWgtVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, iTimeMultiplier_Num, iTo
 {
 	global
 	riVar := 0
-
+b := raFieldInfo.Dim = "X" && false
 	; Validate all sections and keys.
 	ValidateLeapAndMetricSecsAndKeys(rLeapData, raFieldInfo)
 
@@ -365,12 +429,10 @@ TimeWgtVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, iTimeMultiplier_Num, iTo
 
 	if (iVar != A_Blank)
 	{
-		if (bUseAbsVal)
+		if (raFieldInfo.UseAbsVal)
 			iVar := abs(iVar)
-
-		g_vRawData_Ini[g_iCurSecForRawData][raFieldInfo.LeapKey "_NonWgted"] := iVar
-		g_vRawData_Ini[g_iCurSecForRawData][raFieldInfo.LeapKey "_Num"] := iTimeMultiplier_Num
-
+if (b)
+	Msgbox % raFieldInfo.LeapKey "=" iVar
 		iVar *= iTimeMultiplier_Num ; Time-weight var num.
 
 		; Don't /div 0!
@@ -379,11 +441,11 @@ TimeWgtVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, iTimeMultiplier_Num, iTo
 
 		; In order to inc the time-weighted var, we need to retrieve the previous, aggregated raw (non-weighted) val.
 		iPrevAggRawVal := g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] * (iTotalTime_Denom - iTimeMultiplier_Num)
-		g_vRawData_Ini[g_iCurSecForRawData][raFieldInfo.LeapKey "_Denom"] := iTotalTime_Denom
-		g_vRawData_Ini[g_iCurSecForRawData][raFieldInfo.LeapKey "_PrevAggRawVal"] := iPrevAggRawVal
 
 		; Divide the aggregated vars by the total time elapsed.
 		g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] := (iVar + iPrevAggRawVal) / iTotalTime_Denom ; Here's where we time-weight denom.
+		if (b)
+			Msgbox % raFieldInfo.LeapKey "=" rLeapData[raFieldInfo.LeapSec][raFieldInfo.LeapKey] "`n" raFieldInfo.MetricKey "=" g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey]
 	}
 
 	riVar := g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey]
@@ -413,7 +475,12 @@ ValidateLeapAndMetricSecsAndKeys(ByRef rLeapData, ByRef raFieldInfo)
 	if (!(rLeapData.Header.HasKey(raFieldInfo.LeapKey) || (rLeapData.HasKey("Hand1")
 			&& rLeapData["Hand1"].HasKey(raFieldInfo.LeapKey))))
 	{
-		FatalErrorMsg("Error: Program is trying to retrieve data using invalid sections or keys.`n`nLeap data section:`t" raFieldInfo.LeapSec "(" rLeapData.Header.HasKey(raFieldInfo.LeapKey) "-" rLeapData.HasKey("Hand1") "-" rLeapData["Hand1"].HasKey(raFieldInfo.LeapKey) ")`nLeap data key:`t" raFieldInfo.LeapKey "(" rLeapData[raFieldInfo.LeapSec].HasKey(raFieldInfo.LeapKey) ")`nMetric data section:`t" raFieldInfo.MetricSec "(" bMetricHasSec ")`nMetric data key:`t" raFieldInfo.MetricKey "(" bMetricHasKey ")")
+		FatalErrorMsg("Error: Program is trying to retrieve data using invalid sections or keys.`n`nLeap data section:`t" 
+			. raFieldInfo.LeapSec "(" rLeapData.Header.HasKey(raFieldInfo.LeapKey) "-" rLeapData.HasKey("Hand1") "-" 
+			. rLeapData["Hand1"].HasKey(raFieldInfo.LeapKey) ")`nLeap data key:`t" raFieldInfo.LeapKey 
+			. "(" rLeapData[raFieldInfo.LeapSec].HasKey(raFieldInfo.LeapKey) ")`nMetric data section:`t" 
+			. raFieldInfo.MetricSec "(" bMetricHasSec ")`nMetric data key:`t" raFieldInfo.MetricKey "(" bMetricHasKey ")`n"
+			. rLeapData.GetKeys("Header"))
 	}
 
 	return
@@ -432,7 +499,7 @@ InitGUI()
 {
 	global
 
-	GUI, SurgeryWatcher_:New, MinSize Resize, Surgery Watcher
+	GUI, SurgeryWatcher_:New, hwndg_hSurgeryWatcher MinSize Resize, %g_sName%
 
 	; ---Menus---
 
@@ -455,9 +522,17 @@ InitGUI()
 	Menu, SurgeryWatcher_ViewMenu, Check, % g_vUnitsInfo.mm.Menu ; Check Millimeters.
 	g_sUnits := "mm"
 
+	; Calculations
+	Menu, SurgeryWatcher_HelpMenu, Add, &Calculations, SurgeryWatcher_Calcs
+	Menu, SurgeryWatcher_HelpMenu, Icon, &Calculations, AutoLeap\Info.ico,, 16
+	; About
+	Menu, SurgeryWatcher_HelpMenu, Add, &About, SurgeryWatcher_ReadMe
+	Menu, SurgeryWatcher_HelpMenu, Icon, &About, AutoLeap\Info.ico,, 16
+
 	Menu, SurgeryWatcher_MainMenu, Add, &File, :SurgeryWatcher_FileMenu
 	Menu, SurgeryWatcher_MainMenu, Add, &Edit, :SurgeryWatcher_EditMenu
 	Menu, SurgeryWatcher_MainMenu, Add, &View, :SurgeryWatcher_ViewMenu
+	Menu, SurgeryWatcher_MainMenu, Add, &Help, :SurgeryWatcher_HelpMenu
 
 	GUI, Menu, SurgeryWatcher_MainMenu
 
@@ -467,9 +542,10 @@ InitGUI()
 	GUI, Add, Edit, x5 w450 h400 vg_vSurgeryWatcher_Output ReadOnly
 	GUI, Font, s10
 	; Record/Stop.
-	GUI, Add, Button, % "x5 yp+" 400+g_iMSDNStdBtnSpacing " w80 h26 hwndg_hRecordBtn vg_vRecordBtn gSurgeryWatcher_RecordOrStop", S&tart
+	GUI, Add, Button, % "x5 yp+" 400+g_iMSDNStdBtnSpacing " w80 h26 hwndg_hRecordBtn vg_vRecordBtn gSurgeryWatcher_RecordOrStop", &Start
 	ILButton(g_hRecordBtn, "Record.ico", 24, 24, 0)
-	GUI, Add, Button, % "X" 450 - g_iMSDNStdBtnW + 6 " Yp+" 26 - g_iMSDNStdBtnH " W" g_iMSDNStdBtnW " H" g_iMSDNStdBtnH " vg_vExitBtn gSurgeryWatcher_Exit", E&xit
+	GUI, Add, Text, % "X" 225-g_iMSDNStdBtnW + 6 " YP+" g_iMSDNStdBtnSpacing/2 " W220 H" g_iMSDNStdBtnH " vg_vImportantCopyright", % g_sName " " A_Year
+	GUI, Add, Button, % "XP+" 225 " Yp-" g_iMSDNStdBtnSpacing/2 " W" g_iMSDNStdBtnW " HP vg_vExitBtn gSurgeryWatcher_Exit", E&xit
 
 	GUIControl, Focus, g_vRecordBtn
 	GUI, Show
@@ -513,17 +589,22 @@ InitGUI()
 				}
 			}
 
-			GUIControl,, g_vRecordBtn, S&top
+			GUIControl,, g_vRecordBtn, &Stop
 			ILButton(g_hRecordBtn, "Stop.ico", 24, 24, 0)
 			Menu, SurgeryWatcher_EditMenu, Rename, &Record`tCtrl + R, Stop &Recording`tCtrl + R
 			Menu, SurgeryWatcher_EditMenu, Icon, Stop &Recording`tCtrl + R, Record.ico,, 16
-			Msgbox TODO: Try placing a sleep here and giving the user time to bring hands into view -- see if that fixes time issues.
-			Sleep 3000
+
+		Loop 3
+		{
+			SurgeryWatcher_OutputToGUI("Tracking will begin in " 3-A_Index+1 "...")
+			Sleep 1000
+		}
+
 			g_vLeap.SetTrackState(true)
 		}
 		else
 		{
-			GUIControl,, g_vRecordBtn, S&tart
+			GUIControl,, g_vRecordBtn, &Start
 			ILButton(g_hRecordBtn, "Record.ico", 24, 24, 0)
 			Menu, SurgeryWatcher_EditMenu, Rename, Stop &Recording`tCtrl + R, &Record`tCtrl + R
 			Menu, SurgeryWatcher_EditMenu, Icon, &Record`tCtrl + R, Record.ico,, 16
@@ -536,30 +617,40 @@ InitGUI()
 
 	SurgeryWatcher_Export:
 	{
-		g_vMetrics.Save()
+		SetFormat, FloatFast, 0.15
 		FileDelete, Export.csv
 
-		aColData := {}
 		aRows := []
 		; Sections are columns.
 		for sec, aData in g_vMetrics
 		{
-			if (sec = "Other")
-				continue
 			bMakeHeaders := (A_Index == 2)
+			bIsOtherRow := (sec = "Other")
 
 			; Keys are row headings.
 			; values are cells.
-			aColData[sec] := []
 			sRow := sec
 			for k, v in aData
 			{
-				if (bMakeHeaders)
-					sHeaders .= k ","
-				sRow .= "," v
+				if (InStr(k, "_Prev"))
+					continue
+
+				if (bIsOtherRow)
+					sOtherRowHeaders .= "," k
+				else if (bMakeHeaders)
+					sHeaders .= (sHeaders == A_Blank ? k : "," k)
+
+				if (bIsOtherRow)
+					sDataForBothRows .= "," v
+				else sRow .= "," v
 			}
-			aRows.Insert(sRow)
+			if (!bIsOtherRow)
+				aRows.Insert(sRow)
 		}
+
+		sHeaders .= sOtherRowHeaders
+		aRows.1 .= sDataForBothRows
+		aRows.2 .= sDataForBothRows
 
 		; H1,H2,H3,...
 		FileAppend, `,%sHeaders%, Export.csv
@@ -567,11 +658,23 @@ InitGUI()
 		for i, v in aRows
 		{
 			; Row,V1,V2,V3,...
-			FileAppend, `n%v%, Export.csv
+			FileAppend, `n%v%, Export.csv ; Initial comma because rows are like headers.
 		}
 
-		Msgbox 8192,, Export has completed.`n`nSaved to: %A_WorkingDir%\Export.csv
+		Run, %A_WorkingDir%,, UseErrorLevel
 		g_bMetricsDataWasExported := true
+		return
+	}
+
+	SurgeryWatcher_ReadMe:
+	{
+		ShowInfoDlg(GetReadMeFile())
+		return
+	}
+
+	SurgeryWatcher_Calcs:
+	{
+		ShowInfoDlg(GetLegendFile())
 		return
 	}
 
@@ -579,6 +682,7 @@ InitGUI()
 	{
 		Anchor2("SurgeryWatcher_:g_vSurgeryWatcher_Output", "xwyh", "0, 1, 0, 1")
 		Anchor2("SurgeryWatcher_:g_vRecordBtn", "xwyh", "0, 0, 1, 0")
+		Anchor2("SurgeryWatcher_:g_vImportantCopyright", "xwyh", "0.5, 0, 1, 0")
 		Anchor2("SurgeryWatcher_:g_vExitBtn", "xwyh", "1, 0, 1, 0")
 
 		return
@@ -606,14 +710,15 @@ InitGUI()
 SurgeryWatcher_Exit()
 {
 	global
-	;~ g_vLeap.OSD_PostMsg("Data is being logged...")
-	;~ g_vRawData_Ini.Save() ; This will take some time
+	g_vLeap.OSD_PostMsg("Data is being logged...")
+
+	SetFormat, FloatFast, 0.15
+	SurgeryWatcher_OutputToGUI("Exporting raw data (This may take a *long* time)...")
+	g_vRawDataCSV.Save()
 
 	GUI, SurgeryWatcher_:Destroy
 	g_vLeap.m_bInit := true ; Since I have so much trouble getting this to freaking delete.
 	g_vLeap.__Delete()
-
-	g_vRawDataCSV.Save()
 
 	ExitApp
 	return
@@ -654,10 +759,10 @@ FileInstalls()
 	FileInstall, AutoLeap\msvcr120.dll, AutoLeap\msvcr120.dll
 	FileInstall, AutoLeap\msvcp120.dll, AutoLeap\msvcp120.dll
 
-	FileInstall, Clear.ico, Clear.ico
 	FileInstall, Eye.ico, Eye.ico
 	FileInstall, Record.ico, Record.ico
 	FileInstall, Stop.ico, Stop.ico
+
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -685,6 +790,46 @@ InitTray()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function:
+		Purpose:
+	Parameters
+		sFile: File to display on dlg.
+*/
+ShowInfoDlg(sFIle)
+{
+	global
+
+	StringReplace, sFile, sFile, `t, %A_Space%%A_Space%%A_Space%%A_Space%, All
+	FileRead, iVersion, version
+	StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
+
+	GUI, InfoDlg_:New, hwndg_hInfoDlg, %g_sName%
+
+	local iFarRight := 0
+	if (sInfoFile = "ReadMe.txt")
+		iFarRight := 850-g_iMSDNStdBtnW
+	else iFarRight := 450-g_iMSDNStdBtnW
+	GUI, Add, Link, w%iFarRight%, %sFile%
+	local iBtnX := iFarRight-g_iMSDNStdBtnW-g_iMSDNStdBtnSpacing
+	GUI, Add, Button, X%iBtnX% W%g_iMSDNStdBtnW% H%g_iMSDNStdBtnH% gInfoDlg_GUIEscape, &OK
+
+	GUI, Show, x-32768 AutoSize
+	g_vLeap.m_vDlgs.CenterWndOnOwner(g_hInfoDlg, g_hSurgeryWatcher)
+
+	return
+
+	InfoDlg_GUIEscape:
+	InfoDlg_GUIClose:
+	{
+		GUI, InfoDlg_:Destroy
+		return
+	}
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: InitGlobals
 		Purpose:
 	Parameters
@@ -694,16 +839,17 @@ InitGlobals(bInitLeap=true)
 {
 	global
 
+	g_sName := "Surgery Watcher " chr(169)
+
 	; http://msdn.microsoft.com/en-us/library/windows/desktop/aa511453.aspx#sizing
 	g_iMSDNStdBtnW := 75
 	g_iMSDNStdBtnH := 23
 	g_iMSDNStdBtnSpacing := 6
 
 	g_iHands_c := 2
-	g_iCurSecForRawData := 0
 	; For parsing loops within hands loop.
 	g_s3DParse_c := "X|Y|Z"
-	g_sPalmMetricsParse_c := "Roll|Pitch|Yaw"
+	g_sLeapSecsParse_c := "Hand1|Hand2|Header"
 
 	; Leap Forwarder.
 	local sMetrics := "
@@ -723,26 +869,21 @@ InitGlobals(bInitLeap=true)
 		WgtAvgAccelerationX=0
 		WgtAvgAccelerationY=0
 		WgtAvgAccelerationZ=0
-		WgtAvgRoll=0
-		WgtAvgPitch=0
-		WgtAvgYaw=0
+		WgtAvgMotion SmoothnessX=0
+		WgtAvgMotion SmoothnessY=0
+		WgtAvgMotion SmoothnessZ=0
 
 		[Hand2]
 		; To avoid cloning, data is copied from Hand1.
 	)"
+
 	FileDelete, Metrics.ini
 	g_vMetrics := class_EasyIni("Metrics", sMetrics)
-	g_vMetrics.Hand2 := g_vMetrics.Hand1
+	g_vMetrics.Hand2 := ObjClone(g_vMetrics.Hand1)
 	g_bMetricsDataWasExported := true ; because there's nothing to export when we first start.
-
-	; Sections will be corresponding to the point in time that the frame came into being.
-	; Keys will contain the frame data.
-	FileDelete, RawData.ini
-	g_vRawData_Ini := class_EasyIni("RawData")
 
 	FileDelete, RawData.csv
 	g_vRawDataCSV := class_EasyCSV("RawData", "", true) ; has headers = true.
-	g_iCSVCol := 0
 	g_iCSVRow := 0
 
 	local sUnitsInfo := "
@@ -773,21 +914,35 @@ InitGlobals(bInitLeap=true)
 	; Loads g_vCatalog.
 	LoadCatalog()
 
-	; TODO: Move to better sec
-	; Add the first header column now.
-	if (!g_vRawDataCSV.AddCol("TimeStamp (ms)", sError))
-		FatalErrorMsg(sError)
-	for sField, aFieldInfo in g_vCatalog
-	{
-		if (!g_vRawDataCSV.AddCol(aFieldInfo.Label, sError))
-			FatalErrorMsg(sError)
+	g_vColLabelToNum := {}
 
-		if (aFieldInfo.StoreAs = "TimeWeighted" || aFieldInfo.StoreAs = "ValFromMetrics")
+	g_vColLabelToNum["H1 TimeStamp (ms)"] := g_vRawDataCSV.AddCol("H1 TimeStamp (ms)", sError)
+	g_vColLabelToNum["H2 TimeStamp (ms)"] := g_vRawDataCSV.AddCol("H2 TimeStamp (ms)", sError)
+
+	for sField, aFieldInfo in g_vCatalog
+		Loop %g_iHands_c%
 		{
-			if (!g_vRawDataCSV.AddCol(aFieldInfo.AvgLabel, sError))
+			if (aFieldInfo.LeapSec = "Header" && A_Index == 2)
+				continue ; We only need to add columns for these fileds once.
+
+			sLabel := "H" A_Index " " aFieldInfo.Label
+			sAvgLabel := "H" A_Index " " aFieldInfo.AvgLabel
+			if (aFieldInfo.LeapSec = "Header")
+			{
+				sLabel := aFieldInfo.Label
+				sAvgLabel := aFieldInfo.AvgLabel
+			}
+
+			; Not worth the trouble to calculate motion smoothness.
+			if (sField != ("Motion Smoothness" . aFieldInfo.Dim))
+				g_vColLabelToNum[sLabel] := g_vRawDataCSV.AddCol(sLabel, sError)
+			; Averaging fields store current and averages.
+			if (aFieldInfo.StoreAs = "TimeWeighted" || aFieldInfo.StoreAs = "ValFromMetrics")
+				g_vColLabelToNum[sAvgLabel] := g_vRawDataCSV.AddCol(sAvgLabel, sError)
+
+			if (sError)
 				FatalErrorMsg(sError)
 		}
-	}
 
 	if (bInitLeap)
 	{
@@ -810,15 +965,15 @@ InitGlobals(bInitLeap=true)
 */
 RunUnitTests()
 {
-	global g_s3DParse_c
+	global g_s3DParse_c, g_iHands_c
 	sLeapData := "
 	(LTrim
 		[Header]
 		hWnd=0x0
 		DataType=Update
-		PalmDiffX=100
-		PalmDiffY=100
-		PalmDiffZ=100
+		PalmDiffX_US=100
+		PalmDiffY_US=100
+		PalmDiffZ_US=100
 
 		[Hand1]
 		PalmX=0
@@ -827,7 +982,24 @@ RunUnitTests()
 		VelocityX=100
 		VelocityY=100
 		VelocityZ=100
+		PalmDeltaX=100
+		PalmDeltaY=100
+		PalmDeltaZ=100
+		TimeVisible=1
+		Roll=0
+		Pitch=0
+		Yaw=0
 
+		[Hand2]
+		PalmX=0
+		PalmY=0
+		PalmZ=0
+		VelocityX=100
+		VelocityY=100
+		VelocityZ=100
+		PalmDeltaX=100
+		PalmDeltaY=100
+		PalmDeltaZ=100
 		TimeVisible=1
 		Roll=0
 		Pitch=0
@@ -835,30 +1007,49 @@ RunUnitTests()
 	)"
 	vLeapData := class_EasyIni("", sLeapData)
 
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] := 100
-	vLeapData.Hand1.TimeVisible := 0
+	Loop %g_iHands_c%
+	{
+		iHand := A_Index
+		for k, v in vLeapData["Hand" iHand]
+			vLeapData["Hand" iHand, k] := 100
+	}
+	vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible := 0
+
 	LeapMsgHandler("", vLeapData, [], s)
 	Tooltip 1
 	Sleep 1000
 
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] :=150
+	Loop %g_iHands_c%
+	{
+		iHand := A_Index
+		for k, v in vLeapData["Hand" iHand]
+			vLeapData["Hand" iHand, k] := 150
+	}
 	Loop, Parse, g_s3DParse_c, |
 		vLeapData.Header["PalmDiff" A_LoopField] := 150
-	vLeapData.Hand1.TimeVisible := 1001
+	vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible := 1001
+
 	LeapMsgHandler("", vLeapData, [], s)
 	Tooltip 2
 	Sleep 1000
 
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] :=200
+	Loop %g_iHands_c%
+	{
+		iHand := A_Index
+		for k, v in vLeapData["Hand" iHand]
+			vLeapData["Hand" iHand, k] := 200
+	}
 	Loop, Parse, g_s3DParse_c, |
 		vLeapData.Header["PalmDiff" A_LoopField] := 200
-	vLeapData.Hand1.TimeVisible := 2001
-	LeapMsgHandler("", vLeapData, [], s)
-	Tooltip 3
-	Sleep 1000
+
+	vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible := 2001
+	Loop 3
+	{
+		LeapMsgHandler("", vLeapData, [], s)
+		Tooltip % 2 + A_Index
+		Sleep 1000
+		vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible += 1000
+	}
 
 	return
 }
@@ -874,12 +1065,11 @@ RunUnitTests()
 */
 FatalErrorMsg(sError)
 {
-	global g_vRawData_Ini, g_vLeap
+	global g_vLeap, g_vRawDataCSV
 	Msgbox 8192,, %sError%`n`nPlease contact aatozb@gmail.com in order to fix this.`n`nThe program will exit after this message is dismissed.
 
 	g_vLeap.OSD_PostMsg("Data is being logged...")
-	; g_vRawData_Ini serves as a kind of log.
-	g_vRawData_Ini.Save()
+	g_vRawDataCSV.Save("RawData_From Latest Crash.csv")
 	g_vLeap.OSD_PostMsg("Data has been saved. The application will now exit.")
 	Sleep 1500
 
@@ -887,9 +1077,97 @@ FatalErrorMsg(sError)
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: GetReadMeFile
+		Purpose:
+	Parameters
+		
+*/
+GetReadMeFile()
+{
+	global
+
+	return "
+	(
+License: <a href=""http://creativecommons.org/licenses/by-nc-nd/4.0/legalcode"">Attribution-NonCommercial-NoDerivatives 4.0 International</a>
+
+Version: %VERSION%
+
+Credits (This links to an external website; web content is not rated or monitored)
+	AutoHotkey
+		<a href=""http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=6056"">tinku99 @ AutoHotkey</a>
+		<a href=""http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=9238"">HotKeyIt @ AutoHotkey</a>
+		<a href=""http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=3754"">Lexikos @ AutoHotkey</a>
+		<a href=""http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=47646"">Amnesiac @ AutoHotkey</a>
+		<a href=""http://www.autohotkey.net/~HotKeyIt/AutoHotkey/files/AutoHotkey-txt.html"">HotkeyIt @ AutoHotkey_H</a>
+		<a href=""http://www.autohotkey.com/board/topic/90972-string-things-common-text-and-array-functions/"">Tidbit: String Things library</a>
+		<a href=""http://www.autohotkey.com/board/topic/37147-ilbutton-image-buttons-with-text-states-alignment/"">tkoi: ILButton.ahk</a>
+		<a href=""https://raw.github.com/polyethene/AutoHotkey-Scripts/master/Anchor.ahk"">Polythene: Anchor.ahk</a>
+		<a href=""http://www.autohotkey.com/board/topic/94458-msgbox-replacement-monolog-non-modal-transparent-message-box-cornernotify/"">RobertCollier4: CornerNotify (with some minor modifictions by me)</a>
+		<a href=""http://www.autohotkey.com/board/topic/90481-library-fnt-v05-preview-do-stuff-with-fonts/"">Jballi: Fnt.ahk</a>
+
+	Visual
+		<a href=""http://mebaze.com	"">Mebaze</a> for ""Bunch of Bluish"" icons
+		<a href=""https://www.iconfinder.com/krasnoyarsk"">Aha-Soft</a> for ""Free Blue Buttons"" icons
+		<a href=""http://mazenl77.deviantart.com/"">MazeNL77</a> for ""I Like Buttons"" icons
+	Other
+		<a href=""https://www.leapmotion.com/"">" g_vLeap.m_sLeapTM " Motion</a>
+
+	Special Thanks
+		Lexikos and Chris Mallet for AutoHotkey.
+		HotkeyIt for his amazing work with AutoHotkey_H, and also his helpful answers to my many questions in the AutoHotkey forum.
+
+	If you see your work and you are not credited, this is not deliberate. Notify me and I will credit you ASAP.
+	)"
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: GetLegendFile
+		Purpose:
+	Parameters
+		
+*/
+GetLegendFile()
+{
+	global
+
+	return "
+	(
+
+Hand1 and Hand2: Which hand is which?
+	The " g_vLeap.m_sLeapMC " cannot necessarily distinguish the left hand from the right (although it likely will in the future). Therefore, metrics are given as ""Hand1"" and ""Hand2."" Hand1 is the first hand detected, Hand2 is the second.
+
+Distance Traveled
+	Difference between palm position for two points in time.
+
+Speed/Velocity
+	This is not calculated by " g_sName ". Rather, it is received directly from the " g_vLeap.m_sLeapMC "; therefore, " g_sName " is not responsible if hand-calculated speed (based on the Distance Traveled and time elapsed between frames) is different than the reported speed.
+
+Average Speed
+	Time-weighted average Speed.
+
+Average Acceleration
+	Difference between Average Speed for two points in time.
+
+Average Motion Smoothness
+	Difference between Average Acceleration for two points in time.
+
+Average Distance Between Hands
+	Values are calculated as the difference between Hand1 and Hand2. A positive Y metric indicates Hand1 is higher than Hand2; conversely, a negative Y metric indicates Hand1 is lower than Hand2.
+
+	)"
+
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 /*
 -----------------------------------------------------------------------------------------------------------------------------------
----------------------------------------------------------DEPENDENCIES--------------------------------------------------
+---------------------------------------------------------DEPENDENCIES---------------------------------------------------------
 -----------------------------------------------------------------------------------------------------------------------------------
 */
 
@@ -897,239 +1175,45 @@ FatalErrorMsg(sError)
 ;;;;;;;;;;;;;; My (Verdlin) modification of Titan?s/Polythene?s anchor function: https://raw.github.com/polyethene/AutoHotkey-Scripts/master/Anchor.ahk
 ;;;;;;;;;;;;;; Using this one instead of Attach or Titan’s/Polythene’s Anchor v4 because this function,
 ;;;;;;;;;;;;;; although the parameter syntax is downright atrocious, actually works in Windows 7 and 8.
-Anchor2(ctrl, a, d = false) {
-static pos
-sGUI := SubStr(ctrl, 1, InStr(ctrl, ":")-1)
-GUI, %sGUI%:Default
-ctrl := SubStr(ctrl, InStr(ctrl, ":")+1)
-sig = `n%ctrl%=
+Anchor2(ctrl, a, d = false)
+{
+	static pos
+	sGUI := SubStr(ctrl, 1, InStr(ctrl, ":")-1)
+	GUI, %sGUI%:Default
+	ctrl := SubStr(ctrl, InStr(ctrl, ":")+1)
+	sig = `n%ctrl%=
 
-If (d = 1){
-draw = Draw
-d=1,1,1,1
-}Else If (d = 0)
-d=1,1,1,1
-StringSplit, q, d, `,
+	If (d = 1){
+	draw = Draw
+	d=1,1,1,1
+	}Else If (d = 0)
+	d=1,1,1,1
+	StringSplit, q, d, `,
 
-If !InStr(pos, sig) {
-GUIControlGet, p, Pos, %ctrl%
-pos := pos . sig . px - A_GUIWidth * q1 . "/" . pw - A_GUIWidth * q2 . "/"
-. py - A_GUIHeight * q3 . "/" . ph - A_GUIHeight * q4 . "/"
-}
-StringTrimLeft, p, pos, InStr(pos, sig) - 1 + StrLen(sig)
-StringSplit, p, p, /
+	If !InStr(pos, sig) {
+	GUIControlGet, p, Pos, %ctrl%
+	pos := pos . sig . px - A_GUIWidth * q1 . "/" . pw - A_GUIWidth * q2 . "/"
+	. py - A_GUIHeight * q3 . "/" . ph - A_GUIHeight * q4 . "/"
+	}
+	StringTrimLeft, p, pos, InStr(pos, sig) - 1 + StrLen(sig)
+	StringSplit, p, p, /
 
-s = xwyh
-Loop, Parse, s
-If InStr(a, A_LoopField) {
-If A_Index < 3
-e := p%A_Index% + A_GUIWidth * q%A_Index%
-Else e := p%A_Index% + A_GUIHeight * q%A_Index%
-d%A_LoopField% := e
-m = %m%%A_LoopField%%e%
-}
-GUIControlGet, i, hwnd, %ctrl%
-ControlGetPos, cx, cy, cw, ch, , ahk_id %i%
+	s = xwyh
+	Loop, Parse, s
+	If InStr(a, A_LoopField) {
+	If A_Index < 3
+	e := p%A_Index% + A_GUIWidth * q%A_Index%
+	Else e := p%A_Index% + A_GUIHeight * q%A_Index%
+	d%A_LoopField% := e
+	m = %m%%A_LoopField%%e%
+	}
+	GUIControlGet, i, hwnd, %ctrl%
+	ControlGetPos, cx, cy, cw, ch, , ahk_id %i%
 
-DllCall("SetWindowPos", "UInt", i, "Int", 0, "Int", dx, "Int", dy, "Int", InStr(a, "w") ? dw : cw, "Int", InStr(a, "h") ? dh : ch, "Int", 4)
-DllCall("RedrawWindow", "UInt", i, "UInt", 0, "UInt", 0, "UInt", 0x0101) ; RDW_UPDATENOW | RDW_INVALIDATE
-return
+	DllCall("SetWindowPos", "UInt", i, "Int", 0, "Int", dx, "Int", dy, "Int", InStr(a, "w") ? dw : cw, "Int", InStr(a, "h") ? dh : ch, "Int", 4)
+	DllCall("RedrawWindow", "UInt", i, "UInt", 0, "UInt", 0, "UInt", 0x0101) ; RDW_UPDATENOW | RDW_INVALIDATE
+	return
 }
 
 #Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
 #Include %A_ScriptDir%\Catalog.ahk
-
-;~ ----------------------------------------------------------------------------------------------------------------------------------------------------------
-;~ ------------------------------------------------------------DEPRECATED-------------------------------------------------------------------------------
-;~ ----------------------------------------------------------------------------------------------------------------------------------------------------------
-
-/* 
-LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
-{
-	global g_vMetrics, g_vUnitsInfo, g_vRawData_Ini, g_sUnits, g_iHands_c, g_s3DParse_c, g_sPalmMetricsParse_c
-	static s_iTimeStartOffset_Hand1, s_iTimeStartOffset_Hand2, s_bIsFirstCallWithData := true, s_iTimeAtFirstFrameWithData:0
-
-	; Metrics needed:
-		; 1. Total path distance travelled. - Done
-		; 2. Speed. - Done
-		; 3. Acceleration. -
-		; 4. Motion smoothness. -
-		; 5. Average distance between hands. - Next up
-
-	if (!s_bIsFirstCallWithData) ; TODO: See if I can remove this check -- every bit counts(?)
-		iTimeSinceLastFrame := QPX(false) * 1000 ; QPX returns seconds, and me want ms.
-
-	; If no hands are present, there is no data to process.
-	; Note: We return *after* calling QPX()
-	if (!rLeapData.HasKey("Hand1"))
-		return
-
-	; DO NOT USE A_TICKCOUNT; USE QPX().
-	iTotalTimeElapsed := iTimeSinceLastFrame - s_iTimeAtFirstFrameWithData
-	; For the very first frame, we have to make certain adjustments so that time-weighted metrics don't get skewed.
-	if (s_bIsFirstCallWithData) ; On the first call, we have to force the total to be 1 in order for averaging to be right.
-	{
-		QPX(true) ; Start counting from here.
-		s_iTimeStartOffset_Hand1 := rLeapData.Hand1.TimeVisible
-		s_iTimeStartOffset_Hand2 := rLeapData.Hand2.TimeVisible
-		iTotalTimeElapsed := 1
-		iTimeSinceLastFrame := 1
-		s_iTimeAtFirstFrameWithData := 1
-	}
-	else iTotalTimeElapsed -= s_iTimeStartOffset
-
-	; Frames can come through *really* fast, so if there is zero difference, we have may have to force 1ms difference.
-	; TODO: See if this is necessary now that I use QPX.
-	iOrigTimeElapsed := iTotalTimeElapsed
-	if (g_vRawData_Ini.HasKey(iTotalTimeElapsed))
-		iTotalTimeElapsed++
-	if (!g_vRawData_Ini.AddSection(iTotalTimeElapsed, "OrigTimeElap", iOrigTimeElapsed, sError)) ; we'll notify about the problem here.
-		Msgbox 8192,, An error occurred. Please contact aatozb@gmail.com in order to fix this. Technical details are outlined below.`n`n%sError%
-
-	if (s_bIsFirstCallWithData)
-		g_vRawData_Ini[iTotalTimeElapsed].StartTimeOffset := s_iTimeStartOffset
-
-	; Perform some sanity checks for our time-weighted vars.
-	if (!iTimeSinceLastFrame)
-		FatalErrorMsg("Error: There is an issue with calculating the time since the last frame " iTimeSinceLastFrame)
-	if (iTotalTimeElapsed == 0)
-		FatalErrorMsg("Error: There is an issue with the time-weighting denominator.")
-	else if (iTimeSinceLastFrame > iTotalTimeElapsed)
-		FatalErrorMsg("Error: There is an issue with the time-weighting numerator.")
-
-	g_iUnitConversionFactor := g_vUnitsInfo[g_sUnits].FromMM
-
-	; Loop over all hands.
-	Loop, %g_iHands_c%
-	{
-		iHand := A_Index
-		sHandAsSec := "Hand" iHand
-
-		; If this hand isn't present, continue.
-		if (!rLeapData.HasKey(sHandAsSec))
-			continue
-
-		; 3D metrics.
-		s .= "Metrics for hand " iHand "`n"
-		Loop, Parse, g_s3DParse_c, |
-		{
-			sXYZ := A_LoopField
-
-			; Distance traveled.
-			sIniKey := "DistanceTraveled" sXYZ
-			sMetricKey := "Trans" sXYZ
-			IncVarInMetrics(rLeapData, sHandAsSec, sMetricKey, sHandAsSec, sIniKey, true, iVar)
-
-			s .= "   Distance Traveled " sXYZ ": " g_vMetrics[sHandAsSec][sIniKey] * g_iUnitConversionFactor " " g_sUnits "`n"
-			g_vRawData_Ini.AddKey(iTotalTimeElapsed, sIniKey, iVar)
-
-			; Time-weighted average speed.
-			sMetricKey := "WgtAvgSpeed" sXYZ
-			sLeapKey := "Velocity" sXYZ
-
-			TimeWgtVarInMetrics(rLeapData, sHandAsSec, sLeapKey, sHandAsSec, sMetricKey, true, iTimeSinceLastFrame, iTotalTimeElapsed, iVar)
-
-			s .= "   Current Speed " sXYZ ": " rLeapData[sHandAsSec][sLeapKey] * g_iUnitConversionFactor " " g_sUnits "/s`n"
-			s .= "   Avg. Speed " sXYZ ": " iVar * g_iUnitConversionFactor " " g_sUnits "/s`n"
-			g_vRawData_Ini.AddKey(iTotalTimeElapsed, sIniKey, iVar)
-		}
-
-		; Palm metrics.
-		Loop, Parse, g_sPalmMetricsParse_c, |
-		{
-			sMetricKey := "WgtAvg" A_LoopField
-			TimeWgtVarInMetrics(rLeapData, sHandAsSec, A_LoopField, sHandAsSec, sMetricKey, false, iTimeSinceLastFrame, iTotalTimeElapsed, iVar)
-
-			s .= "   Current " A_LoopFIeld ": " rLeapData[sHandAsSec][sLeapKey] * g_iUnitConversionFactor " " g_sUnits "/s`n"
-			s .= "   Avg. " A_LoopField ": " iVar " " g_sUnits "/s`n"
-			g_vRawData_Ini.AddKey(iTotalTimeElapsed, sIniKey, iVar)
-		}
-	}
-
-	SurgeryWatcher_OutputToGUI(s)
-
-	s_bIsFirstCallWithData := false
-	return
-}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-timeSinceLastCall ( http://ahkscript.org/boards/viewtopic.php?f=6&t=537 )
-   Return the amount of time, in milliseconds, that has passed since you last called this function.
-
-   id    = You may use different ID's to store different timesets. ID should be 1 and above (not 0 or negative) or a string.
-   reset = If reset is 1 and id is 0, all ID's are cleared. Otherwise if reset is 1, that specific id is cleared.
-
-   * NOTE:
-   The first call is usually blank.
-
-example:
-   out:=timeSinceLastCall()
-   sleep, 500
-   out:=timeSinceLastCall()
-output:  500
-TimeSinceLastCall(id=1, reset=0)
-{
-   static arr:=array()
-   if (reset=1)
-   {
-      ((id=0) ? arr:=[] : (arr[id, 0]:=arr[id, 1]:="", arr[id, 2]:=0))
-      return
-   }
-   arr[id, 2]:=!arr[id, 2]
-   arr[id, arr[id, 2]]:=A_TickCount      
-   return abs(arr[id,1]-arr[id,0])
-}
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-/*
-	Author: Verdlin
-	Function: RunUnitTests
-		Purpose: To ensure our calculations are valid.
-	Parameters
-		
-
-RunUnitTests()
-{
-	sLeapData := "
-	(LTrim
-		[Header]
-		hWnd=0x0
-		DataType=Update
-
-		[Hand1]
-		TransX=0
-		TransY=0
-		TransZ=0
-		VelocityX=100
-		VelocityY=100
-		VelocityZ=100
-
-		Roll=0
-		Pitch=0
-		Yaw=0
-	)"
-	vLeapData := class_EasyIni("", sLeapData)
-
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] := 100
-	LeapMsgHandler("", vLeapData, [], s)
-	Tooltip 1
-	Sleep 1000
-
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] :=150
-	LeapMsgHandler("", vLeapData, [], s)
-	Tooltip 2
-	Sleep 1000
-
-	for k, v in vLeapData.Hand1
-		vLeapData.Hand1[k] :=200
-	LeapMsgHandler("", vLeapData, [], s)
-	Tooltip 3
-	Sleep 1000
-
-	return
-}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-*/

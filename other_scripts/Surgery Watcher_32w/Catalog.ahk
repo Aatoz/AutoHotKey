@@ -14,29 +14,10 @@ LoadCatalog()
 
 	Remember:
 		* We can't use Leap keys as secs because of items like Acceleration.
-		* Roll is first because, due to dynamic creating of sections, it gets placed first anyway.
-			If we did not explicitly make it first, then pitch and yaw would be at the bottom.
-
-	Need to add
-		1. MotionSmoothness
 */
 
 	sCatalog := "
 		(LTrim
-			[Roll]
-			Label=Current $(A_ThisSec)
-			AvgLabel=Average $(A_ThisSec)
-			StoreAs=TimeWeighted
-			Units=°
-			UseAbsVal=0
-			LeapSec=Hand
-			LeapKey=$(A_ThisSec)
-			MetricSec=Hand
-			MetricKey=WgtAvg$(A_ThisSec)
-			3D=0
-			CloneTo=Pitch|Yaw
-			m_bCloned=0
-			LastVal=
 
 			[DistanceTraveled]
 			Label=Distance traveled $(A_ThisDim)
@@ -44,7 +25,7 @@ LoadCatalog()
 			Units=$(g_sUnits)
 			UseAbsVal=1
 			LeapSec=Hand
-			LeapKey=PalmDelta$(A_ThisDim)
+			LeapKey=PalmDelta$(A_ThisDim)_US
 			MetricSec=Hand
 			MetricKey=$(A_ThisSec)
 			3D=1
@@ -56,7 +37,8 @@ LoadCatalog()
 			AvgLabel=Average speed $(A_ThisDim)
 			StoreAs=TimeWeighted
 			Units=$(g_sUnits)/s
-			UseAbsVal=0
+			; Negative speed is simply direction, not decelleration.
+			UseAbsVal=1
 			LeapSec=Hand
 			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
@@ -70,11 +52,29 @@ LoadCatalog()
 			AvgLabel=Average acceleration $(A_ThisDim)
 			StoreAs=ValFromMetrics
 			Units=$(g_sUnits)/s2
+			UseAbsVal=0
 			LeapSec=Hand
 			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
 			MetricKey=WgtAvg$(A_ThisSec)
 			MetricKeyForDiff=WgtAvgSpeed$(A_ThisDim)
+			UseAbsValForMetricKey=1
+			3D=1
+			Dim=
+			m_bCloned=0
+
+			[Motion Smoothness]
+			Label=Current motion smoothness $(A_ThisDim)
+			AvgLabel=Average motion smoothness $(A_ThisDim)
+			StoreAs=ValFromMetrics
+			Units=$(g_sUnits)/s3
+			UseAbsVal=0
+			LeapSec=Hand
+			LeapKey=Velocity$(A_ThisDim)
+			MetricSec=Hand
+			MetricKey=WgtAvg$(A_ThisSec)
+			MetricKeyForDiff=WgtAvgAcceleration$(A_ThisDim)
+			UseAbsValForMetricKey=0
 			3D=1
 			Dim=
 			m_bCloned=0
@@ -84,9 +84,9 @@ LoadCatalog()
 			AvgLabel=Average distance between hands $(A_ThisDim)
 			StoreAs=TimeWeighted
 			Units=$(g_sUnits)
-			UseAbsVal=1
+			UseAbsVal=0
 			LeapSec=Header
-			LeapKey=PalmDiff$(A_ThisDim)
+			LeapKey=PalmDiff$(A_ThisDim)_US
 			; TODO: Keep leap and metric sections the same.
 			MetricSec=Other
 			MetricKey=WgtAvgDistFromHands$(A_ThisDim)
@@ -181,7 +181,26 @@ LoadCatalog()
 		}
 	}
 
-	g_vCatalog.Save()
+	;~ g_vCatalog.Save()
 
 	return
 }
+
+/*
+Deprecated fields...
+
+
+			[Roll]
+			Label=Current $(A_ThisSec)
+			AvgLabel=Average $(A_ThisSec)
+			StoreAs=TimeWeighted
+			Units=°
+			UseAbsVal=0
+			LeapSec=Hand
+			LeapKey=$(A_ThisSec)
+			MetricSec=Hand
+			MetricKey=WgtAvg$(A_ThisSec)
+			3D=0
+			CloneTo=Pitch|Yaw
+			m_bCloned=0
+*/
