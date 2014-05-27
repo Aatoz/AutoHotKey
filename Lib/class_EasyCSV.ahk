@@ -170,8 +170,10 @@ class EasyCSV
 	*/
 	AddRow(ByRef rsError)
 	{
-		for iCol in this
-			this[iCol].Insert("") ; Insert adds new row.
+		;~ for iCol in this
+		; Adding one to every col takes a lot of time, and I don't think it is necessary.
+		; However, I should verify this -- Verdlin: 5/26/14.
+		this.1.Insert("") ; Insert adds new row.
 
 		iRow := this.1.MaxIndex()
 		if (iRow == A_Blank)
