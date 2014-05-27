@@ -139,7 +139,7 @@ class AutoLeap
 	{
 		static WM_CLOSE:=16
 
-		; If we post a message after this.OSD_PostMsg, then there's not enough time to actually see this message.
+		; If we post a message after this.SendMessageToExe, then there's not enough time to actually see this message.
 		if (bUpdateOSD)
 			this.OSD_PostMsg("Leap Motion(™) listener is closing")
 
