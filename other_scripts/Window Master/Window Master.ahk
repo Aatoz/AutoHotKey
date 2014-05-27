@@ -1831,14 +1831,14 @@ Window_Master_About:
 	FileRead, iVersion, version
 	StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
 
-	GUI, AboutDlg_:New, hwndg_hCreditsDlg
+	GUI, AboutDlg_:New, hwndg_hAboutDlg
 
 	iFarRight := 850-g_iMSDNStdBtnW
 	GUI, Add, Link, w%iFarRight%, %sFile%
 	GUI, Add, Button, X%iFarRight% W%g_iMSDNStdBtnW% H%g_iMSDNStdBtnH% gAboutDlg_GUIEscape, &OK
 
 	GUI, Show, x-32768 AutoSize
-	CenterWndOnOwner(g_hCreditsDlg, g_hWindowMaster)
+	CenterWndOnOwner(g_hAboutDlg, g_hWindowMaster)
 
 	iFarRight :=
 	return
@@ -5690,10 +5690,11 @@ Author(s):
 */
 IsResizable(hwnd="A")
 {
+	static s_sExceptions := "Chrome_XPFrame,Chrome_WidgetWin_1,MozillaUIWindowClass,MozillaWindowClass,wndclass_desked_gsk,QPasteClass,Notepad++,SciTEWindow"
 	MakeValidHwnd(hWnd)
 
 	WinGetClass, Class, ahk_id %hwnd%
-	if Class in Chrome_XPFrame,MozillaUIWindowClass,MozillaWindowClass,wndclass_desked_gsk,QPasteClass,Notepad++,SciTEWindow
+	if Class in %s_sExceptions%
 	{
 		return true
 	}
