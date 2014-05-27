@@ -5,12 +5,10 @@
 sFilesToInclude := "
 (
 res\Default Wnd.png
-res\W7Circle.jpg
 res\Monitor Frame.png
 res\icons\Sequence.ico
 res\icons\Settings_Pressed_16.ico
 res\icons\Snap.ico
-res\icons\Win7.ico
 res\icons\Bunch of Bluish\Add.ico
 res\icons\Bunch of Bluish\Close.ico
 res\icons\Bunch of Bluish\Edit.ico
@@ -25,6 +23,11 @@ res\icons\I Like Buttons\Win2.ico
 res\icons\Orb\Down.ico
 res\icons\Primo\Pause.ico
 res\icons\Primo\Play.ico
+res\icons\Windows Master\Default Flyout Menu 1.jpg
+res\icons\Windows Master\Default Flyout Menu 2.jpg
+res\icons\Windows Master\Default Flyout Menu 3.jpg
+res\icons\Windows Master\Main.ico
+res\icons\Windows Master\Splash with rounded edges.png
 )"
 
 ; Begin version number
@@ -63,14 +66,13 @@ Loop, Parse, sFilesToInclude, `n
 			sFileExt := SubStr(sFileName, iPosOfDot)
 			sFileName := SubStr(sFileName, 1, iPosOfDot-3) sFileExt
 		}
-		StringReplace, sFileName, sFileName, W7Circle, Default Flyout Menu
 		StringReplace, sFileName, sFileName, Off, Close
 		StringReplace, sFileName, sFileName, Settings_Pressed_16, Menu Settings
 		StringReplace, sFileName, sFileName, Browse2, Window
 		StringReplace, sFileName, sFileName, Resize2, Resize
 		StringReplace, sFileName, sFileName, Win2, Open
-		StringReplace, sFileName, sFileName, Win7, Main
 		StringReplace, sFileName, sFileName, Down, Import
+		StringReplace, sFileName, sFileName, Splash with rounded edges, Splash
 
 		sFileInstalls .= "FileInstall, images\" sFileName ", images\" sFileName ", 1`n"
 		FileCopy, %A_LoopField%, %sDir%\%sFileName%
