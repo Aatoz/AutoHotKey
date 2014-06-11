@@ -195,7 +195,8 @@ class CFlyout
 	}
 
 	; Moves m_vSelector to the item rect within iMouseY. Does not and should not work in ReadOnly mode.
-	Click(iMouseY)
+	; If bMoveToMouse is false, then we just return the row the mouse is under. Used in CLeapMenu.
+	Click(iMouseY, bMoveToMouse=true)
 	{
 		;~ ControlGetPos,, iBorderY,,,, % "ahk_id" this.m_hGroupBox
 		iOffset := Fnt_GetFontHeight(this.m_hFont) / 2 ; TODO: m_iFontOffsetY
@@ -218,7 +219,8 @@ class CFlyout
 			i := iMouseY - iOffset
 			if (i < iBottom && i >= (iY))
 			{
-				this.MoveTo(A_Index + this.m_iDrawnAtNdx)
+				if (bMoveToMouse)
+					this.MoveTo(A_Index + this.m_iDrawnAtNdx)
 				return A_Index
 			}
 		}
@@ -1086,7 +1088,7 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 	if (IsFunc(vFlyout.m_sCallbackFunc))
 		bRet := Func(vFlyout.m_sCallbackFunc).(vFlyout, msg)
 
-	vFlyout:=
+	vFlyout :=
 	return bRet
 }
 ;;;;;;;;;;;;;;
