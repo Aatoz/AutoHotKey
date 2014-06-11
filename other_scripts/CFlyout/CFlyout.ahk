@@ -84,6 +84,7 @@ class CFlyout
 	; Calculates height from m_iDrawnAtNdx (topmost item being display) to item number iTo. Used in CFlyoutMenuHandler.
 	CalcHeightTo(iTo)
 	{
+		iOffset := Fnt_GetFontHeight(this.m_hFont) / 2
 		while (A_Index <= iTo)
 		{
 			sTmp := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
@@ -201,7 +202,8 @@ class CFlyout
 		;~ ControlGetPos,, iBorderY,,,, % "ahk_id" this.m_hGroupBox
 		iOffset := Fnt_GetFontHeight(this.m_hFont) / 2 ; TODO: m_iFontOffsetY
 
-		Loop % this.m_iMaxRows ; the flyout should never be larger than the height of this.m_iMaxRows
+		iLoop := (this.m_asItems.MaxIndex() < this.m_iMaxRows ? this.m_asItems.MaxIndex() : this.m_iMaxRows)
+		Loop %iLoop% ; the flyout should never be larger than the height of this.m_iMaxRows
 		{
 			this.CalcBorderSelectionRect(this.m_asItems[this.m_iDrawnAtNdx + A_Index])
 
