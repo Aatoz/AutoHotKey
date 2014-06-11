@@ -28,6 +28,9 @@ if (false)
 InitGlobals()
 InitGUI()
 
+#Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
+#Include %A_ScriptDir%\Catalog.ahk
+
 return
 
 LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
@@ -117,7 +120,12 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 					, sRawDataColPrefix, sIndent, sGUIOutput)
 			}
 			else if (aFieldInfo_Copy.StoreAs = "ValFromMetrics")
-				AddVarFromMetricsDiff(rLeapData, aFieldInfo_Copy, sRawDataColPrefix, sIndent, sGUIOutput)
+			{
+				AddVarFromMetricsDiff(rLeapData, aFieldInfo_Copy
+					, s_vTimeInfo[aFieldInfo_Copy.LeapSec].TimeSinceLastCall
+					, s_vTimeInfo[aFieldInfo_Copy.LeapSec].TotalTimeVisible
+					, sRawDataColPrefix, sIndent, sGUIOutput)
+			}
 			else if (aFieldInfo_Copy.StoreAs = "RawInc")
 				AddRawVar(rLeapData, aFieldInfo_Copy, sRawDataColPrefix, sIndent, sGUIOutput)
 			else FatalErrorMsg("Invalid data storage type encountered: " . aFieldInfo_Copy.StoreAs)
@@ -140,6 +148,10 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		{
 			g_vMetrics[sec, aFieldInfo.MetricKey "_Prev"] := g_vMetrics[sec, aFieldInfo.MetricKey]
 			g_vMetrics[sec, aFieldInfo.LeapKey "_Prev"] := rLeapData[sec, aFieldInfo.LeapKey]
+
+			; For calculating averages from differences in metrics.
+			if (g_vCatalog[sFieldID].HasKey("MetricKeyForCurVal"))
+				g_vMetrics[sec, g_vCatalog[sFieldID, "MetricKeyForCurVal"] "_Prev"] := g_vMetrics[sec, g_vCatalog[sFieldID, "MetricKeyForCurVal"]]
 		}
 
 	s_bIsFirstCallWithData := false
@@ -160,54 +172,34 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 SetTimeInfo(bIsFirstCallWithData, ByRef rLeapData, ByRef rvTimeInfo)
 {
 	global g_sLeapSecsParse_c
-	static s_bHand2IsHand1 := false
+	static s_iTotalTimeVisible := 0
 
-	Loop, Parse, g_sLeapSecsParse_c, |
+	if (bIsFirstCallWithData)
 	{
-		; On the first call with data, we have to force the total to be 0.001 in order for averaging to be right.
-		; I have thought this through, and I think it is best to give such a small weight (as opposed to 1) for the first frame
-		; Since this could very well be a jerky motion due to hands coming into view, we want this to affect
-		; averaging as little as possible.
-		if (bIsFirstCallWithData)
-		{
-			rvTimeInfo[A_LoopField].TimeStartOffset := rLeapData[A_LoopField].TimeVisible ; ms
-			rvTimeInfo[A_LoopField].TotalTimeVisible := 0.001
-			rvTimeInfo[A_LoopField].TimeSinceLastCall := 0.001
-			rvTimeInfo.Header.TimeStartOffset := rLeapData.Hand1.TimeVisible ; Hand1/2 is arbitrary.
-		}
-		else
-		{
-			if (A_LoopField = "Header")
-				iTotalTimeVisible := rLeapData.Hand1.TimeVisible - rvTimeInfo[A_LoopField].TimeStartOffset
-			else iTotalTimeVisible := rLeapData[A_LoopField].TimeVisible - rvTimeInfo[A_LoopField].TimeStartOffset
-
-			; If Hand2 drops out of view, then start using time from Hand1.
-			; This isn't necessarily the most perfect approach, but it is fast,
-			; and it likely won't skew calculations too bad since both hands
-			; likely came into view around the same time.
-			if (A_LoopField = "Hand2" && (s_bHand2IsHand1 || !rLeapData.HasKey(A_LoopField)))
-			{
-				rvTimeInfo.Hand2 := rvTimeInfo.Hand1
-				s_bHand2IsHand1 := true
-				continue
-			}
-
-			; Set the times at previous call before resetting TotalTimeVisible.
-			rvTimeInfo[A_LoopField].TimeSinceLastCall := iTotalTimeVisible - rvTimeInfo[A_LoopField].TotalTimeVisible
-
-			; Now reset TotalTimeVisible.
-			rvTimeInfo[A_LoopField].TotalTimeVisible := iTotalTimeVisible
-		}
+		TimeSinceLastCall() ; Begin counter.
+		iTimeSinceLastCall := 0.001 ; If 0, first metrics are all 0.
+	}
+	else
+	{
+		iTimeSinceLastCall := TimeSinceLastCall()
+		if (iTimeSinceLastCall == 0)
+			iTimeSinceLastCall := 0.001
 	}
 
-	; TODO: Reinstate?
+	s_iTotalTimeVisible += iTimeSinceLastCall
+	Loop, Parse, g_sLeapSecsParse_c, |
+	{
+		rvTimeInfo[A_LoopField].TotalTimeVisible := s_iTotalTimeVisible
+		rvTimeInfo[A_LoopField].TimeSinceLastCall := iTimeSinceLastCall
+	}
+
 	; Perform some sanity checks for our time-weighted vars.
-	;~ if (!iTimeSinceLastFrame)
-		;~ FatalErrorMsg("Error: There is an issue with calculating the time since the last frame " iTimeSinceLastFrame)
-	;~ if (iTotalTimeElapsed == 0)
-		;~ FatalErrorMsg("Error: There is an issue with the time-weighting denominator.")
-	;~ else if (iTimeSinceLastFrame > iTotalTimeElapsed)
-		;~ FatalErrorMsg("Error: There is an issue with the time-weighting numerator.")
+	if (rvTimeInfo.Hand1.TimeSinceLastCall < 0)
+		FatalErrorMsg("Error: There is an issue with calculating the time since the last frame " rvTimeInfo.Hand1.TimeSinceLastCall)
+	if (s_iTotalTimeVisible == 0)
+		FatalErrorMsg("Error: There is an issue with the time-weighting denominator.")
+	else if (rvTimeInfo.Hand1.TimeSinceLastCall > s_iTotalTimeVisible)
+		FatalErrorMsg("Error: There is an issue with the time-weighting numerator.")
 
 
 	return
@@ -266,10 +258,10 @@ IncVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, ByRef riVar="")
 		if (raFieldInfo.UseAbsVal)
 			iLeapVar := abs(iLeapVar)
 
-		g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] += iLeapVar
+		g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] += iLeapVar
 	}
 
-	riVar := g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey]
+	riVar := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey]
 
 	return
 }
@@ -283,23 +275,22 @@ IncVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, ByRef riVar="")
 	Parameters
 		rLeapData
 		raFieldInfo: Field info from g_vCatalog
+		iNum: Numerator
+		iDenom: Denominator
 		sRawDataColPrefix: Hand1 and Hand2 have identical column names, but we need UIDs for g_vColLabelToNum,
 			This string should be "H1 " or "H2 "
 		sIndent: Indentation for labels (needed for rsDataForGUI)
 		rsDataForGUI: Visual string data outputted to GUI
 */
-AddVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, sRawDataColPrefix, sIndent, ByRef rsDataForGUI)
+AddVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sRawDataColPrefix, sIndent, ByRef rsDataForGUI)
 {
 	global
 
-	CalcVarFromMetricsDiff(rLeapData, raFieldInfo, iCurLeapDiff, iMetricDiff)
+	CalcVarFromMetricsDiff(rLeapData, raFieldInfo, iNum, iDenom, iCurLeapDiff, iMetricDiff)
 
 	; Log this information.
-	if (raFieldInfo.MetricKeyForDiff = ("WgtAvgSpeed" . raFieldInfo.Dim))
-	{	; Only worth the trouble to calculate current acceleration.
-		rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iCurLeapDiff * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
-		g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iCurLeapDiff
-	}
+	rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iCurLeapDiff * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iCurLeapDiff
 
 	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " Round(iMetricDiff * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
 	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.AvgLabel], g_iCSVRow] := iMetricDiff
@@ -316,65 +307,49 @@ AddVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, sRawDataColPrefix, sIn
 	Parameters
 		rLeapData
 		raFieldInfo: Field info from g_vCatalog.
-		riCurDiffVar: Difference between leap val at current frame and val at last frame.
-		riMetricDiff: Difference between metric val at current frame and val at last frame.
+		iTimeMultiplier_Num: To multiply numerator by
+		iTotalTime_Denom
+		riCurDiff: Difference between current val at current frame and "current" val at last frame.
+		riAvgDiff: Difference between metric val at current frame and val at last frame.
 */
-CalcVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, ByRef riLeapDiff, ByRef riMetricDiff)
+CalcVarFromMetricsDiff(ByRef rLeapData, ByRef raFieldInfo, iTimeMultiplier_Num, iTotalTime_Denom, ByRef riCurDiff, ByRef riAvgDiff)
 {
 	global g_vMetrics
-	riLeapDiff := riMetricDiff := 0
+	riCurDiff := riAvgDiff := 0
 
 	; Validate all sections and keys.
 	ValidateLeapAndMetricSecsAndKeys(rLeapData, raFieldInfo)
 
-	if (raFieldInfo.MetricKeyForDiff = ("WgtAvgSpeed" . raFieldInfo.Dim))
+	if (raFieldInfo.MetricKey = "WgtAvgAcceleration" . raFieldInfo.Dim)
 	{
-		iCurLeapVal := rLeapData[raFieldInfo.LeapSec, raFieldInfo.LeapKey]
-		iPrevLeapVal := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.LeapKey "_Prev"]
-
-		; If we didn't have a previous value, then the effective value is the current value.
-		if (iCurLeapVal == A_Blank)
-			riLeapDiff := A_Blank
-		else
-		{
-			; If we don't respect abs val, then we will get reversed values since _Prev is always stored as abs val.
-			; Note: That comment will likely make no sense to me weeks from now -- Verdlin: 5/26/14.
-			if (raFieldInfo.UseAbsValForMetricKey)
-			{
-				iCurLeapVal := abs(iCurLeapVal)
-				iPrevLeapVal := abs(iPrevLeapVal)
-			}
-			riLeapDiff := (iCurLeapVal - iPrevLeapVal)
-		}
+		iCurMetric := abs(rLeapData[raFieldInfo.LeapSec, raFieldInfo.LeapKey])
+		iPrevMetric := abs(g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.LeapKey "_Prev"])
 	}
-
-	iCurMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKeyForDiff]
-	iPrevMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKeyForDiff "_Prev"]
-	if (iPrevMetric == A_Blank)
-		riMetricDiff := iCurLeapVal
-	else if (iCurMetric == A_Blank)
-		riMetricDiff := A_Blank
 	else
 	{
-		if (raFieldInfo.UseAbsValForMetricKey)
-		{
-			iCurMetric := abs(iCurMetric)
-			iPrevMetric := iPrevMetric
-		}
-		riMetricDiff := (iCurMetric - iPrevMetric)
+		iCurMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.CurMetricKeyForDiff]
+		iPrevMetric := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.CurMetricKeyForDiff "_Prev"]
 	}
 
-	g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] := riMetricDiff
+	if (iCurMetric == A_Blank)
+		riCurDiff := A_Blank
+	else riCurDiff := (iCurMetric - iPrevMetric)
+	; We must store current values for other metrics differences that need to reference this field.
+	; Acceleration needing Velocity, for example.
+	g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKeyForCurVal] := riCurDiff
+
+	; Time-wgt current val of metric to get weighted average.
+	TimeWgtVarInMetrics(riCurDiff, raFieldInfo, iTimeMultiplier_Num, iTotalTime_Denom, riAvgDiff)
 
 	return
 }
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
 	Function:
 		Purpose: AddTimeWgtVar
+			Note: Function assumes you want to time weight a far coming out of rLeapData
 	Parameters
 		rLeapData
 		raFieldInfo: Field info from g_vCatalog
@@ -389,7 +364,11 @@ AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sRawDataColPrefi
 {
 	global
 
-	TimeWgtVarInMetrics(rLeapData, raFieldInfo, iNum, iDenom, iVar)
+	; Validate all sections and keys.
+	ValidateLeapAndMetricSecsAndKeys(rLeapData, raFieldInfo)
+
+	iVar := rLeapData[raFieldInfo.LeapSec, raFieldInfo.LeapKey]
+	TimeWgtVarInMetrics(iVar, raFieldInfo, iNum, iDenom, iTimeWgtVar)
 
 	; Log this information.
 	iCurVal := rLeapData[raFieldInfo.LeapSec][raFieldInfo.LeapKey]
@@ -398,8 +377,8 @@ AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sRawDataColPrefi
 	rsDataForGUI .= sIndent . raFieldInfo.Label ": " Round(iCurVal * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
 	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.Label], g_iCSVRow] := iCurVal
 
-	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " Round(iVar * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
-	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.AvgLabel], g_iCSVRow] := iVar
+	rsDataForGUI .= sIndent . raFieldInfo.AvgLabel ": " Round(iTimeWgtVar * g_iUnitConversionFactor) " " raFieldInfo.Units "`n"
+	g_vRawDataCSV[g_vColLabelToNum[sRawDataColPrefix . raFieldInfo.AvgLabel], g_iCSVRow] := iTimeWgtVar
 
 	return
 }
@@ -411,44 +390,29 @@ AddTimeWgtVar(ByRef rLeapData, ByRef raFieldInfo, iNum, iDenom, sRawDataColPrefi
 	Function: TimeWgtVarInMetrics
 		Purpose: Handles general logic for time-weighting a variable tracking in our Leap procedures.
 	Parameters
-		rLeapData
+		iRawVar: Var to time-weight
 		raFieldInfo: Field info from g_vCatalog
 		iTimeMultiplier_Num: To multiply numerator by
-		iTotalTime_Denom
-		riVar="": Passed out var retrieved from rLeapData
+		iTotalTime_Denom: Denom
+		riVar="": Time-weighted var
 */
-TimeWgtVarInMetrics(ByRef rLeapData, ByRef raFieldInfo, iTimeMultiplier_Num, iTotalTime_Denom, ByRef riVar="")
+TimeWgtVarInMetrics(iRawVar, ByRef raFieldInfo, iTimeMultiplier_Num, iTotalTime_Denom, ByRef riVar="")
 {
 	global
 	riVar := 0
-b := raFieldInfo.Dim = "X" && false
-	; Validate all sections and keys.
-	ValidateLeapAndMetricSecsAndKeys(rLeapData, raFieldInfo)
 
-	iVar := rLeapData[raFieldInfo.LeapSec][raFieldInfo.LeapKey]
+	if (iRawVar == A_Blank)
+		iRawVar := 0
+	else if (raFieldInfo.UseAbsVal)
+		iRawVar := abs(iRawVar)
 
-	if (iVar != A_Blank)
-	{
-		if (raFieldInfo.UseAbsVal)
-			iVar := abs(iVar)
-if (b)
-	Msgbox % raFieldInfo.LeapKey "=" iVar
-		iVar *= iTimeMultiplier_Num ; Time-weight var num.
-
-		; Don't /div 0!
-		if (!iTotalTime_Denom)
-			iTotalTime_Denom := 1
-
-		; In order to inc the time-weighted var, we need to retrieve the previous, aggregated raw (non-weighted) val.
-		iPrevAggRawVal := g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] * (iTotalTime_Denom - iTimeMultiplier_Num)
-
-		; Divide the aggregated vars by the total time elapsed.
-		g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey] := (iVar + iPrevAggRawVal) / iTotalTime_Denom ; Here's where we time-weight denom.
-		if (b)
-			Msgbox % raFieldInfo.LeapKey "=" rLeapData[raFieldInfo.LeapSec][raFieldInfo.LeapKey] "`n" raFieldInfo.MetricKey "=" g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey]
-	}
-
-	riVar := g_vMetrics[raFieldInfo.MetricSec][raFieldInfo.MetricKey]
+	; Set the current, unweighted var in metrics.
+	; Time-weight var numerator only
+	if (g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] == A_Blank)
+		g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] := (iRawVar * iTimeMultiplier_Num)
+	else g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] += (iRawVar * iTimeMultiplier_Num)
+	; The denominator should be used by callers when the total is actually needed.
+	riVar := g_vMetrics[raFieldInfo.MetricSec, raFieldInfo.MetricKey] / iTotalTime_Denom
 
 	return
 }
@@ -762,7 +726,7 @@ FileInstalls()
 	FileInstall, Eye.ico, Eye.ico
 	FileInstall, Record.ico, Record.ico
 	FileInstall, Stop.ico, Stop.ico
-
+	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -790,8 +754,8 @@ InitTray()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function:
-		Purpose:
+	Function: ShowInfoDlg
+		Purpose: To show an information dialog.
 	Parameters
 		sFile: File to display on dlg.
 */
@@ -815,6 +779,10 @@ ShowInfoDlg(sFIle)
 
 	GUI, Show, x-32768 AutoSize
 	g_vLeap.m_vDlgs.CenterWndOnOwner(g_hInfoDlg, g_hSurgeryWatcher)
+
+	Hotkey, IfWinActive, ahk_id %g_hInfoDlg%
+		Hotkey, Enter, InfoDlg_GUIEscape
+		Hotkey, NumpadEnter, InfoDlg_GUIEscape
 
 	return
 
@@ -869,15 +837,14 @@ InitGlobals(bInitLeap=true)
 		WgtAvgAccelerationX=0
 		WgtAvgAccelerationY=0
 		WgtAvgAccelerationZ=0
-		WgtAvgMotion SmoothnessX=0
-		WgtAvgMotion SmoothnessY=0
-		WgtAvgMotion SmoothnessZ=0
+		WgtAvgMotionSmoothnessX=0
+		WgtAvgMotionSmoothnessY=0
+		WgtAvgMotionSmoothnessZ=0
 
 		[Hand2]
 		; To avoid cloning, data is copied from Hand1.
 	)"
 
-	FileDelete, Metrics.ini
 	g_vMetrics := class_EasyIni("Metrics", sMetrics)
 	g_vMetrics.Hand2 := ObjClone(g_vMetrics.Hand1)
 	g_bMetricsDataWasExported := true ; because there's nothing to export when we first start.
@@ -982,9 +949,9 @@ RunUnitTests()
 		VelocityX=100
 		VelocityY=100
 		VelocityZ=100
-		PalmDeltaX=100
-		PalmDeltaY=100
-		PalmDeltaZ=100
+		PalmDeltaX_US=100
+		PalmDeltaY_US=100
+		PalmDeltaZ_US=100
 		TimeVisible=1
 		Roll=0
 		Pitch=0
@@ -997,9 +964,9 @@ RunUnitTests()
 		VelocityX=100
 		VelocityY=100
 		VelocityZ=100
-		PalmDeltaX=100
-		PalmDeltaY=100
-		PalmDeltaZ=100
+		PalmDeltaX_US=100
+		PalmDeltaY_US=100
+		PalmDeltaZ_US=100
 		TimeVisible=1
 		Roll=0
 		Pitch=0
@@ -1043,12 +1010,30 @@ RunUnitTests()
 		vLeapData.Header["PalmDiff" A_LoopField] := 200
 
 	vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible := 2001
-	Loop 3
+	Loop 15
 	{
 		LeapMsgHandler("", vLeapData, [], s)
 		Tooltip % 2 + A_Index
-		Sleep 1000
-		vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible += 1000
+		Sleep 250
+
+		Loop %g_iHands_c%
+		{
+			Random, iInc, 50, 500
+			iHand := A_Index
+			for k, v in vLeapData["Hand" iHand]
+			{
+				if (k = "TimeVisible")
+					continue
+
+				vLeapData["Hand" iHand, k] := iInc
+			}
+		}
+		Random, iInc, 50, 500
+		Loop, Parse, g_s3DParse_c, |
+			vLeapData.Header["PalmDiff" A_LoopField] := iInc
+
+		Random, iTime, 0.1, 0.3
+		vLeapData.Hand1.TimeVisible := vLeapData.Hand2.TimeVisible += iTime
 	}
 
 	return
@@ -1092,6 +1077,8 @@ GetReadMeFile()
 	return "
 	(
 License: <a href=""http://creativecommons.org/licenses/by-nc-nd/4.0/legalcode"">Attribution-NonCommercial-NoDerivatives 4.0 International</a>
+	Copyright " g_sName " " A_Year " Noah Graydon
+	All rights reserved
 
 Version: %VERSION%
 
@@ -1215,5 +1202,31 @@ Anchor2(ctrl, a, d = false)
 	return
 }
 
-#Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
-#Include %A_ScriptDir%\Catalog.ahk
+/*
+timeSinceLastCall ( http://ahkscript.org/boards/viewtopic.php?f=6&t=537 )
+   Return the amount of time, in milliseconds, that has passed since you last called this function.
+
+   id    = You may use different ID's to store different timesets. ID should be 1 and above (not 0 or negative) or a string.
+   reset = If reset is 1 and id is 0, all ID's are cleared. Otherwise if reset is 1, that specific id is cleared.
+
+   * NOTE:
+   The first call is usually blank.
+
+example:
+   out:=timeSinceLastCall()
+   sleep, 500
+   out:=timeSinceLastCall()
+output:  500
+*/
+TimeSinceLastCall(id=1, reset=0)
+{
+	static arr:=array()
+	if (reset=1)
+	{
+		((id=0) ? arr:=[] : (arr[id, 0]:=arr[id, 1]:="", arr[id, 2]:=0))
+		return
+	}
+	arr[id, 2]:=!arr[id, 2]
+	arr[id, arr[id, 2]]:=A_TickCount
+	return abs(arr[id,1]-arr[id,0])
+}

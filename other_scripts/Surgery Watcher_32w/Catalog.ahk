@@ -37,7 +37,7 @@ LoadCatalog()
 			AvgLabel=Average speed $(A_ThisDim)
 			StoreAs=TimeWeighted
 			Units=$(g_sUnits)/s
-			; Negative speed is simply direction, not decelleration.
+			; Negative speed is simply direction, not deceleration.
 			UseAbsVal=1
 			LeapSec=Hand
 			LeapKey=Velocity$(A_ThisDim)
@@ -57,13 +57,12 @@ LoadCatalog()
 			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
 			MetricKey=WgtAvg$(A_ThisSec)
-			MetricKeyForDiff=WgtAvgSpeed$(A_ThisDim)
-			UseAbsValForMetricKey=1
+			MetricKeyForCurVal=Acceleration$(A_ThisDim)
 			3D=1
 			Dim=
 			m_bCloned=0
 
-			[Motion Smoothness]
+			[MotionSmoothness]
 			Label=Current motion smoothness $(A_ThisDim)
 			AvgLabel=Average motion smoothness $(A_ThisDim)
 			StoreAs=ValFromMetrics
@@ -73,13 +72,12 @@ LoadCatalog()
 			LeapKey=Velocity$(A_ThisDim)
 			MetricSec=Hand
 			MetricKey=WgtAvg$(A_ThisSec)
-			MetricKeyForDiff=WgtAvgAcceleration$(A_ThisDim)
-			UseAbsValForMetricKey=0
+			CurMetricKeyForDiff=Acceleration$(A_ThisDim)
 			3D=1
 			Dim=
 			m_bCloned=0
 
-			[Distance between hands]
+			[DistanceBetweenHands]
 			Label=Current distance between hands $(A_ThisDim)
 			AvgLabel=Average distance between hands $(A_ThisDim)
 			StoreAs=TimeWeighted
@@ -87,7 +85,6 @@ LoadCatalog()
 			UseAbsVal=0
 			LeapSec=Header
 			LeapKey=PalmDiff$(A_ThisDim)_US
-			; TODO: Keep leap and metric sections the same.
 			MetricSec=Other
 			MetricKey=WgtAvgDistFromHands$(A_ThisDim)
 			3D=1
