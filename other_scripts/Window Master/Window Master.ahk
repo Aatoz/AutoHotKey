@@ -66,12 +66,10 @@ FileInstall, ..\CFlyout\CFMH_res.dll, CFMH_res.dll, 1
 ; Also FileInstalls are created dynamically from make.ahk.
 ; v1.0
 FileInstall, images\Default Wnd.png, images\Default Wnd.png, 1
-FileInstall, images\Default Flyout Menu.jpg, images\Default Flyout Menu.jpg, 1
 FileInstall, images\Monitor Frame.png, images\Monitor Frame.png, 1
 FileInstall, images\Sequence.ico, images\Sequence.ico, 1
 FileInstall, images\Menu Settings.ico, images\Menu Settings.ico, 1
 FileInstall, images\Snap.ico, images\Snap.ico, 1
-FileInstall, images\Main.ico, images\Main.ico, 1
 FileInstall, images\Add.ico, images\Add.ico, 1
 FileInstall, images\Close.ico, images\Close.ico, 1
 FileInstall, images\Edit.ico, images\Edit.ico, 1
@@ -86,6 +84,11 @@ FileInstall, images\Open.ico, images\Open.ico, 1
 FileInstall, images\Import.ico, images\Import.ico, 1
 FileInstall, images\Pause.ico, images\Pause.ico, 1
 FileInstall, images\Play.ico, images\Play.ico, 1
+FileInstall, images\Default Flyout Menu 1.jpg, images\Default Flyout Menu 1.jpg, 1
+FileInstall, images\Default Flyout Menu 2.jpg, images\Default Flyout Menu 2.jpg, 1
+FileInstall, images\Default Flyout Menu 3.jpg, images\Default Flyout Menu 3.jpg, 1
+FileInstall, images\Main.ico, images\Main.ico, 1
+FileInstall, images\Splash.png, images\Splash.png, 1
 ; License and other help files.
 FileInstall, License.txt, License.txt, 1
 FileInstall, ReadMe.txt, ReadMe.txt, 1
@@ -472,11 +475,11 @@ VolumeOSD_Init()
 ;;;;;;;;;;;;;;
 InitThreads()
 {
-	global g_dll, g_vMH
+	global g_dll, g_vFlyoutMH
 
 	g_dll.ahklabel["ExitApp"] ; Because sometimes the destructor does not work.
-	g_vMH:=ahklabel["ExitApp"]
-	g_dll:=g_vMH:=
+	g_vFlyoutMH:=ahklabel["ExitApp"]
+	g_dll:=g_vFlyoutMH:=
 
 	InitMenuHandler()
 	StartHotkeyThread()
@@ -489,10 +492,10 @@ InitThreads()
 ;;;;;;;;;;;;;;
 SuspendThreads(sOnOrOff)
 {
-	global g_dll, g_vMH
+	global g_dll, g_vFlyoutMH
 
 	g_dll.ahkFunction["Suspend", sOnOrOff]
-	g_vMH.Suspend(sOnOrOff)
+	g_vFlyoutMH.Suspend(sOnOrOff)
 
 	return
 }
@@ -505,14 +508,16 @@ InitMenuHandler()
 
 	if (g_HotkeysIni["Quick Menu"].Hotkey && g_HotkeysIni["Quick Menu"].Activate = "true")
 	{
-		local vTmp := class_EasyIni("Flyout_config.ini", GetMenuConfigSettingsIni())
+		local vTmp := class_EasyIni("Flyout_config.ini", GetLeapMenuSettingsIni())
 		if (!FileExist("Flyout_Config.ini"))
 		{
 			; Effectively the first time running.
 			vTmp.Save()
 		}
 
-		g_vMH := new CFlyoutMenuHandler(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll", vTmp.Flyout.X, vTmp.Flyout.Y, 0, 0, GetMenuConfigIni(), "Left")
+		g_vFlyoutMH := new CFlyoutMenuHandler(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll", vTmp.Flyout.X, vTmp.Flyout.Y, 0, 0, GetLeapMenuConfigIni(), "Left")
+		if (g_bHasLeap)
+			g_vLeapMH := new CLeapMenu(g_vFlyoutMH, g_vLeap)
 
 		;~ SetTimer, Window_Master_HotCorner, 350
 		g_iActivatedSince := 11
@@ -522,7 +527,7 @@ InitMenuHandler()
 
 QuickMenu_EditSettings:
 {
-	; Note: Not calling g_vMH.GUIEditSettings(g_hWindowMaster) because that causes a lockup.
+	; Note: Not calling g_vFlyoutMH.GUIEditSettings(g_hWindowMaster) because that causes a lockup.
 	CFlyout.GUIEditSettings(g_hWindowMaster)
 	return
 }
@@ -540,8 +545,8 @@ Window_Master_HotCorner:
 	{
 		WinGetActiveTitle, sTitle
 		if (InStr(sTitle, "GUI_Flyout"))
-			g_vMH.ExitMenu()
-		else g_vMH.ShowMenu()
+			g_vFlyoutMH.ExitMenu()
+		else g_vFlyoutMH.ShowMenu()
 
 		g_iActivatedSince :=
 		g_iActivatedAtX := iX
@@ -1669,12 +1674,12 @@ Window_Master_Reload:
 		WinClose
 	g_vLeap.__Delete() ; If one of the dlgs were active, then the proper __Delete routines will not fire.
 
-	g_dll := g_vMH := g_vLeap := ""
+	g_dll := g_vFlyoutMH := g_vLeap := ""
 	Reload
 } ; Fall through
 Window_Master_Exit:
 {
-	g_dll := g_vMH := g_vLeap := "" ; g_vLeap should be released since it is responsible for AutoLeap.exe
+	g_dll := g_vFlyoutMH := g_vLeap := "" ; g_vLeap should be released since it is responsible for AutoLeap.exe
 	ExitApp
 	return
 }
@@ -3151,8 +3156,8 @@ StartHotkeyThread()
 
 	if (g_bIsDev) ; For debugging
 	{
-		filedelete, test2.ahk
-		fileappend, %sScript%, test2.ahk
+		filedelete, test.ahk
+		fileappend, %sScript%, test.ahk
 	}
 
 	if (sScript)
@@ -3337,7 +3342,17 @@ LeapTabIsActive()
 ;;;;;;;;;;;;;;
 Window_Master_LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vLeapMsgProcessor
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
+		, g_vLeap, g_vLeapMsgProcessor, g_vFlyoutMH, g_vLeapMH
+
+	;~ if (g_vFlyoutMH.MainMenuExist()) ; TODO: Encapsulate logic in MenuProc instead?
+	;~ {
+		;~ g_vLeap.m_vProcessor.m_bIgnoreGestures := true
+		;~ g_vLeapMH.MenuProc(rLeapData)
+		;~ return
+	;~ }
+	;~ else if (!g_vLeapMH.m_bCircleHidden)
+		;~ g_vLeapMH.HideCircle()
 
 	bIsDataPost := (sMsg = "Post")
 
@@ -3573,7 +3588,7 @@ Window_Master_PlayPauseLeap:
 */
 Leap_ActionFromHotkey(sAction)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vMH
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vFlyoutMH
 
 	Loop, Parse, g_sInisForParsing, |
 	{
@@ -3604,7 +3619,7 @@ Leap_ActionFromHotkey(sAction)
 
 		; I hate hard-coding, but hopefully this is the only special case we need to handle.
 		if (sAction = "Quick Menu")
-			g_vMH.ShowMenu()
+			g_vFlyoutMH.ShowMenu()
 	}
 	else Msgbox("Unable to determine function for action: " sAction, 2)
 
@@ -3630,6 +3645,7 @@ Leap_MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	MakeValidHwnd(hWnd)
 
 	; Tracking gets iffy at these points, and currently the interaction box class does not help with this problem.
+	; TODO: Use Data confidence factor in v2.0
 	if (rLeapData.Hand1.PalmX > 290 || || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
 		return
 
@@ -4066,8 +4082,8 @@ Leap_Zoom(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 
 	;~ iRadiusScaled := rLeapData.Circle.Radius*s_iRadiusFactor_c
 	;~ iZooms := (iProgressDiff*s_iProgressFactor_c)+iRadiusScaled
-	if (iZooms > 0.80 && iZooms < 1)
-		iZooms := iProgressDiff ; 1 Progress = 1 zoom
+	;~ if (iZooms > 0.80 && iZooms < 1)
+		;~ iZooms := iProgressDiff ; 1 Progress = 1 zoom
 
 	;~ WinGetTitle, sTitle, ahk_id %hWnd%
 	;~ WinGetClass, sClass
@@ -4168,97 +4184,15 @@ Leap_AdjustVolume(ByRef rLeapData, ByRef rasGestures)
 */
 Leap_QuickMenu(ByRef rLeapData, ByRef rasGestures)
 {
-	global g_vLeap, g_vLeapMsgProcessor, g_vMH
-	static s_iLeftRightFactor := 0.1, s_iUpDownFactor := 0.1
-		, s_bLastMoveWasSubmit, s_bLastMoveWasEscape
-
-	if (!g_vMH.MainMenuExists())
+	global g_vFlyoutMH, g_vLeapMH, g_vLeapMsgProcessor
+Msgbox %A_ThisFunc%()
+	if (g_vFlyoutMH.MainMenuExist())
+		g_vLeapMH.MenuProc(rLeapData)
+	else
 	{
+		g_vLeapMH.HideCircle()
 		g_vLeapMsgProcessor.m_bCallerHasFinished := true
-		return
 	}
-
-	; Get palm info.
-	iPalmX := rLeapData.Hand1.PalmX
-	iPalmY := rLeapData.Hand1.PalmY
-	; Get palm X and Y movement.
-	iPalmXDelta := rLeapData.Hand1.TransX
-	iPalmYDelta := rLeapData.Hand1.TransY
-
-	; Velocity.
-	iVelocityX := abs(rLeapData.Hand1.VelocityX)
-	iVelocityY := abs(rLeapData.Hand1.VelocityY)
-
-	; Movement should be *very* deliberate.
-	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 400)
-	if (iVelocityY < 400)
-		iVelocityYFactor := 0.75
-	else iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 900)
-
-	; Strip out noise from humanity's generable inability to stabilize their palms.
-	if (abs(iPalmXDelta) > 0.10)
-		iScrollXs := abs(iPalmXDelta*iVelocityXFactor*s_iLeftRightFactor)
-	if (abs(iPalmYDelta) > 0.10)
-		iScrollYs := abs(iPalmYDelta*iVelocityYFactor*s_iUpDownFactor)
-	Tooltip %iScrollYs%`n%iPalmYDelta%`n%iVelocityYFactor%`n%iVelocityY%
-
-	; 1. Scroll right is submit.
-	; 2. Scroll left is escape.
-	; 3. Scroll down moves the menu down.
-	; 4. Scroll up moves the menu up.
-	; Note: Since right/left are submit/escape, we only allow one per call;
-	; however, since scrolling up/down takes more work, we allow multiple.
-	bScrollRight := (iPalmX > iLastPalmX)
-	bScrollUp := (iPalmY > iLastPalmY)
-
-	bMainMenuExists := true
-
-	if (iScrollXs > 1)
-	{
-		if (bScrollRight && !s_bLastMoveWasSubmit)
-		{
-			g_vMH.Submit(bMainMenuExists)
-			s_bLastMoveWasSubmit := true
-		}
-		else if (!bScrollRight && !s_bLastMoveWasEscape)
-		{
-			g_vMH.Escape(bMainMenuExists)
-			s_bLastMoveWasEscape := true
-		}
-	}
-	else s_bLastMoveWasSubmit := s_bLastMoveWasEscape := false
-
-	Loop %iScrollYs%
-		g_vMH.Move(bScrollUp)
-
-	;~ if (s_bMenuIsActive)
-	;~ {
-		;~ g_vMH.ShowMenu()
-		;~ s_bMenuIsActive := false
-		;~ return
-	;~ }
-
-	;~ if (asGestures.MaxIndex() > 1)
-		;~ return
-
-	;~ bMainMenuExists := true
-	;~ sGesture := asGestures[1]
-
-	;~ if (sGesture = "KeyTap" || sGesture = "ScreenTap" || sGesture = "Swipe Right")
-		;~ g_vMH.Submit(bMainMenuExists)
-	;~ else if (sGesture = "Swipe Left")
-		;~ g_vMH.Escape(bMainMenuExists)
-	;~ else if (sGesture = "Swipe Up")
-		;~ g_vMH.Move(true)
-	;~ else if (sGesture = "Swipe Down")
-		;~ g_vMH.Move(false)
-
-	;~ if (bMainMenuExists)
-		;~ g_vLeap.OSD_Init()
-	;~ else
-	;~ {
-		;~ g_vLeapMsgProcessor.m_bCallerHasFinished := true
-	;~ }
 
 	return
 }
@@ -4617,14 +4551,13 @@ SnapWnd(sDir, hWnd="A")
 {
 	global g_DictMonInfo
 
-	hWndToSnap := hWnd == "A" ? WinExist(hWnd) : hWnd
-
+	hWndToSnap := (hWnd == "A" ? WinExist(hWnd) : hWnd)
 	if (GetMinMaxState(hWndToSnap) == 1)
 		WinRestore ; TODO: Toggle it without moving?
 	WinGetPos, iX, iY, iW, iH, ahk_id %hWndToSnap%
 
-	iXRight := 100 - ((iW * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)]["W"]))
-	iYBottom := 100 - ((iH * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)]["H"]))
+	iXRight := 100 - ((iW * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)].W))
+	iYBottom := 100 - ((iH * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)].H))
 
 	if (sDir = "BottomLeft")
 		GetDimFromPct(0, iYBottom, 0, 0, iX, iY, iW, iH, hWndToSnap)
@@ -4649,7 +4582,7 @@ SnapWnd(sDir, hWnd="A")
 	else if (sDir = "CornerBottom")
 		GetDimFromPct(0, iYBottom, 0, 0, i, iY, i, i, hWndToSnap)
 
-	WinMove, ahk_id %hWndToSnap%, , %iX%, %iY%
+	WinMove, ahk_id %hWndToSnap%,, %iX%, %iY%
 	return
 }
 
@@ -4952,7 +4885,7 @@ DisableTransparency:
 ;~ {
 	;~ SetFormat, Integer, hex
 	;~ hTopmost := DllCall("GetTopWindow", uint, 0)
-	;~ hNext := DllCall("GetWindow", uint, hTopmost, uint, 2)
+	;~ hNext := WinExist("ahk_id " win2)
 
 	;~ WinMove, ahk_id %hTopmost%,, 0, 0, 960, 540
 	;~ WinMove, ahk_id %hNext%,, 0, 0, 960, 540
@@ -5021,7 +4954,10 @@ MosaicMode:
 }
 QuickMenu:
 {
-	g_vMH.ShowMenu()
+	if (g_bHasLeap)
+		Leap_ActionFromHotkey("Quick Menu")
+	else sec = "Quick Menu"
+
 	return
 }
 ResizeToBottomHalf:
@@ -5726,7 +5662,7 @@ GuiControlGet(Subcommand = "", ControlID = "", Param4 = "") {
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-GetMenuConfigSettingsIni()
+GetLeapMenuSettingsIni()
 {
 	return "
 		(LTrim
@@ -5748,62 +5684,82 @@ GetMenuConfigSettingsIni()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-GetMenuConfigIni()
+GetLeapMenuConfigIni()
 {
-	return "
+	global g_bHasLeap, g_LeapActionsIni
+
+	sSharedMenu := "
 		(LTrim
 			[MainMenu]
 			1. Snap >=Snap To
 			2. Move >=Move To
 			3. Resize >=Resize
 			4. Window >=Window
-			5. Open App=Label:LaunchMainDlg
-			6. Exit (Esc)=ExitMainMenu
 
 			[Snap To]
 			1. To Top >=Snap To Top
 			2. To Bottom >=Snap To Bottom
 			3. To Corner >=Snap To Corner
-			4. To Center=Func:SnapWnd(""Center"", g_hActiveWndBeforeMenu)
+			4. To Center=Func:SnapWnd(""Center"", m_hActiveWndBeforeMenu)
 
 			[Snap To Top]
-			1. Left=Func:SnapWnd(""TopLeft"", g_hActiveWndBeforeMenu)
-			2. Right=Func:SnapWnd(""TopRight"", g_hActiveWndBeforeMenu)
-			3. Center=Func:SnapWnd(""TopCenter"", g_hActiveWndBeforeMenu)
+			1. Left=Func:SnapWnd(""TopLeft"", m_hActiveWndBeforeMenu)
+			2. Right=Func:SnapWnd(""TopRight"", m_hActiveWndBeforeMenu)
+			3. Center=Func:SnapWnd(""TopCenter"", m_hActiveWndBeforeMenu)
 
 			[Snap To Bottom]
-			1. Left=Func:SnapWnd(""BottomLeft"", g_hActiveWndBeforeMenu)
-			2. Right=Func:SnapWnd(""BottomRight"", g_hActiveWndBeforeMenu)
-			3. Center=Func:SnapWnd(""BottomCenter"", g_hActiveWndBeforeMenu)
+			1. Left=Func:SnapWnd(""BottomLeft"", m_hActiveWndBeforeMenu)
+			2. Right=Func:SnapWnd(""BottomRight"", m_hActiveWndBeforeMenu)
+			3. Center=Func:SnapWnd(""BottomCenter"", m_hActiveWndBeforeMenu)
 
 			[Snap To Corner]
-			1. Left=Func:SnapWnd(""CornerLeft"", g_hActiveWndBeforeMenu)
-			2. Right=Func:SnapWnd(""CornerRight"", g_hActiveWndBeforeMenu)
-			3. Top=Func:SnapWnd(""CornerTop"", g_hActiveWndBeforeMenu)
-			4. Bottom=Func:SnapWnd(""CornerBottom"", g_hActiveWndBeforeMenu)
+			1. Left=Func:SnapWnd(""CornerLeft"", m_hActiveWndBeforeMenu)
+			2. Right=Func:SnapWnd(""CornerRight"", m_hActiveWndBeforeMenu)
+			3. Top=Func:SnapWnd(""CornerTop"", m_hActiveWndBeforeMenu)
+			4. Bottom=Func:SnapWnd(""CornerBottom"", m_hActiveWndBeforeMenu)
 
 			[Move To]
-			1. Left Monitor=Func:MoveWndToMonitor(""Left"", g_hActiveWndBeforeMenu)
-			2. Right Monitor=Func:MoveWndToMonitor(""Right"", g_hActiveWndBeforeMenu)
+			1. Left Monitor=Func:MoveWndToMonitor(""Left"", m_hActiveWndBeforeMenu)
+			2. Right Monitor=Func:MoveWndToMonitor(""Right"", m_hActiveWndBeforeMenu)
 
 			[Resize]
-			1. Left 1/2=Func:ResizeWnd(""LeftHalf"", g_hActiveWndBeforeMenu)
-			2. Right 1/2=Func:ResizeWnd(""RightHalf"", g_hActiveWndBeforeMenu)
-			3. Top 1/2=Func:ResizeWnd(""TopHalf"", g_hActiveWndBeforeMenu)
-			4. Bottom 1/2=Func:ResizeWnd(""BottomHalf"", g_hActiveWndBeforeMenu)
-			5. Center 1/2=Func:ResizeWnd(""CenterHalf"", g_hActiveWndBeforeMenu)
-			6. Center 3/4=Func:ResizeWnd(""CenterThreeFourths"", g_hActiveWndBeforeMenu)
+			1. Left 1/2=Func:ResizeWnd(""LeftHalf"", m_hActiveWndBeforeMenu)
+			2. Right 1/2=Func:ResizeWnd(""RightHalf"", m_hActiveWndBeforeMenu)
+			3. Top 1/2=Func:ResizeWnd(""TopHalf"", m_hActiveWndBeforeMenu)
+			4. Bottom 1/2=Func:ResizeWnd(""BottomHalf"", m_hActiveWndBeforeMenu)
+			5. Center 1/2=Func:ResizeWnd(""CenterHalf"", m_hActiveWndBeforeMenu)
+			6. Center 3/4=Func:ResizeWnd(""CenterThreeFourths"", m_hActiveWndBeforeMenu)
 
 			[Window]
-			1. Toggle Border=Func:ToggleWindowBorder(g_hActiveWndBeforeMenu)
-			2. Minimize Window=Func:MinimizeWindow(g_hActiveWndBeforeMenu)
-			3. Maximize Window=Func:MaximizeWindow(g_hActiveWndBeforeMenu)
-			4. Maximize Vertically=Func:MaximizeVertically(g_hActiveWndBeforeMenu)
-			5. Maximize Horizontally=Func:MaximizeHorizontally(g_hActiveWndBeforeMenu)
-			6. Close All Windows=ExitMainMenu
-			7. Close All but Curent Window=ExitMainMenu
+			1. Toggle Border=Func:ToggleWindowBorder(m_hActiveWndBeforeMenu)
+			2. Minimize Window=Func:MinimizeWindow(m_hActiveWndBeforeMenu)
+			3. Maximize Window=Func:MaximizeWindow(m_hActiveWndBeforeMenu)
+			4. Maximize Vertically=Func:MaximizeVertically(m_hActiveWndBeforeMenu)
+			5. Maximize Horizontally=Func:MaximizeHorizontally(m_hActiveWndBeforeMenu)
+			;~ 6. Close Window=Func:CloseWindow(m_hActiveWndBeforeMenu)
+			7. Close All Windows=ExitAllMenus
+			8. Close All but Curent Window=ExitAllMenus
 
 	)"
+		vTmpMenu := class_EasyIni("MergedMenu", sSharedMenu)
+
+		; TODO: Adding menu logic should be incorporated into CFlyoutMenuHandler class.
+		iCurMainMenuNum := 5
+		if (g_bHasLeap)
+		{
+			vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Leap Actions"] := "Leap Actions"
+			iCurLeapMenuNum := 1
+			for sec in g_LeapActionsIni
+				vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". " sec] := "Func:Leap_ActionFromHotkey(""" sec """)"
+			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Resize Window"] := "Func:Leap_ActionFromHotkey(""Resize Window"")"
+			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Adjust Volume"] := "Func:Leap_ActionFromHotkey(""Adjust Volume"")"
+			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Scroll"] := "Func:Leap_ActionFromHotkey(""Scroll"")"
+			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Zoom"] := "Func:Leap_ActionFromHotkey(""Zoom"")"
+		}
+		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Open App"] := "Label:LaunchMainDlg"
+		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Exit (Esc)"] := "ExitAllMenus"
+
+	return vTmpMenu.ToVar()
 }
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -6097,7 +6053,6 @@ GetDefaultHotkeysIni()
 			Type=Settings
 			GestureName=Launch Quick Menu
 			HelpDesc=Activates a menu which provides shortcuts for the most useful window actions.
-			RouteToLeapWhenAvailable=false
 
 			[Resize To Bottom Half]
 			Activate=true
@@ -6805,6 +6760,5 @@ GetVKsIni()
 ;	Includes
 #include <class_GUITabEx>
 #Include %A_ScriptDir%\WM_Dlg.ahk
-#Include %A_ScriptDir%\CFlyout.ahk ; Simply to get around lock-up bug where we cannot call GUIEditSettings from CFMH.
-#Include %A_ScriptDir%\CFlyoutMenuHandler.ahk
+#Include %A_ScriptDir%\CLeapMenu.ahk
 #Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
