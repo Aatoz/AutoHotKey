@@ -2,6 +2,7 @@
 #SingleInstance Force
 #include %A_ScriptDir%\CFlyout.ahk
 
+SetWorkingDir, %A_ScriptDir%
 SendMode, Input
 
 g_vTooltipFlyout := new CFlyout(0, GetLatestSpecs(false), false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "Center") ; c0xFF0080
@@ -20,6 +21,7 @@ Hotkey, IfWinActive, % "ahk_id" g_vTooltipFlyout.m_hFlyout
 	Hotkey, Down, OnWheelDown
 	Hotkey, Enter, OnEnter
 	Hotkey, NumpadEnter, OnEnter
+	Hotkey, Space, OnEnter
 	Hotkey, !E, GUIEditSettings
 	Hotkey, ^R, Reload
 	Hotkey, Esc, ExitApp
