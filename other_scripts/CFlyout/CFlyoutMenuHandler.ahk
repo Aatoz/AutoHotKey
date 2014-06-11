@@ -510,7 +510,7 @@ Suspend(sOnOff)
 			this.m_vMenuConfigIni := class_EasyIni("MenuConfig", this.m_sIni)
 		else this.m_vMenuConfigIni := class_EasyIni("MenuConfig")
 
-		this.m_vMenuConfigIni.Save()
+		;~ this.m_vMenuConfigIni.Save()
 		return
 	}
 
