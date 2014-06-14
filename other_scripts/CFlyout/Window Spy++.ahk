@@ -197,6 +197,7 @@ Show_Hide:
 	if (g_vTooltipFlyout.m_bIsHidden)
 	{
 		SetTimer, TooltipProc, 100
+		gosub TooltipProc
 		g_vTooltipFlyout.MoveTo(g_iPrevSel)
 		g_vTooltipFlyout.Show()
 	}
