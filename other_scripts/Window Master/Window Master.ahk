@@ -46,7 +46,6 @@ For Me: Current LOC written by me (Including AutoLeap.exe): 10,098
 */
 
 #SingleInstance Force
-
 SetBatchLines -1 ; Needed for StartHotkeyThread().
 SetWinDelay, -1
 SendMode, Input
@@ -60,7 +59,6 @@ if (!FileExist("images"))
 
 If 0 ; When compiled, AhkDllThread.ahk assumes AutoHotkey[Mini].dll is installed in the executable
 	FileInstall,..\..\AutoHotkey.dll,-
-FileInstall, ..\CFlyout\CFMH_res.dll, CFMH_res.dll, 1
 
 ; Images are brought over with make.ahk.
 ; Also FileInstalls are created dynamically from make.ahk.
@@ -121,6 +119,12 @@ Menu, TRAY, Icon, E&xit, AutoLeap\Exit.ico,, 16
 ; Dismiss Splash screen.
 SplashImage, Off
 gosub LaunchMainDlg
+
+;	Includes
+#include <class_GUITabEx>
+#Include %A_ScriptDir%\WM_Dlg.ahk
+#Include %A_ScriptDir%\CLeapMenu.ahk
+#Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
 
 return ; End Autoexecute
 
@@ -204,10 +208,11 @@ InitGlobals()
 	if (g_bHasLeap)
 	{
 		g_vLeapMsgProcessor := {					m_bUseTriggerGesture:0
-			, m_bCallbackNeedsGestures:0,	m_bGestureUsesPinch:0
+			, m_bCallbackNeedsGestures:0,		m_bGestureUsesPinch:0
 			, m_bCallbackCanStop:0,					m_hTriggerGestureFunc:0,	m_bActionHasStarted:0
 			, m_sTriggerAction:0,						m_bMoveAlongXOnly:0,		m_bMoveAlongYOnly:0
-			, m_bFistMadeDuringThreshold:0,	m_iFrameCnt:0,						m_iMSSinceLastFrame:0}
+			, m_bFistMadeDuringThreshold:0,	m_iFistStart:0,						m_iTimeWithFist:0
+			, m_bHand1HasReset:0, 					m_bHand2HasReset:0}
 	}
 
 	return
@@ -222,7 +227,7 @@ InitLeap()
 	RegRead, sKey, HKCR, airspace\shell\open\command
 	if (InStr(sKey, "Leap Motion"))
 	{
-		global g_vLeap := new AutoLeap("Window_Master_LeapMsgHandler")
+		global g_vLeap := new AutoLeap("LeapMsgHandler")
 
 		; Merge Gestures.ini with our defaults.
 		g_vLeap.MergeGesturesIni(GetDefaultLeapGesturesIni())
@@ -261,14 +266,13 @@ InitAllInis()
 	; "Static" hotkeys
 	; Given the delicate relationship between labels and hotkeys, this requires some special handling.
 	local vDefaultHotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini", GetDefaultHotkeysIni())
-	g_HotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini")
+	g_HotkeysIni := class_EasyIni(vDefaultHotkeysIni.GetFileName())
 	; To allow removal of old settings and additions of new settings, merge vDefaultHotkeysIni and g_HotkeysIni.
 	; bRemoveNonMatching: If true, removes sections and keys that do not exist in both inis.
 	; bOverwriteMatching: If true, any key that exists in both objects will use the val from g_HotkeysIni.
 	local vExceptionsForHotkeysIni := class_EasyIni("", GetExceptionsForHotkeysIni())
 	vDefaultHotkeysIni.Merge(g_HotkeysIni, true, true, vExceptionsForHotkeysIni)
 	g_HotkeysIni := vDefaultHotkeysIni ; Seems like merge should handle this or something, but I am too tired to think this one through right now.
-	g_HotkeysIni.Save() ; This effectively updates the local ini with new, internal settings from GetDefaultHotkeysIni()
 
 	; Save to ensure that, if new options were added, keys were renamed, or keys were removed
 	; we will load this options into their appropriate ListView
@@ -279,16 +283,16 @@ InitAllInis()
 
 	; Leap actions. Handling is quite similar to g_HotkeysIni.
 	local vDefaultLeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini", GetDefaultLeapActionsIni())
-	g_LeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini")
+	g_LeapActionsIni := class_EasyIni(vDefaultLeapActionsIni.GetFileName())
 	local vExceptionsForLeapActionsIni := class_EasyIni("", GetExceptionsForLeapActionsIni())
 	; Merge in similar fashion as g_HotkeysIni.
 	vDefaultLeapActionsIni.Merge(g_LeapActionsIni, true, true, vExceptionsForLeapActionsIni)
 	g_LeapActionsIni := vDefaultLeapActionsIni
 	g_LeapActionsIni.Save() ; This effectively updates the local ini with new, internal settings from GetDefaultLeapActionsIni()
 
-	if (!FileExist("Sequences.ini"))
+	if (!FileExist(g_SequencesIni.GetFileName()))
 	{
-		g_SequencesIni := class_EasyIni(A_ScriptDir "\sequences.ini", GetDefaultSequencesIni())
+		g_SequencesIni := class_EasyIni(g_SequencesIni.GetFileName(), GetDefaultSequencesIni())
 		g_SequencesIni.Save()
 	}
 
@@ -1646,9 +1650,9 @@ Window_Master_GUIClose:
 		else g_bShouldSave := false
 	}
 
-	gosub Window_Master_CloseProc
-
+	; We reload all inis in CloseProc. That has started to take awhile, so now we hide the GUI before doing so.
 	GUI, Window_Master_:Hide
+	gosub Window_Master_CloseProc
 
 	; Note: The below block was originally placed in LaunchMainDlg; it has been moved because RegRead is VERY slow.
 	; Also note how we do this AFTER we have hidden the GUI.
@@ -3340,39 +3344,36 @@ LeapTabIsActive()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-Window_Master_LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
+LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
 	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
 		, g_vLeap, g_vLeapMsgProcessor, g_vFlyoutMH, g_vLeapMH
+	static s_iPalm1ID := rLeapData.Hand1.ID, s_iPalm2ID := rLeapData.Hand2.ID
+	SetFormat, FloatFast, 0.6 ; For timestamps
 
-	;~ if (g_vFlyoutMH.MainMenuExist()) ; TODO: Encapsulate logic in MenuProc instead?
-	;~ {
-		;~ g_vLeap.m_vProcessor.m_bIgnoreGestures := true
-		;~ g_vLeapMH.MenuProc(rLeapData)
-		;~ return
-	;~ }
-	;~ else if (!g_vLeapMH.m_bCircleHidden)
-		;~ g_vLeapMH.HideCircle()
+	g_vLeapMsgProcessor.m_bHand1HasReset := s_iPalm1ID != rLeapData.Hand1.ID
+	g_vLeapMsgProcessor.m_bHand2HasReset := s_iPalm2ID != rLeapData.Hand2.ID
+	s_iPalm1ID := rLeapData.Hand1.ID
+	s_iPalm2ID := rLeapData.Hand2.ID
 
 	bIsDataPost := (sMsg = "Post")
 
 	; The below checks allows the hand(s) to go completely out of view without us ending the gesture.
 	if (g_vLeapMsgProcessor.m_bUseTriggerGesture)
 	{
-		; When the hand is just coming into the FOV, there are usually no fingers immediately detected.
-		g_vLeapMsgProcessor.m_iFrameCnt++
-		if (g_vLeapMsgProcessor.m_iMSSinceLastFrame > 0)
+		bIsMakingFist := g_vLeap.IsMakingFist(rLeapData)
+		if (!bIsMakingFist || g_vLeapMsgProcessor.m_bHand1HasReset)
 		{
-			if (A_TickCount-g_vLeapMsgProcessor.m_iMSSinceLastFrame > 1000
-				|| ((g_vLeapMsgProcessor.m_sTriggerAction = "Scroll" || g_vLeapMsgProcessor.m_bGestureUsesPinch)
-				&& A_TickCount-g_vLeapMsgProcessor.m_iMSSinceLastFrame > 1250))
-			{
-				g_vLeapMsgProcessor.m_iMSSinceLastFrame := 0
-				g_vLeapMsgProcessor.m_iFrameCnt := 0
-				g_vLeapMsgProcessor.m_bFistMadeDuringThreshold := g_vLeap.IsMakingFist(rLeapData)
-			}
+			g_vLeapMsgProcessor.m_iFistStart := 0
+			g_vLeapMsgProcessor.m_iTimeWithFist := 0
+			g_vLeapMH.TimeSinceLastCall(A_ThisFunc, 2)
 		}
-		else g_vLeapMsgProcessor.m_iMSSinceLastFrame := (A_TickCount)
+
+		if (bIsMakingFist) ; If we have been making a fist for the past second, bail out.
+		{
+			g_vLeapMsgProcessor.m_iTimeWithFist += g_vLeapMH.TimeSinceLastCall(A_ThisFunc)
+			g_vLeapMsgProcessor.m_bFistMadeDuringThreshold := g_vLeapMsgProcessor.m_iTimeWithFist > 1000
+		}
 	}
 	; End fist-checking.
 
@@ -3382,7 +3383,7 @@ Window_Master_LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsO
 		return
 	}
 
-	; Leap_ functions stop getting called when g_vLeap.IsMakingFist(rLeapData)
+	; Leap_ functions stop getting called when making a fist for 1 or more seconds.
 	bActionHasStarted := g_vLeapMsgProcessor.m_bActionHasStarted
 	bCallbackCanStop := g_vLeapMsgProcessor.m_bCallbackCanStop
 	bCallbackWillStop := g_vLeapMsgProcessor.m_bCallbackWillStop
@@ -3431,55 +3432,72 @@ Window_Master_LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsO
 		return
 
 	if (bIsDataPost)
+		OnDataPost(sGesture, rsOutput)
+
+	return
+}
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: OnDataPost
+		Purpose:
+	Parameters
+		rLeapData
+		rsOutput
+*/
+OnDataPost(ByRef rsGesture, ByRef rsOutput)
+{
+	global
+
+	; Gesture is defined in Gestures.ini, so search m_vGesturesIni to see if it is mapped to any action.
+	Loop, Parse, g_sInisForParsing, |
 	{
-		; Gesture is defined in Gestures.ini, so search to see if it is mapped to any action.
-		Loop, Parse, g_sInisForParsing, |
+		for sec, aData in %A_LoopField%
 		{
-			for sec, aData in %A_LoopField%
-			{
-				bGestureIsMappedToAction := (sGesture = g_vLeap.m_vGesturesIni[aData.GestureName].Gesture)
-
-				if (bGestureIsMappedToAction)
-				{
-					rsOutput := aData.GestureName
-					break
-				}
-			}
-
-			sCallable := CallableFromSec(sec)
+			bGestureIsMappedToAction := (rsGesture = g_vLeap.m_vGesturesIni[aData.GestureName].Gesture)
 
 			if (bGestureIsMappedToAction)
 			{
-				if (A_LoopField = "g_SequencesIni")
-				{
-					SequenceWnd(sec)
-				}
-				else if (A_LoopField = "g_PrecisionIni")
-				{
-					DoPrecisePlacement(sec)
-				}
-				else if (A_LoopField = "g_HotkeysIni")
-				{
-					if (aData.RouteToLeapWhenAvailable = "true")
-						SetLeapMsgCallback(sCallable, g_LeapActionsIni["Internal_" sec], rsOutput)
-
-					if (IsLabel(sCallable))
-						gosub %sCallable%
-					else rsOutput := "Error: Gesture not found"
-				}
-				else if (A_LoopField = "g_LeapActionsIni")
-				{
-					SetLeapMsgCallback(sCallable, aData, rsOutput)
-				}
-
+				rsOutput := aData.GestureName
 				break
 			}
+		}
+
+		sCallable := CallableFromSec(sec)
+
+		if (bGestureIsMappedToAction)
+		{
+			if (A_LoopField = "g_SequencesIni")
+			{
+				SequenceWnd(sec)
+			}
+			else if (A_LoopField = "g_PrecisionIni")
+			{
+				DoPrecisePlacement(sec)
+			}
+			else if (A_LoopField = "g_HotkeysIni")
+			{
+				if (aData.RouteToLeapWhenAvailable = "true")
+					SetLeapMsgCallback(sCallable, g_LeapActionsIni["Internal_" sec], rsOutput)
+
+				if (IsLabel(sCallable))
+					gosub %sCallable%
+				else rsOutput := "Error: Gesture not found"
+			}
+			else if (A_LoopField = "g_LeapActionsIni")
+			{
+				SetLeapMsgCallback(sCallable, aData, rsOutput)
+			}
+
+			break
 		}
 	}
 
 	return
 }
-;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3503,6 +3521,7 @@ ResetLeapMsgProcessor()
 
 	g_vLeap.m_vProcessor.m_bIgnoreGestures := false
 	g_vLeap.m_vProcessor.m_bGestureSuggestions := true
+	g_vLeap.m_vProcessor.m_iOnlyUseLatestGesture := -1
 
 	return
 }
@@ -3532,14 +3551,17 @@ SetLeapMsgCallback(sFunc, aData, sTriggerAction)
 		g_vLeapMsgProcessor.m_sTriggerAction := sTriggerAction
 
 		g_vLeapMsgProcessor.m_bFistMadeDuringThreshold := false
-		g_vLeapMsgProcessor.m_iFrameCnt := 0
-		g_vLeapMsgProcessor.m_iMSSinceLastFrame := 0
+		g_vLeapMH.TimeSinceLastCall(2, true) ; Reset
+		g_vLeapMsgProcessor.m_iFistStart := 0
 
 		;~ if (g_vLeapMsgProcessor.m_bGestureUsesPinch)
 			;~ g_vLeap.SendMessageToExe("Pinch=Start")
 		if (!g_vLeapMsgProcessor.m_bCallbackNeedsGestures)
 			g_vLeap.m_vProcessor.m_bIgnoreGestures := true ; Reduces noise and saves precious time in ProcessAutoLeapData.
 		else g_vLeap.m_vProcessor.m_bGestureSuggestions := false ; We don't want gesture suggestions when are hooked to an action.
+
+		if (aData.OnlyUseLatestGesture)
+			g_vLeap.m_vProcessor.m_bOnlyUseLatestGesture := aData.OnlyUseLatestGesture
 	}
 
 	return
@@ -3588,7 +3610,8 @@ Window_Master_PlayPauseLeap:
 */
 Leap_ActionFromHotkey(sAction)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vFlyoutMH
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
+		, g_vLeap, g_vFlyoutMH, g_vLeapMH
 
 	Loop, Parse, g_sInisForParsing, |
 	{
@@ -3608,6 +3631,10 @@ Leap_ActionFromHotkey(sAction)
 
 	if (bFoundMatch)
 	{
+		; Note: if we do this at the bottom, it locks up the whole program!
+		if (g_vFlyoutMH.MainMenuExist())
+			g_vLeapMH.EndMenuProc(0)
+
 		; When we redirect to LeapActionIni, we should be guaranteed that there is an identical section name prefixed with "Internal_"
 		if (bRouteToLeap)
 			aData := g_LeapActionsIni["Internal_" sAction]
@@ -3790,13 +3817,9 @@ Leap_PinchWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 
 	MakeValidHwnd(hWnd)
 
-	; Use the last gesture in the array; that way the user doesn't have to worry about accidentally
-	; triggering another gesture, such as a forward swipe, when they really want to start circling.
-	sGesture := rasGestures[rasGestures.MaxIndex()]
-
-	if (sGesture = "Circle Right")
+	if (rLeapData.Circle.Direction = "Right")
 		bPinchIn := true
-	else if (sGesture = "Circle Left")
+	else if (rLeapData.Circle.Direction = "Left")
 		bPinchIn := false
 	else return ; Unsupported gesture.
 	bPinchOut := !bPinchIn
@@ -3907,25 +3930,10 @@ Leap_PinchWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 */
 Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 {
-	global g_vLeap
-	static s_bFingersWereOutOfTouchZone
-		, WM_HSCROLL:=276, WM_VSCROLL:=277
+	global g_vLeap, g_vLeapMsgProcessor
+	static WM_HSCROLL:=276, WM_VSCROLL:=277
 		, SB_LINELEFT:=0, SB_LINERIGHT:=1, SB_LINEUP:=0, SB_LINEDOWN:=1
 		, SB_PAGELEFT:=2, SB_PAGERIGHT:=3, SB_PAGEUP:=2, SB_PAGEDOWN:=3
-
-	; Prevent scrolling when no fingers are less than halfway within the virtual touch zone.
-	bFingersOutOfTouchZone := true
-	while (bFingersOutOfTouchZone && rLeapData.HasKey("Finger" A_Index))
-		bFingersOutOfTouchZone := (rLeapData["Finger" A_Index].TouchDistance > 0.40)
-
-	if (bFingersOutOfTouchZone)
-	{
-		s_bFingersWereOutOfTouchZone := true
-		return
-	}
-
-	bHasReset := s_bFingersWereOutOfTouchZone
-	s_bFingersWereOutOfTouchZone := false
 
 	;~ if (hWnd != "A")
 		;~ Msgbox
@@ -3933,53 +3941,62 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	;~ WinGetTitle, sTitle, ahk_id %hWnd%
 	;~ ToolTip hWnd:`t%hWnd%`nTitle:`t%sTitle%
 
-	iVelocityX := abs(rLeapData.Hand1.VelocityX)
-	iVelocityY := abs(rLeapData.Hand1.VelocityY)
+	sLeapSec := "Finger1"
+	sLeapKeyPart := "Delta"
+	if (!rLeapData.HasKey(sLeapSec))
+	{
+		sLeapSec := "Hand1"
+		sLeapKeyPart := "Trans"
+	}
 
-	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 120)
-	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 120)
+	iVelocityX := abs(rLeapData[sLeapSec].VelocityX)
+	iVelocityY := abs(rLeapData[sLeapSec].VelocityY)
+	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 45)
+	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 45)
 
 	; Get palm X and Y movement.
-	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
+	iXDelta := rLeapData[sLeapSec, sLeapKeyPart "X"]
+	iYDelta  :=rLeapData[sLeapSec, sLeapKeyPart "Y"]
 
 	; Here's the deal: If the finger(s) started low and re-entered high, we would glitch upward.
-	if (bHasReset)
+	if (bHasReset || g_vLeapMsgProcessor.m_bHand1HasReset)
 		return
 
-	bScrollLeft := (iPalmXDelta > 0)
-	bScrollRight := !bScrollLeft
-	bScrollDown := (iPalmYDelta > 0)
+	bScrollRight := (iXDelta < 0)
+	bScrollDown := (iYDelta < 0)
 
-	if (iVelocityX > 800)
+	if (iVelocityX > 750)
 	{
 		iScrollXs := 1
 		SB_LR := (bScrollRight ? SB_PAGERIGHT : SB_PAGELEFT)
 	}
 	else
 	{
-		iScrollXs := abs((iPalmXDelta*iVelocityXFactor))*0.1
-		if (iScrollXs < 1 && iScrollXs > 0.05)
-			iScrollXs := 1
+		iScrollXs := abs(iXDelta)*0.25
 		SB_LR := (bScrollRight ? SB_LINERIGHT : SB_LINELEFT)
 	}
-	if (iVelocityY > 800)
+	if (iVelocityY > 750)
 	{
 		iScrollYs := 1
 		SB_UD := (bScrollDown ? SB_PAGEDOWN : SB_PAGEUP)
 	}
 	else
 	{
-		iScrollYs := abs((iPalmYDelta*iVelocityYFactor))*0.1
-		if (iScrollYs < 1 && iScrollYs > 0.05)
-			iScrollYs := 1
+		iScrollYs := abs(iYDelta)*0.25
 		SB_UD := (bScrollDown ? SB_LINEDOWN : SB_LINEUP)
 	}
 
-	ControlGetFocus, ActiveControl, A
+	; No need to overdo scrolling and slow down frames.
+	if (iScrollXs > 20)
+		iScrollXs := 5
+	if (iScrollYs > 20)
+		iScrollYs := 5
+
+	ControlGetFocus, hActiveControl, A
 	Loop %iScrollXs%
-		SendMessage, WM_HSCROLL, %SB_LR%, 0, %ActiveControl%, A
+		SendMessage, WM_HSCROLL, %SB_LR%, 0, %hActiveControl%, A
 	Loop %iScrollYs%
-		SendMessage, WM_VSCROLL, %SB_UD%, 0, %ActiveControl%, A
+		SendMessage, WM_VSCROLL, %SB_UD%, 0, %hActiveControl%, A
 
 	return
 }
@@ -3997,9 +4014,7 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 */
 Leap_Zoom(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 {
-	static s_iRadiusFactor_c := 0.005, s_iProgressFactor_c := 22.00, s_iLastProgress
-	; Old values
-	; static s_iRadiusFactor_c := 0.025, s_iProgressFactor_c := 1.75, s_iLastProgress
+	static s_iRadiusFactor_c := 0.05, s_iProgressFactor_c := 22.00, s_iLastProgress, s_iRunningProgress := 0
 
 	if (s_iLastProgress == A_Blank)
 	{
@@ -4009,13 +4024,9 @@ Leap_Zoom(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 
 	MakeValidHwnd(hWnd)
 
-	; Use the last gesture in the array; that way the user doesn't have to worry about accidentally
-	; triggering another gesture, such as a forward swipe, when they really want to start circling.
-	sGesture := rasGestures[rasGestures.MaxIndex()]
-
-	if (sGesture = "Circle Right")
+	if (rLeapData.Circle.Direction = "Right")
 		bZoomIn := true
-	else if (sGesture = "Circle Left")
+	else if (rLeapData.Circle.Direction = "Left")
 		bZoomIn := false
 	else ; unsupported gesture.
 	{
@@ -4024,16 +4035,23 @@ Leap_Zoom(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	}
 
 	iProgressDiff := abs(rLeapData.Circle.Progress-s_iLastProgress)
-	iRadiusScaled := rLeapData.Circle.Radius*s_iRadiusFactor_c
-	iZooms := (iProgressDiff*s_iProgressFactor_c)+iRadiusScaled
-	;~ if (iZooms > 0.80 && iZooms < 1)
-		;~ iZooms := iProgressDiff ; 1 Progress = 1 zoom
+	if (Round(iProgressDiff + s_iRunningProgress, 1) > 0.25)
+	{
+		iZooms := 1+(rLeapData.Circle.Radius*s_iRadiusFactor_c)
+		s_iRunningProgress := 0
+	}
+	else
+	{
+		iZooms := 0
+		s_iRunningProgress += iProgressDiff
+	}
 
 	WinGetTitle, sTitle, ahk_id %hWnd%
 	WinGetClass, sClass
 
 	sSendZoom := "^" (bZoomIn ? "{WheelUp}" : "{WheelDown}")
-	if ((sClass = "MozillaWindowClass" || sClass = "IEFrame" || sClass = "Chrome_WidgetWin_0" || sClass = "{1C03B488-D53B-4a81-97F8-754559640193}") ; Chrome and Safari
+	if ((sClass = "MozillaWindowClass" || sClass = "IEFrame" || ChromeIsActive()
+		|| sClass = "{1C03B488-D53B-4a81-97F8-754559640193}") ; Chrome and Safari
 		&& (SubStr(sTitle, 1, 12) = "Google Earth"
 		|| SubStr(sTitle, 1, 11) = "Google Maps"
 		|| SubStr(sTitle, 1, 9) = "Bing Maps"))
@@ -4146,27 +4164,28 @@ Leap_Zoom(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 */
 Leap_AdjustVolume(ByRef rLeapData, ByRef rasGestures)
 {
-	global g_vLeap
-	static s_iVolumeAdjsPerMM  := 0.1
+	global g_vLeap, g_vLeapMsgProcessor
+	static s_iVolumeAdjsPerMM := 0.1
 		, EVolumeType_Up := 1, EVolumeType_Down := 2
 
-	; Get palm X and Y movement.
-	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
-	bVolumeUp := (iPalmYDelta < 0) ; Otherwise, volume down.
+	iPalmYDelta := rLeapData.Hand1.TransY
+	if (abs(iPalmYDelta) < 0.25)
+		iPalmYDelta := 0
 
-	iVelocityY := abs(rLeapData.Hand1.VelocityY)
-	if (iVelocityY > 350)
-		iHowMuch := 2*g_vLeap.CalcVelocityFactor(iVelocityY, 550)
-	else iHowMuch := 1
+	bVolumeUp := (iPalmYDelta > 0) ; Otherwise, volume down.
+	iHowMuch := abs(iPalmYDelta) * s_iVolumeAdjsPerMM
 
-	iLoop := abs(Round(iPalmYDelta*s_iVolumeAdjsPerMM))
-	if (iLoop < 1 && iLoop > 0.04)
-	{
-		iLoop := 1
-		iHowMuch := 1
-	}
+	; Let's not blast anyone's ears out.
+	if (iHowMuch > 35)
+		iHowMuch := 0
 
-	Loop %iLoop%
+	; This is the best way to handle resetting right now because
+	; translations numbers are large for more than just the first frame
+	; following the hand coming back into the FOV.
+	if (abs(rLeapData.Hand1.TransY) > 15)
+		iHowMuch := 0
+
+	if (iHowMuch > 0)
 		VolumeOSD_Adj(bVolumeUp ? EVolumeType_Up : EVolumeType_Down, iHowMuch)
 
 	return
@@ -4176,16 +4195,17 @@ Leap_AdjustVolume(ByRef rLeapData, ByRef rasGestures)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function:
-		Purpose:
+	Function: Leap_QuickMenu
+		Purpose: To handle CLeapMenu.MenuProc.
+			In other words, navigate the quick menu using the Leap Motion Controller
 	Parameters
 		rLeapData: Various information from Leap API
 		rasGestures: A chain of gestures. May be blank.
 */
 Leap_QuickMenu(ByRef rLeapData, ByRef rasGestures)
 {
-	global g_vFlyoutMH, g_vLeapMH, g_vLeapMsgProcessor
-Msgbox %A_ThisFunc%()
+	global
+; TODO: Don't stop when making fist
 	if (g_vFlyoutMH.MainMenuExist())
 		g_vLeapMH.MenuProc(rLeapData)
 	else
@@ -4956,7 +4976,7 @@ QuickMenu:
 {
 	if (g_bHasLeap)
 		Leap_ActionFromHotkey("Quick Menu")
-	else sec = "Quick Menu"
+	else g_vFlyoutMH.ShowMenu()
 
 	return
 }
@@ -5643,6 +5663,20 @@ IsResizable(hwnd="A")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
+	Author: Verdlin
+	Function: ChromeIsActive
+		Purpose:
+	Parameters
+		
+*/
+ChromeIsActive()
+{
+	return WinExist("ahk_class Chrome_XPFrame") || WinExist("ahk_class Chrome_WidgetWin_1")
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
 	Author: Polythene
 	Function: Functions.ahk
 		Purpose: Wraps Commands into Functions
@@ -5686,7 +5720,7 @@ GetLeapMenuSettingsIni()
 ;;;;;;;;;;;;;;
 GetLeapMenuConfigIni()
 {
-	global g_bHasLeap, g_LeapActionsIni
+	global g_bHasLeap, g_LeapActionsIni, g_vLeap
 
 	sSharedMenu := "
 		(LTrim
@@ -5747,14 +5781,17 @@ GetLeapMenuConfigIni()
 		iCurMainMenuNum := 5
 		if (g_bHasLeap)
 		{
-			vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Leap Actions"] := "Leap Actions"
+			sLeapMenuID := g_vLeap.m_sLeapTM " Actions"
+			vTmpMenu.MainMenu[iCurMainMenuNum++ ". " sLeapMenuID] := sLeapMenuID
 			iCurLeapMenuNum := 1
 			for sec in g_LeapActionsIni
-				vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". " sec] := "Func:Leap_ActionFromHotkey(""" sec """)"
-			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Resize Window"] := "Func:Leap_ActionFromHotkey(""Resize Window"")"
-			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Adjust Volume"] := "Func:Leap_ActionFromHotkey(""Adjust Volume"")"
-			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Scroll"] := "Func:Leap_ActionFromHotkey(""Scroll"")"
-			;~ vTmpMenu["Leap Actions", iCurLeapMenuNum++ ". Zoom"] := "Func:Leap_ActionFromHotkey(""Zoom"")"
+			{
+				; Skip internal sections.
+				if (SubStr(sec, 1, 9) = "Internal_")
+					continue
+
+				vTmpMenu[sLeapMenuID, iCurLeapMenuNum++ ". " sec] := "Func:Leap_ActionFromHotkey(""" sec """)"
+			}
 		}
 		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Open App"] := "Label:LaunchMainDlg"
 		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Exit (Esc)"] := "ExitAllMenus"
@@ -6053,6 +6090,7 @@ GetDefaultHotkeysIni()
 			Type=Settings
 			GestureName=Launch Quick Menu
 			HelpDesc=Activates a menu which provides shortcuts for the most useful window actions.
+			RouteToLeapWhenAvailable=true
 
 			[Resize To Bottom Half]
 			Activate=true
@@ -6243,6 +6281,7 @@ GetDefaultLeapActionsIni()
 			UsesPinch=false
 			UsesGestures=true
 			CallbackWillStop=false
+			OnlyUseLatestGesture=1
 			Hotkey=LWin + LAlt + P
 			HelpDesc=Shrinks/expands window relative to circular motion. Circle right to shrink and left to expand. For best results, use one or two fingers.
 
@@ -6262,7 +6301,7 @@ GetDefaultLeapActionsIni()
 			UsesGestures=false
 			CallbackWillStop=false
 			Hotkey=LWin + LAlt + S
-			HelpDesc=Scrolls up, down, left, and right relative to palm motion. For best results, use two fingers.
+			HelpDesc=Scrolls up, down, left, and right relative to finger motion. For best results, use two fingers.
 
 			[Zoom]
 			Activate=true
@@ -6270,6 +6309,7 @@ GetDefaultLeapActionsIni()
 			UsesPinch=false
 			UsesGestures=true
 			CallbackWillStop=false
+			OnlyUseLatestGesture=1
 			Hotkey=LWin + LAlt + Z
 			HelpDesc=Zooms in/out of window relative to circular motion. Circle right to zoom in and left to zoom out. For best results, use one or two fingers.
 
@@ -6292,7 +6332,7 @@ GetExceptionsForLeapActionsIni()
 	global g_LeapActionsIni
 
 	for sec in g_LeapActionsIni
-		sExceptionsIni .= "[" sec "]`nUsesPinch`nUsesGestures`nCallbackWillStop`nHelpDesc`n"
+		sExceptionsIni .= "[" sec "]`nUsesPinch`nUsesGestures`nCallbackWillStop`nOnlyUseLatestGesture`nHelpDesc`n"
 
 	return sExceptionsIni
 }
@@ -6328,7 +6368,7 @@ GetDefaultLeapGesturesIni()
 			[Escape Key]
 			Gesture=KeyTap, Swipe Backward
 			[Launch Quick Menu]
-			Gesture=Swipe Up, Circle Left, KeyTap
+			Gesture=Swipe Left, Swipe Right
 			[Maximize Horizontally]
 			Gesture=Circle Left, Swipe Right
 			[Maximize Vertically]
@@ -6755,10 +6795,3 @@ GetVKsIni()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-;	Includes
-#include <class_GUITabEx>
-#Include %A_ScriptDir%\WM_Dlg.ahk
-#Include %A_ScriptDir%\CLeapMenu.ahk
-#Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
