@@ -312,8 +312,9 @@ class EasyIni
 			vOtherIni: Other EasyIni object to merge with this.
 			bRemoveNonMatching: If true, removes sections and keys that do not exist in both inis.
 			bOverwriteMatching: If true, any key that exists in both objects will use the val from vOtherIni.
+			vExceptionsIni: class_Easy ini object full of exceptions keys for secs. Any matching key will remain unchanged.
 	*/
-	Merge(vOtherIni, bRemoveNonMatching = false, bOverwriteMatching = false)
+	Merge(vOtherIni, bRemoveNonMatching = false, bOverwriteMatching = false, vExceptionsIni = "")
 	{
 		; TODO: Perhaps just save one ini, read it back in, and then perform merging? I think this would help with formatting.
 		; [Sections]
@@ -327,12 +328,20 @@ class EasyIni
 			; key=val
 			for key, val in aKeysAndVals
 			{
-				if (!this[sec].HasKey(key))
-					if (bRemoveNonMatching)
+				bMakeException := vExceptionsIni[sec].HasKey(key)
+
+				if (this[sec].HasKey(key))
+				{
+					if (bOverwriteMatching && !bMakeException)
+						this[sec, key] := val
+				}
+				else
+				{
+					if (bRemoveNonMatching && !bMakeException)
 						this.DeleteKey(sec, key)
-					else this.AddKey(sec, key, val)
-				else if (bOverwriteMatching)
-					this[sec][key] := val ; keys exist in both inis, so overwrite existing val
+					else if (!bRemoveNonMatching)
+						this.AddKey(sec, key, val)
+				}
 			}
 		}
 		return
