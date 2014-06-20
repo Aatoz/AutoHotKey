@@ -167,6 +167,7 @@ WSpy_OnMessage(vFlyout, msg)
 OnWheelUp:
 {
 	g_vTooltipFlyout.Move(true)
+	; TODO: Check on previous sel and move - 2
 	if (g_vTooltipFlyout.GetCurSel() = "-------------------------------")
 		g_vTooltipFlyout.Move(true)
 	return
@@ -175,6 +176,7 @@ OnWheelUp:
 OnWheelDown:
 {
 	g_vTooltipFlyout.Move(false)
+	; TODO: Check on next sel and move + 2
 	if (g_vTooltipFlyout.GetCurSel() = "-------------------------------")
 		g_vTooltipFlyout.Move(false)
 	return
