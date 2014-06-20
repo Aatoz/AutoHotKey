@@ -1,43 +1,8 @@
 /*
-License: GNU GENERAL PUBLIC LICENSE v2 -- See License.txt
-	Feel free to modify and improve upon the work herein, but be certain to give credit me (Verdlin) when using my scripts.
+License: NO LICENSE
+	I (Noah Graydon) retain all rights and do not permit distribution, reproduction, or derivative works. I soley grant GitHub the required rights according to their terms of service; namely, GitHub users may view and fork this code.
 
-Credits
-	AutoHotkey
-		tinku99 @ AutoHotkey	http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=6056
-		HotKeyIt @ AutoHotkey	http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=9238
-		Lexikos @ AutoHotkey	http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=3754
-		Amnesiac @ AutoHotkey	http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=47646
-		HotkeyIt @ AutoHotkey_H	http://www.autohotkey.net/~HotKeyIt/AutoHotkey/files/AutoHotkey-txt.html
-		Tidbit: st.ahk lib -- http://www.autohotkey.net/~tidbit/StringThings/ST.ahk
-		Just Me: LV_Colors.ahk -- http://www.autohotkey.com/board/topic/88699-class-lv-colors-coloured-rowscells-in-gui-listviews/
-		Just Me: GuiTabEx.ahk -- http://www.autohotkey.com/board/topic/79963-class-guitabex-additional-features-for-tabtab2/
-		tkoi: ILButton.ahk -- http://www.autohotkey.com/board/topic/37147-ilbutton-image-buttons-with-text-states-alignment/
-		Polythene: Anchor.ahk -- https://raw.github.com/polyethene/AutoHotkey-Scripts/master/Anchor.ahk
-		Polythene: xpath.ahk -- http://www.autohotkey.com/board/topic/16137-xpath-v3-read-and-write-xml-documents-with-xpath-syntax/
-		Lexikos:WindowPad -- http://www.autohotkey.com/board/topic/19990-windowpad-window-moving-tool/
-		Lexikos: IsResizable()
-		Shinywong: GetMonitorIndexFromWindow() -- http://www.autohotkey.com/board/topic/69464-how-to-determine-a-window-is-in-which-monitor/#entry440355
-		Hoppfrosch: WindowPaxX --https://github.com/hoppfrosch/WindowPadX
-		RobertCollier4: CornerNotify (with some minor modifictions by me) -- http://www.autohotkey.com/board/topic/94458-msgbox-replacement-monolog-non-modal-transparent-message-box-cornernotify/
-		Maestrith: Dlg.ahk (Specifically the color picker dlg) -- http://www.autohotkey.com/board/topic/94083-ahk-11-font-and-color-dialogs/
-		Jballi: Fnt.ahk -- http://www.autohotkey.com/board/topic/90481-library-fnt-v05-preview-do-stuff-with-fonts/
-		JoeDF: Simple Volume OSD: http://www.autohotkey.com/board/topic/94165-simple-volume-osd/
-
-	Visual
-		Taytel for Orb icon set: http://taytel.deviantart.com/
-		Ahmad Hania for Spherical icon set: (Creative Commons 3.0 - http://creativecommons.org/licenses/by-nc/3.0/legalcode)
-			-- Some icons were modified to have transparent background and a broader range of resolutions.
-
-	Other
-		Leap Motion: https://www.leapmotion.com/
-
-	Special Thanks
-		Lexikos and Chris Mallet for AutoHotkey.
-		HotkeyIt for his amazing work with AutoHotkey_H, and also his helpful answers to my many questions in the AutoHotkey forum.
-		Lexikos and Hoppfrosch for WindowPad and WindowPadX, respectively. Numerous functions herein are based off of those open-source AHK files.
-
-	If you see your work and you are not credited, this is not deliberate. Notify me and I will credit you ASAP.
+Credits (See ReadMe.txt)
 
 For Me: Current LOC written by me (Including AutoLeap.exe): 10,098
 	TODO:
@@ -51,9 +16,6 @@ SetWinDelay, -1
 SendMode, Input
 SetWorkingDir, %A_ScriptDir%
 
-; Start Splash Screen.
-SplashImage, images\Splash.png, B W832 H624 ZW832 ZH624
-
 if (!FileExist("images"))
 	FileCreateDir, images
 
@@ -62,7 +24,7 @@ If 0 ; When compiled, AhkDllThread.ahk assumes AutoHotkey[Mini].dll is installed
 
 ; Images are brought over with make.ahk.
 ; Also FileInstalls are created dynamically from make.ahk.
-; v1.0
+; v1.01
 FileInstall, images\Default Wnd.png, images\Default Wnd.png, 1
 FileInstall, images\Monitor Frame.png, images\Monitor Frame.png, 1
 FileInstall, images\Sequence.ico, images\Sequence.ico, 1
@@ -76,8 +38,10 @@ FileInstall, images\Save.ico, images\Save.ico, 1
 FileInstall, images\Refresh.ico, images\Refresh.ico, 1
 FileInstall, images\Resize.ico, images\Resize.ico, 1
 FileInstall, images\Window.ico, images\Window.ico, 1
+FileInstall, images\Green.ico, images\Green.ico, 1
 FileInstall, images\Info.ico, images\Info.ico, 1
 FileInstall, images\Close.ico, images\Close.ico, 1
+FileInstall, images\Red.ico, images\Red.ico, 1
 FileInstall, images\Open.ico, images\Open.ico, 1
 FileInstall, images\Import.ico, images\Import.ico, 1
 FileInstall, images\Pause.ico, images\Pause.ico, 1
@@ -88,8 +52,14 @@ FileInstall, images\Default Flyout Menu 3.jpg, images\Default Flyout Menu 3.jpg,
 FileInstall, images\Main.ico, images\Main.ico, 1
 FileInstall, images\Splash.png, images\Splash.png, 1
 ; License and other help files.
+FileInstall, version, version, 1
 FileInstall, License.txt, License.txt, 1
 FileInstall, ReadMe.txt, ReadMe.txt, 1
+; Dependencies
+FileInstall, msvcr100.dll, msvcr100.dll, 1
+
+; Now that the image has been installed, start the splash screen.
+SplashImage, images\Splash.png, B W832 H624 ZW832 ZH624
 
 ; Tray icon
 Menu, TRAY, Icon, images\Main.ico,, 1
@@ -110,8 +80,10 @@ if (!A_IsCompiled)
 		Hotkey, #+R, Window_Master_Reload
 }
 
-; If the Leap Module is used, then an option is added to the tray menu. That is why InitEverything is called here
+; If the Leap Module is used, then an option is added to the tray menu. That is why InitEverything is called here.
 InitEverything()
+
+SetStartsWithWindowsTrayIcon()
 
 Menu, TRAY, Add, E&xit, Window_Master_Exit
 Menu, TRAY, Icon, E&xit, AutoLeap\Exit.ico,, 16
@@ -201,6 +173,9 @@ InitGlobals()
 	g_sModParse := "Ctrl|Alt|Shift|Win"
 	g_sAbbrModParse := "^|!|+|#" ; For parsing hotkey modifiers in the HK dlg.
 
+	; For launching upon startup.
+	g_sPathToShortcut := A_AppData "\Microsoft\Windows\Start Menu\Programs\Startup\" A_ScriptName ".lnk"
+
 	; Master object for Window Master dialogs.
 	g_vDlgs := new WM_Dlg()
 
@@ -236,8 +211,8 @@ InitLeap()
 		{
 			Menu, TRAY, Add, &Gestures, Window_Master_ShowControlCenterDlg
 			Menu, TRAY, Icon, &Gestures, AutoLeap\Leap.ico,, 16
-			Menu, TRAY, Add, % "&Pause " g_vLeap.m_sLeapTM, Window_Master_PlayPauseLeap
-			Menu, TRAY, Icon, % "&Pause " g_vLeap.m_sLeapTM, images\Pause.ico,, 16
+			Menu, TRAY, Add, Pause &Tracking, Window_Master_PlayPauseLeap
+			Menu, TRAY, Icon, Pause &Tracking, images\Pause.ico,, 16
 
 			; In case ini data has been modified externally.
 			RemoveUnreferencedGestures()
@@ -259,42 +234,43 @@ InitAllInis()
 
 	; For custom hotkeys and sequences
 	g_SequencesIni := class_EasyIni(A_ScriptDir "\sequences.ini")
+	; Note: Cannot merge sequences ini since secs are simply integers, and users may add and remove as they please.
+	if (!FileExist(g_SequencesIni.GetFileName()))
+	{
+		g_SequencesIni := class_EasyIni(g_SequencesIni.GetFileName(), GetDefaultSequencesIni())
+		g_SequencesIni.Save()
+	}
 
 	; For hotkey mappings
-	g_VKsIni := class_EasyIni("", GetVKsIni())
+	g_vVKsIni := class_EasyIni("", GetVKsIni())
 
 	; "Static" hotkeys
 	; Given the delicate relationship between labels and hotkeys, this requires some special handling.
-	local vDefaultHotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini", GetDefaultHotkeysIni())
-	g_HotkeysIni := class_EasyIni(vDefaultHotkeysIni.GetFileName())
+	local vDefaultHotkeysIni := class_EasyIni("", GetDefaultHotkeysIni())
+	g_HotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini")
 	; To allow removal of old settings and additions of new settings, merge vDefaultHotkeysIni and g_HotkeysIni.
 	; bRemoveNonMatching: If true, removes sections and keys that do not exist in both inis.
 	; bOverwriteMatching: If true, any key that exists in both objects will use the val from g_HotkeysIni.
 	local vExceptionsForHotkeysIni := class_EasyIni("", GetExceptionsForHotkeysIni())
+	vDefaultHotkeysIni.EasyIni_ReservedFor_m_sFile := g_HotkeysIni.GetFileName()
 	vDefaultHotkeysIni.Merge(g_HotkeysIni, true, true, vExceptionsForHotkeysIni)
 	g_HotkeysIni := vDefaultHotkeysIni ; Seems like merge should handle this or something, but I am too tired to think this one through right now.
 
 	; Save to ensure that, if new options were added, keys were renamed, or keys were removed
 	; we will load this options into their appropriate ListView
 	g_HotkeysIni.Save()
-
 	; "Precision" hotkeys
 	;~ g_PrecisionIni := class_EasyIni(A_ScriptDir "\precision.ini")
 
 	; Leap actions. Handling is quite similar to g_HotkeysIni.
-	local vDefaultLeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini", GetDefaultLeapActionsIni())
-	g_LeapActionsIni := class_EasyIni(vDefaultLeapActionsIni.GetFileName())
+	local vDefaultLeapActionsIni := class_EasyIni("", GetDefaultLeapActionsIni())
+	g_LeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini")
 	local vExceptionsForLeapActionsIni := class_EasyIni("", GetExceptionsForLeapActionsIni())
 	; Merge in similar fashion as g_HotkeysIni.
+	vDefaultLeapActionsIni.EasyIni_ReservedFor_m_sFile := g_LeapActionsIni.GetFileName()
 	vDefaultLeapActionsIni.Merge(g_LeapActionsIni, true, true, vExceptionsForLeapActionsIni)
 	g_LeapActionsIni := vDefaultLeapActionsIni
 	g_LeapActionsIni.Save() ; This effectively updates the local ini with new, internal settings from GetDefaultLeapActionsIni()
-
-	if (!FileExist(g_SequencesIni.GetFileName()))
-	{
-		g_SequencesIni := class_EasyIni(g_SequencesIni.GetFileName(), GetDefaultSequencesIni())
-		g_SequencesIni.Save()
-	}
 
 	;~ g_sInisForParsing := "g_SequencesIni|g_PrecisionIni|g_HotkeysIni|g_LeapActionsIni"
 	g_sInisForParsing := "g_SequencesIni|g_HotkeysIni|g_LeapActionsIni"
@@ -479,11 +455,11 @@ VolumeOSD_Init()
 ;;;;;;;;;;;;;;
 InitThreads()
 {
-	global g_dll, g_vFlyoutMH
+	global g_vDLL, g_vFlyoutMH
 
-	g_dll.ahklabel["ExitApp"] ; Because sometimes the destructor does not work.
-	g_vFlyoutMH:=ahklabel["ExitApp"]
-	g_dll:=g_vFlyoutMH:=
+	g_vDLL.ahkTerminate()
+	g_vFlyoutMH.__Delete() ; Beacuse sometimes the destructor does not properly get called.
+	g_vFlyoutMH:=g_vDLL:=
 
 	InitMenuHandler()
 	StartHotkeyThread()
@@ -496,9 +472,9 @@ InitThreads()
 ;;;;;;;;;;;;;;
 SuspendThreads(sOnOrOff)
 {
-	global g_dll, g_vFlyoutMH
+	global g_vDLL, g_vFlyoutMH
 
-	g_dll.ahkFunction["Suspend", sOnOrOff]
+	g_vDLL.ahkFunction["Suspend", sOnOrOff]
 	g_vFlyoutMH.Suspend(sOnOrOff)
 
 	return
@@ -585,7 +561,7 @@ MakeMainDlg()
 	g_bFirstLaunch := true
 	GUI Window_Master_: New, hwndg_hWindowMaster MinSize Resize, Window Master
 
-	Menu, WM_Menu_Import, Add, Import WinSplit* &Settings`tCtrl + W, ConvertWinSplitXMLSettingsToInis
+	Menu, WM_Menu_Import, Add, Import WinSplit &Settings`tCtrl + W, ConvertWinSplitXMLSettingsToInis
 	Menu, WM_ImportMenu, Add, I&mport, :WM_Menu_Import
 	Menu, WM_ImportMenu, Icon, I&mport, images\Import.ico,, 16
 	Menu, WM_ImportMenu, Add, E&xit, Window_Master_GUIClose
@@ -599,8 +575,8 @@ MakeMainDlg()
 
 	if (g_bHasLeap)
 	{
-		Menu, WM_Menu_Settings, Add, % "&" g_vLeap.m_sLeapTM " Settings`tCtrl + L", Window_Master_ShowControlCenterDlg
-		Menu, WM_Menu_Settings, Icon,% "&" g_vLeap.m_sLeapTM " Settings`tCtrl + L", AutoLeap\Leap.ico,, 16
+		Menu, WM_Menu_Settings, Add, % "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", Window_Master_ShowControlCenterDlg
+		Menu, WM_Menu_Settings, Icon,% "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", AutoLeap\Leap.ico,, 16
 	}
 
 	Menu, WM_Menu_Help, Add, &Using Window Master`tF1, Window_Master_Help
@@ -618,7 +594,7 @@ MakeMainDlg()
 	; Airspace prefers fewer features with greater reliability than many features with nominal reliability.
 	g_asTabs := ["Se&quencing", "&Resizing", "S&napping", "Other Action&s"]
 	if (g_bHasLeap)
-		g_asTabs.Insert("&" g_vLeap.m_sLeapTM)
+		g_asTabs.Insert("&Interactive")
 
 	GUI, Font, s18 ; c83B8G7
 	GUI, Add, Tab2, x5 y5 w215 Buttons +Theme -Background hwndhWMTab Choose1 gWindow_Master_TabProc vvWMTab, % st_glue(g_asTabs, "|")
@@ -726,7 +702,7 @@ AddAllControls()
 	GUI, Add, Picture, xp+195 yp+20 w251 h175 hwndhMonitorFramePic vvMonitorFramePic, images\Monitor Frame.png
 	RegRead, sCurBgd, HKEY_CURRENT_USER, Control Panel\Desktop, Wallpaper
 	if (sCurBgd == "")
-		sCurBgd := "images\Default Flyout Menu.jpg"
+		sCurBgd := "images\Default Flyout Menu 1.jpg"
 
 	GUI, Add, Picture, xp+8 yp+7 w235 h124 hwndhDesktopPic vvDesktopPic, %sCurBgd%
 	GUI, Add, Picture, xp yp+75 w125 h50 hwndhWndPic vvWndPic, images\Default Wnd.png
@@ -742,7 +718,7 @@ AddAllControls()
 	, g_asTabs[3]: "Window Snapping Actions"
 	;~ , g_asTabs[4]: "Precision Window Placement:"
 	, g_asTabs[4]: "Miscellaneous Actions"
-	, g_asTabs[5]: "Interactive, " g_vLeap.m_sLeapTM " Controlled Actions`n(When using, keep fingers apart until you are ready to stop)."}
+	, g_asTabs[5]: "Interactive, " g_vLeap.m_sLeapMC " Actions`n(When using, keep fingers apart until you are ready to stop)."}
 
 	GUI, Font, s15 c83B8G7
 	GUI, Add, Text, x230 y13 w646 h50 hwndg_hGenericText vvGenericText Center Hidden
@@ -1663,7 +1639,7 @@ Window_Master_GUIClose:
 		GUI, Window_Master_:Default
 		RegRead, sCurBgd, HKEY_CURRENT_USER, Control Panel\Desktop, Wallpaper
 		if (sCurBgd == "")
-			sCurBgd := "images\Default Flyout Menu.jpg"
+			sCurBgd := "images\Default Flyout Menu 1.jpg"
 		GUIControl,, vDesktopPic, %sCurBgd%
 	}
 
@@ -1678,12 +1654,12 @@ Window_Master_Reload:
 		WinClose
 	g_vLeap.__Delete() ; If one of the dlgs were active, then the proper __Delete routines will not fire.
 
-	g_dll := g_vFlyoutMH := g_vLeap := ""
+	g_vDLL := g_vFlyoutMH := g_vLeap := ""
 	Reload
 } ; Fall through
 Window_Master_Exit:
 {
-	g_dll := g_vFlyoutMH := g_vLeap := "" ; g_vLeap should be released since it is responsible for AutoLeap.exe
+	g_vDLL := g_vFlyoutMH := g_vLeap := "" ; g_vLeap should be released since it is responsible for AutoLeap.exe
 	ExitApp
 	return
 }
@@ -1716,6 +1692,75 @@ Window_Master_CloseProc:
 			;~ %A_LoopField%.Reload()
 	}
 
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Windows_Master_ToggleStartWithWindows
+		Purpose: To toggle the "Start with Windows" option
+			Note, this label doesn't rely on what the tray is displaying,
+			rather it relies on the present of the shortcut.
+	Parameters
+		
+*/
+Windows_Master_ToggleStartWithWindows:
+{
+	if (StartsWithWindows())
+		FileDelete, %g_sPathToShortcut%
+	else
+	{
+		if (A_IsCompiled)
+		{
+			sTarget := A_AhkDir() "\" A_ScriptName
+		}
+		else
+		{
+			sTarget := A_AhkExe()
+			sWorkingDir := A_WorkingDir
+			sScriptPath := """" A_ScriptDir "\" A_ScriptName """"
+		}
+
+		FileCreateShortcut, %sTarget%, %g_sPathToShortcut%, %sWorkingDir%, %sScriptPath%
+	}
+
+	SetStartsWithWindowsTrayIcon()
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: StartsWithWindows
+		Purpose: Returns true if the application is starting with windows.
+			Checks for shortcut "Windows Master.lnk" in C:\users\%A_UserName%\AppData\Roaming
+	Parameters
+		
+*/
+StartsWithWindows()
+{
+	global g_sPathToShortcut
+	return FileExist(g_sPathToShortcut)
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: SetStartsWithWindowsTrayIcon
+		Purpose: Red vs. Green icon is confusing logic, so localizing it.
+	Parameters
+		
+*/
+SetStartsWithWindowsTrayIcon()
+{
+	; It's OK to keeping calling "Add", and it is good to place it here since the hard-coded menu label is used twice.
+	Menu, TRAY, Add, &Starts with Windows?, Windows_Master_ToggleStartWithWindows
+	Menu, TRAY, Icon, &Starts with Windows?, % "images\" (StartsWithWindows() ? "Green.ico" : "Red.ico"),, 16
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1822,7 +1867,7 @@ GetSequenceValsForEditDlg(ByRef riX, ByRef riY, ByRef riW, ByRef riH, vSeq="")
 */
 Window_Master_Help:
 {
-	Run, Help.chm
+	Run, http://aatoz.github.io/Windows_Master/About.html
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1836,28 +1881,11 @@ Window_Master_Help:
 Window_Master_About:
 {
 	FileRead, sFile, ReadMe.txt
-	StringReplace, sFile, sFile, `t, %A_Space%%A_Space%%A_Space%%A_Space%, All
-	FileRead, iVersion, version
-	StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
+	; Use super-global LeapDlgs in case !g_bHasLeap
+	LeapDlgs.ShowInfoDlg(sFile, g_hWindowMaster, 850)
+	sFile :=
 
-	GUI, AboutDlg_:New, hwndg_hAboutDlg
-
-	iFarRight := 850-g_iMSDNStdBtnW
-	GUI, Add, Link, w%iFarRight%, %sFile%
-	GUI, Add, Button, X%iFarRight% W%g_iMSDNStdBtnW% H%g_iMSDNStdBtnH% gAboutDlg_GUIEscape, &OK
-
-	GUI, Show, x-32768 AutoSize
-	CenterWndOnOwner(g_hAboutDlg, g_hWindowMaster)
-
-	iFarRight :=
 	return
-
-	AboutDlg_GUIEscape:
-	AboutDlg_GUIClose:
-	{
-		GUI, AboutDlg_:Destroy
-		return
-	}
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1872,7 +1900,7 @@ CreateAndShowImportDlg()
 	global
 
 	; TODO: Idea of function to add an text, edit, and an ellipsis button (FIle selector edit)
-	GUI, XMLImportDlg_:New, hwndg_hXMLImportDlg +Owner%g_hWindowMaster%, Import WinSplit* Settings
+	GUI, XMLImportDlg_:New, hwndg_hXMLImportDlg +Owner%g_hWindowMaster%, Import WinSplit Settings
 	GUI, Add, Text, x10 y5 h20 gXMLImportDlg_SelectHotkeysXML, Path to &Hotkeys.xml:
 	GUI, Add, Edit, xp+100 yp-3 w300 hp vg_vXMLImportDlg_HotkeysXMLEdit -TabStop ReadOnly,
 	GUI, Add, Button, xp+301 yp-1 w20 h22 gXMLImportDlg_SelectHotkeysXML, ...
@@ -1914,7 +1942,7 @@ CreateAndShowImportDlg()
 		bOverwriteExisting	:= GUIControlGet("", "g_bXMLImportDlg_OverwriteExisting")
 
 		if (ConvertWinSplitXMLSettingsToInis(sHotkeysXML, sLayoutXML, bOverwriteExisting, sError))
-			Msgbox("WinSplit* settings were imported successfully.")
+			Msgbox("WinSplit settings were imported successfully.")
 		else
 		{
 			Msgbox(sError)
@@ -2911,13 +2939,13 @@ Validate_Error_Msg(vHKInfo)
 
 /*
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-			Hotkey threading			
+-----Hotkey threading-----
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 */
 StartHotkeyThread()
 {
 	; Creates a thread handler for hotkeys/labels.
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_dll, g_bIsDev
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_vDLL, g_bIsDev
 
 	if (g_SequencesIni.HasKey(1))
 		sInis := "g_SequencesIni"
@@ -3038,10 +3066,7 @@ StartHotkeyThread()
 		{
 			sIfElse := A_Index == 1 ? "if" : "`nelse if"
 			sExpr .= sIfElse "(" avLabelInfo[sec][A_Index].sExpr ")`n`t"
-
-			if (aData.RouteToLeapWhenAvailable = "true")
-				sExpr .= "g_exe.ahkPostFunction[""Leap_ActionFromHotkey"", """ sec """]"
-			else sExpr .= "g_exe.ahkLabel[""" CallableFromSec(sec) """]"
+			sExpr .= "g_exe.ahkLabel[""" CallableFromSec(sec) """]"
 		}
 
 		if (!vDictLabelsCreated.HasKey(sLabel))
@@ -3160,14 +3185,14 @@ StartHotkeyThread()
 
 	if (g_bIsDev) ; For debugging
 	{
-		filedelete, test.ahk
-		fileappend, %sScript%, test.ahk
+		FileDelete, test.ahk
+		FileAppend, %sScript%, test.ahk
 	}
 
 	if (sScript)
 	{
-		g_dll:=CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
-		g_dll.ahktextdll[CreateScript("g_exe:=CriticalObject(" . &AhkExported() . ")"sScript)]
+		g_vDLL:=CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
+		g_vDLL.ahkTextDll[CreateScript("g_exe:=CriticalObject(" . &AhkExported() . ")"sScript)]
 	}
 
 	return
@@ -3339,7 +3364,7 @@ LeapTabIsActive()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;				BEGIN LEAP
+;--------BEGIN LEAP--------
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3395,7 +3420,9 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 			;~ g_vLeap.SendMessageToExe("Pinch=Stop")
 
 		; Let the user know that and what we stopped tracking.
-		g_vLeap.OSD_PostMsg("Stop " g_vLeapMsgProcessor.m_sTriggerAction)
+		; Exception: Quick Menu since that displays the submited menu items.
+		if (g_vLeapMsgProcessor.m_sTriggerAction != "Quick Menu")
+			g_vLeap.OSD_PostMsg("Stop " g_vLeapMsgProcessor.m_sTriggerAction)
 
 		; If more functions like this are added, then another callback is in order.
 		if (g_vLeapMsgProcessor.m_sTriggerAction = "Adjust Volume")
@@ -3521,7 +3548,7 @@ ResetLeapMsgProcessor()
 
 	g_vLeap.m_vProcessor.m_bIgnoreGestures := false
 	g_vLeap.m_vProcessor.m_bGestureSuggestions := true
-	g_vLeap.m_vProcessor.m_iOnlyUseLatestGesture := -1
+	g_vLeap.m_vProcessor.m_bOnlyUseLatestGesture := 0
 
 	return
 }
@@ -3582,17 +3609,17 @@ Window_Master_ShowControlCenterDlg:
 ;;;;;;;;;;;;;;
 Window_Master_PlayPauseLeap:
 {
-	if (A_ThisMenuItem = "&Play " g_vLeap.m_sLeapTM)
+	if (A_ThisMenuItem = "Resume &Tracking")
 	{
 		g_vLeap.SetTrackState(true)
-		Menu, TRAY, Rename, % "&Play " g_vLeap.m_sLeapTM, % "&Pause " g_vLeap.m_sLeapTM
-		Menu, TRAY, Icon, % "&Pause " g_vLeap.m_sLeapTM, images\Pause.ico,, 16
+		Menu, TRAY, Rename, Resume &Tracking, Pause &Tracking
+		Menu, TRAY, Icon, Pause &Tracking, images\Pause.ico,, 16
 	}
 	else ; pause tracking.
 	{
 		g_vLeap.SetTrackState(false)
-		Menu, TRAY, Rename, % "&Pause " g_vLeap.m_sLeapTM, % "&Play "g_vLeap.m_sLeapTM
-		Menu, TRAY, Icon, % "&Play " g_vLeap.m_sLeapTM, images\Play.ico,, 16
+		Menu, TRAY, Rename, Pause &Tracking, Resume &Tracking
+		Menu, TRAY, Icon, Resume &Tracking, images\Play.ico,, 16
 	}
 
 	return
@@ -3610,8 +3637,7 @@ Window_Master_PlayPauseLeap:
 */
 Leap_ActionFromHotkey(sAction)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
-		, g_vLeap, g_vFlyoutMH, g_vLeapMH
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vLeapMH
 
 	Loop, Parse, g_sInisForParsing, |
 	{
@@ -3631,22 +3657,18 @@ Leap_ActionFromHotkey(sAction)
 
 	if (bFoundMatch)
 	{
-		; Note: if we do this at the bottom, it locks up the whole program!
-		if (g_vFlyoutMH.MainMenuExist())
-			g_vLeapMH.EndMenuProc(0)
-
 		; When we redirect to LeapActionIni, we should be guaranteed that there is an identical section name prefixed with "Internal_"
 		if (bRouteToLeap)
 			aData := g_LeapActionsIni["Internal_" sAction]
 
-		sFunc := CallableFromSec(sAction)
-		SetLeapMsgCallback(sFunc, aData, sAction)
+		sCallable := CallableFromSec(sAction)
+		SetLeapMsgCallback(sCallable, aData, sAction)
 		; Post the action to the OSD.
 		g_vLeap.OSD_PostMsg(sAction)
 
-		; I hate hard-coding, but hopefully this is the only special case we need to handle.
-		if (sAction = "Quick Menu")
-			g_vFlyoutMH.ShowMenu()
+		; Note: Don't activate quick menu from here. It causes crashes.
+		; Always hiding circle here because there's been issues with the circle not being hidden after the flyout is gone.
+		g_vLeapMH.HideCircle()
 	}
 	else Msgbox("Unable to determine function for action: " sAction, 2)
 
@@ -3959,6 +3981,7 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	iYDelta  :=rLeapData[sLeapSec, sLeapKeyPart "Y"]
 
 	; Here's the deal: If the finger(s) started low and re-entered high, we would glitch upward.
+	; TODO: Handle hand coming in and out of view
 	if (bHasReset || g_vLeapMsgProcessor.m_bHand1HasReset)
 		return
 
@@ -3991,6 +4014,13 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 		iScrollXs := 5
 	if (iScrollYs > 20)
 		iScrollYs := 5
+
+	if (ChromeIsActive())
+	{
+		; Chrome scrolls a bit faster than other applications.
+		iScrollXs *= 0.75
+		iScrollYs *= 0.75
+	}
 
 	ControlGetFocus, hActiveControl, A
 	Loop %iScrollXs%
@@ -4205,12 +4235,12 @@ Leap_AdjustVolume(ByRef rLeapData, ByRef rasGestures)
 Leap_QuickMenu(ByRef rLeapData, ByRef rasGestures)
 {
 	global
-; TODO: Don't stop when making fist
-	if (g_vFlyoutMH.MainMenuExist())
+
+	if (WinExist("CFMH_MainMenu ahk_class AutoHotkeyGUI"))
 		g_vLeapMH.MenuProc(rLeapData)
 	else
 	{
-		g_vLeapMH.HideCircle()
+		g_vLeapMH.EndMenuProc()
 		g_vLeapMsgProcessor.m_bCallerHasFinished := true
 	}
 
@@ -4872,11 +4902,6 @@ CloseWindow:
 	WinKill, A
 	return
 }
-SwitchWindow:
-{
-	Send !{Tab}
-	return
-}
 DecrementTransparency:
 {
 	DetectHiddenWindows, on
@@ -4976,8 +5001,19 @@ QuickMenu:
 {
 	if (g_bHasLeap)
 		Leap_ActionFromHotkey("Quick Menu")
-	else g_vFlyoutMH.ShowMenu()
+	g_vFlyoutMH.ShowMenu()
 
+	return
+}
+QuitApplication:
+{
+	; TODO: Determine whether the window hidden or not; if it is not hidden, first go through GUI close proc?
+
+	; This hotkey is processed fairly quickly, so give a small window of opportunity to let the user know what is happening.
+	CornerNotify(1.5, "Exiting", "Windows Master is exiting.", "hc vc")
+	Sleep 250
+
+	gosub Window_Master_Exit
 	return
 }
 ResizeToBottomHalf:
@@ -5698,10 +5734,11 @@ GuiControlGet(Subcommand = "", ControlID = "", Param4 = "") {
 ;;;;;;;;;;;;;;
 GetLeapMenuSettingsIni()
 {
+	Random, iPic, 1, 3
 	return "
 		(LTrim
 			[Flyout]
-			Background=images\Default Flyout Menu.jpg
+			Background=images\Default Flyout Menu " iPic ".jpg
 			Font=Kozuka Mincho Pr6N R, s26 italic underline
 			FontColor=0x5AAC7
 			MaxRows=10
@@ -5781,8 +5818,8 @@ GetLeapMenuConfigIni()
 		iCurMainMenuNum := 5
 		if (g_bHasLeap)
 		{
-			sLeapMenuID := g_vLeap.m_sLeapTM " Actions"
-			vTmpMenu.MainMenu[iCurMainMenuNum++ ". " sLeapMenuID] := sLeapMenuID
+			sLeapMenuID := "Interactive"
+			vTmpMenu.MainMenu[iCurMainMenuNum++ ". " sLeapMenuID " >"] := sLeapMenuID
 			iCurLeapMenuNum := 1
 			for sec in g_LeapActionsIni
 			{
@@ -5986,13 +6023,6 @@ GetDefaultHotkeysIni()
 			GestureName=Close Window
 			HelpDesc=Closes window.
 
-			[Switch Window]
-			Activate=true
-			Hotkey=
-			Type=Settings
-			GestureName=Switch Window
-			HelpDesc=Uses Alt + Tab to switch to the previous window.
-
 			[Decrement Transparency]
 			Activate=true
 			Hotkey=Win + Shift + Alt + T
@@ -6091,6 +6121,13 @@ GetDefaultHotkeysIni()
 			GestureName=Launch Quick Menu
 			HelpDesc=Activates a menu which provides shortcuts for the most useful window actions.
 			RouteToLeapWhenAvailable=true
+
+			[Quit Application]
+			Activate=true
+			Hotkey=Win + Shift + Q
+			Type=Settings
+			GestureName=
+			HelpDesc=Completely exits Windows Master
 
 			[Resize To Bottom Half]
 			Activate=true
