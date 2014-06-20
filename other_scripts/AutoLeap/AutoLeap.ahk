@@ -1,22 +1,10 @@
 /*
-License: public domain
-	Feel free to modify and improve upon the work herein, but be certain to give credit me (Verdlin) when using my scripts
-
-Credits:
-		Tidbit: st.ahk lib
-		tkoi: ILButton.ahk
-		Just me: LV_Colors.ahk -- http://www.autohotkey.com/board/topic/88699-class-lv-colors-coloured-rowscells-in-gui-listviews/
-		Taytel for Orb icon set: http://taytel.deviantart.com/
-		Ahmad Hania for Spherical icon set: (Creative Commons 3.0 - http://creativecommons.org/licenses/by-nc/3.0/legalcode)
-			-- Some icons were modified to have transparent background and a broader range of resolutions.
-		Leap Motion: https://www.leapmotion.com/
-
-		If you see your work and you are not credited, this is not deliberate. Notify me and I will credit you ASAP.
+	License: MIT LICENSE (See License.txt)
+	Credits: See ReadMe.txt
 */
 
-/*
-	TODOs:
-*/
+; Compiler errors if at bottom.
+#Include %A_ScriptDir%\AutoLeap\ILButton.ahk
 
 class AutoLeap
 {
@@ -36,16 +24,34 @@ class AutoLeap
 
 		this.m_hMsgHandlerFunc := Func(sMsgHandlerFunc)
 		this.m_sLeapWorkingDir := A_ScriptDir "\AutoLeap"
-		this.m_sNameOfExe := "Leap Forwarder_" (A_PtrSize == 8 ? "64" : "32") ".exe"
+		this.m_sNameOfExe := "Leap Forwarder.exe"
 
-		; Directory.
-		if (!FileExist("AutoLeap"))
-			FileCreateDir, AutoLeap
-
-		; Exes and Leap.dll.
-		FileInstall, AutoLeap\Leap Forwarder_32.exe, AutoLeap\Leap Forwarder_32.exe, 1
-		FileInstall, AutoLeap\Leap Forwarder_64.exe, AutoLeap\Leap Forwarder_64.exe, 1
-		FileInstall, AutoLeap\Leap.dll, AutoLeap\Leap.dll, 1
+		; Install exes and dlls (installs both 64bit and 32bit).
+		this.FileInstalls()
+		; Remove _32/_64 extensions from exes and dlls.
+		; Also remove unnecessary files.
+		bIs64Bit := (A_PtrSize == 8)
+		if (bIs64Bit)
+		{
+			FileMove, % this.m_sLeapWorkingDir "\Leap Forwarder_64.exe", % this.m_sLeapWorkingDir "\" this.m_sNameOfExe, 1
+			FileMove, % this.m_sLeapWorkingDir "\Leap_64.dll", % this.m_sLeapWorkingDir "\Leap.dll", 1
+			; Don't delete files for non-compiled scripts, because they are needed for compiling.
+			if (A_IsCompiled)
+			{
+				FileDelete, % this.m_sLeapWorkingDir "\Leap Forwarder_32.exe"
+				FileDelete, % this.m_sLeapWorkingDir "\Leap_32.dll"
+			}
+		}
+		else
+		{
+			FileMove, % this.m_sLeapWorkingDir "\Leap Forwarder_32.exe", % this.m_sLeapWorkingDir "\" this.m_sNameOfExe, 1
+			FileMove, % this.m_sLeapWorkingDir "\Leap_32.dll", % this.m_sLeapWorkingDir "\Leap.dll", 1
+			if (A_IsCompiled)
+			{
+				FileDelete, % this.m_sLeapWorkingDir "\Leap Forwarder_64.exe"
+				FileDelete, % this.m_sLeapWorkingDir "\Leap_64.dll"
+			}
+		}
 
 		; Check to see if core LeapMotion software is even installed on this machine.
 		RegRead, sKey, HKCR, airspace\shell\open\command
@@ -75,9 +81,9 @@ class AutoLeap
 		this.m_vGesturesConfigIni.Merge(vDefaultGesturesConfigIni, true, false)
 		this.m_vGesturesConfigIni.Save() ; This effectively updates the local ini with new settings from GetDefaultGesturesConfigIni().
 
-		; Anywhere we visually say, "Leap" we must say, "Leap(™)"
-		this.m_sLeapTM := "Leap(" chr(8482) ")"
-		this.m_sLeapMC := "Leap(" chr(8482) ") Motion Controller"
+		; Anywhere we display, "Leap" we *must* say, "Leap Motion Controller"
+		; Failure to do so results in automatic rejection from Airspace
+		this.m_sLeapMC := "Leap Motion Controller"
 
 		this.m_bIsFirstRun := true
 		this.StartLeap()
@@ -88,6 +94,8 @@ class AutoLeap
 
 		this.m_bInit := true
 		this.m_bIsFirstRun := false
+
+		SetWorkingDir, %sOldWorkingDir%
 		return this
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -141,7 +149,7 @@ class AutoLeap
 
 		; If we post a message after this.SendMessageToExe, then there's not enough time to actually see this message.
 		if (bUpdateOSD)
-			this.OSD_PostMsg("Leap Motion(™) listener is closing")
+			this.OSD_PostMsg(this.m_sLeapMC " listener is closing")
 
 		sOld := A_DetectHiddenWindows
 		DetectHiddenWindows, On
@@ -172,6 +180,47 @@ class AutoLeap
 		; New PID from StartLeap, so reassign super-global.
 		AutoLeap.PID[this.m_iAutoLeapPID] := &this
 		this.m_bReloading := true
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: FileInstalls
+			Purpose: To FileInstall before initializing class object
+		Parameters
+			
+	*/
+	FileInstalls()
+	{
+		; Directory.
+		if (!FileExist("AutoLeap"))
+			FileCreateDir, AutoLeap
+
+		; v1.0
+		FileInstall, AutoLeap\Leap.ico, AutoLeap\Leap.ico, 1
+		FileInstall, AutoLeap\Exit.ico, AutoLeap\Exit.ico, 1
+		FileInstall, AutoLeap\Save.ico, AutoLeap\Save.ico, 1
+		FileInstall, AutoLeap\Save As.ico, AutoLeap\Save As.ico, 1
+		FileInstall, AutoLeap\Info.ico, AutoLeap\Info.ico, 1
+		FileInstall, AutoLeap\Config.ico, AutoLeap\Config.ico, 1
+		FileInstall, AutoLeap\Red.ico, AutoLeap\Red.ico, 1
+		FileInstall, AutoLeap\Add.ico, AutoLeap\Add.ico, 1
+		FileInstall, AutoLeap\Delete.ico, AutoLeap\Delete.ico, 1
+		FileInstall, AutoLeap\msvcr100.dll, AutoLeap\msvcr100.dll, 1
+		; License and other help files.
+		FileInstall, AutoLeap\version, AutoLeap\version, 1
+		FileInstall, AutoLeap\License.txt, AutoLeap\License.txt, 1
+		FileInstall, AutoLeap\ReadMe.txt, AutoLeap\ReadMe.txt, 1
+
+		; Exes and dependencies
+		FileInstall, AutoLeap\Leap Forwarder_32.exe, AutoLeap\Leap Forwarder_32.exe, 1
+		FileInstall, AutoLeap\Leap Forwarder_64.exe, AutoLeap\Leap Forwarder_64.exe, 1
+		FileInstall, AutoLeap\Leap_32.dll, AutoLeap\Leap_32.dll, 1
+		FileInstall, AutoLeap\Leap_64.dll, AutoLeap\Leap_64.dll, 1
+		FileInstall, AutoLeap\msvcr120.dll, AutoLeap\msvcr120.dll, 1
+		FileInstall, AutoLeap\msvcr120.dll, AutoLeap\msvcr120.dll, 1
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -245,7 +294,7 @@ class AutoLeap
 				[Sliders]
 				Circle.MinRadius=9
 				; Note: Circle.MinArc is multipled by pi.
-				Circle.MinArc=1.8
+				Circle.MinArc=1.08
 				Swipe.MinLength=150
 				Swipe.MinVelocity=220
 				KeyTap.MinDownVelocity=440
@@ -312,8 +361,8 @@ class AutoLeap
 		; TODO: Allow an option for this.
 		sLeapParms .= " ""OneGestureTypePerFrame=True"""
 
-		;~ Run, % comspec " /c " """""" this.m_sLeapWorkingDir "\" this.m_sNameOfExe """ ""hWnd=" A_ScriptHwnd """ " sLeapParms """",,, g_iAutoLeapPID ; g_iAutoLeapPID is used in case the call to Quit fails in __Delete
-		Run, % comspec " /c " """""" this.m_sLeapWorkingDir "\" this.m_sNameOfExe """ ""hWnd=" A_ScriptHwnd """ " sLeapParms """",, HIDE, g_iAutoLeapPID ; g_iAutoLeapPID is used in case the call to Quit fails in __Delete
+		sHide := "HIDE"
+		Run, % comspec " /c " """""" this.m_sLeapWorkingDir "\" this.m_sNameOfExe """ ""hWnd=" A_ScriptHwnd """ " sLeapParms """",, %sHide%, g_iAutoLeapPID ; g_iAutoLeapPID is used in case the call to Quit fails in __Delete
 
 		if (!this.m_iAutoLeapPID) ; Resolved in __Get
 			ExitApp ; Warning dialog should have been shown.
@@ -379,6 +428,7 @@ class AutoLeap
 	*/
 	ProcessAutoLeapData(ByRef rsData)
 	{
+		static s_sLastGesture, s_iLastState
 		vLeapData := class_EasyIni("", rsData)
 
 		; [Header]
@@ -411,7 +461,8 @@ class AutoLeap
 						sGestureToAdd .= " " vLeapData[A_LoopField].Direction
 
 					if ((vLeapData[A_LoopField].State == 1)
-						|| this.GestureIsKeyTapOrScreenTap(A_LoopField)) ; KeyTap and ScreenTap only have a state of 3.
+						|| this.GestureIsKeyTapOrScreenTap(A_LoopField) ; KeyTap and ScreenTap only have a state of 3.
+						|| sGestureToAdd != s_sLastGesture) ; Sometime Leap Forwarder.exe messes up and misses a state, I think it's due to slow responses through SendMessage.
 					{
 						this.m_iGestureSecCnt++
 
@@ -433,6 +484,8 @@ class AutoLeap
 						}
 					}
 
+					s_sLastGesture := sGestureToAdd
+					s_iLastState := vLeapData[A_LoopField].State
 					break ; Only one gesture should have come through, so we can break.
 				}
 			}
@@ -443,7 +496,9 @@ class AutoLeap
 			; There wasn't even a discernable difference measuring with A_TickCount.
 			; Still, I'm keeping my timing code in here so I remember to be aware of timing.
 			;~ iStart := A_TickCount
-			for sec in this.m_vProcessor.m_avGestureData
+			if (this.m_vProcessor.m_bOnlyUseLatestGesture)
+				asGestures.1 := sGestureToAdd
+			else for sec in this.m_vProcessor.m_avGestureData
 			{
 				sGesture := SubStr(sec, 1, InStr(sec, "_") - 1) ; SubStr and InStr...eek.
 				if (this.GestureIsKeyTapOrScreenTap(sGesture))
@@ -942,7 +997,7 @@ class AutoLeap
 /*
 	-------------------------------------------------------------------
 	-------------------------------------------------------------------
-						Begin Member Variables						
+	--------------------Begin Member Variables--------------------
 	-------------------------------------------------------------------
 	-------------------------------------------------------------------
 */
@@ -950,6 +1005,7 @@ class AutoLeap
 	; Member variables.
 	m_iPI := 3.14159265
 	m_vProcessor := {m_bIgnoreGestures:false
+		, m_bOnlyUseLatestGesture:0
 		, m_bGestureSuggestions:true
 		, m_avGestureData:Object()
 		, m_iGestureSecCnt:0}
@@ -1026,20 +1082,6 @@ class LeapDlgs
 	__New()
 	{
 		static WM_KEYDOWN:=256
-
-		; v1.0
-		FileInstall, AutoLeap\Leap.ico, AutoLeap\Leap.ico, 1
-		FileInstall, AutoLeap\Exit.ico, AutoLeap\Exit.ico, 1
-		FileInstall, AutoLeap\Save.ico, AutoLeap\Save.ico, 1
-		FileInstall, AutoLeap\Save As.ico, AutoLeap\Save As.ico, 1
-		FileInstall, AutoLeap\Info.ico, AutoLeap\Info.ico, 1
-		FileInstall, AutoLeap\Config.ico, AutoLeap\Config.ico, 1
-		FileInstall, AutoLeap\Red.ico, AutoLeap\Red.ico, 1
-		FileInstall, AutoLeap\Add.ico, AutoLeap\Add.ico, 1
-		FileInstall, AutoLeap\Delete.ico, AutoLeap\Delete.ico, 1
-		; License and other help files.
-		FileInstall, AutoLeap\License.txt, AutoLeap\License.txt, 1
-		;~ FileInstall, AutoLeap\ReadMe.txt, AutoLeap\ReadMe.txt, 1
 
 		sOldWorkingDir := A_WorkingDir
 		SetWorkingDir, % this.m_sLeapWorkingDir
@@ -1243,8 +1285,13 @@ class LeapDlgs
 		Menu, ControlCenterDlg_EditMenu, Add, &Record`tCtrl + R, ControlCenterDlg_RecordBtn
 		Menu, ControlCenterDlg_EditMenu, Icon, &Record`tCtrl + R, Red.ico,, 16
 
+		; Help
+		Menu, ControlCenterDlg_HelpMenu, Add, &About`tF1, ControlCenterDlg_HelpMenu_About
+		Menu, ControlCenterDlg_HelpMenu, Icon, &About`tF1, Info.ico,, 16
+
 		Menu, ControlCenterDlg_MainMenu, Add, &File, :ControlCenterDlg_FileMenu
 		Menu, ControlCenterDlg_MainMenu, Add, &Edit, :ControlCenterDlg_EditMenu
+		Menu, ControlCenterDlg_MainMenu, Add, &Help, :ControlCenterDlg_HelpMenu
 
 		GUI, Menu, ControlCenterDlg_MainMenu
 
@@ -1268,11 +1315,11 @@ class LeapDlgs
 		; http://msdn.microsoft.com/en-us/library/windows/desktop/aa511453.aspx#sizing
 		static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
 
-		GUI, ControlCenterDlg_:New, hwndg_hControlCenterDlg, % this.m_sLeapTM " Settings"
+		GUI, ControlCenterDlg_:New, hwndg_hControlCenterDlg, % this.m_sLeapMC " Settings"
 
 		;~ -------------------------------------------------------------------------------------------------------
 		GUI, Font, s12 c83B8G7
-		GUI, Add, GroupBox, % "x18 y11 h" 230+(s_iMSDNStdBtnSpacing*2)+s_iMSDNStdBtnH " w743 Center", % this.m_sLeapTM " Gestures Control Center"
+		GUI, Add, GroupBox, % "x18 y11 h" 230+(s_iMSDNStdBtnSpacing*2)+s_iMSDNStdBtnH " w743 Center", Gestures Control Center
 		GUI, Font, s8
 		GUI, Add, Button, % "xp+588 yp+" 239+s_iMSDNStdBtnH+s_iMSDNStdBtnSpacing " w" s_iMSDNStdBtnW " h" s_iMSDNStdBtnH " vg_vControlCenterDlg_OKBtn gControlCenterDlg_OKBtn", &OK
 		GUI, Add, Button, xp+80 yp wp hp vg_vControlCenterDlg_CancelBtn gControlCenterDlg_GUIClose, &Cancel ; This will bypass a Save
@@ -1410,6 +1457,12 @@ class LeapDlgs
 			return
 		}
 
+		ControlCenterDlg_HelpMenu_About:
+		{
+			_Dlgs().ControlCenterDlg_HelpMenu_About()
+			return
+		}
+
 		ControlCenterDlg_GUIEscape:
 		ControlCenterDlg_GUIClose:
 		{
@@ -1417,7 +1470,7 @@ class LeapDlgs
 			return
 		}
 	}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
@@ -1434,6 +1487,8 @@ class LeapDlgs
 		this._SetLV()
 
 		this.m_vGesturesIni := this.m_vGesturesIni.Reload() ; Need to be certain that ini is up-to-date!
+		this.m_vOriginalGesturesIni := ObjClone(this.m_vGesturesIni)
+		this.m_bControlCenterDlg_IsSaved := true
 
 		if (hOwner)
 		{
@@ -1518,12 +1573,11 @@ class LeapDlgs
 		static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
 
 		local vDefaultConfigIni := class_EasyIni("", _AutoLeap().GetDefaultGesturesConfigIni())
-		this.m_vOriginalGesturesConfigIni := ObjClone(this.m_vGesturesConfigIni)
 		this.m_vGesturesConfigIni.Merge(vDefaultConfigIni)
 
-		GUI, GesturesConfigDlg_:New, hwndg_hGesturesConfigDlg MinSize, % this.m_sLeapTM " Gesture Settings"
+		GUI, GesturesConfigDlg_:New, hwndg_hGesturesConfigDlg MinSize, Gesture Settings
 
-		GUI, Add, Groupbox, xm w180 vvGestureBox Center, Enable/disable
+		GUI, Add, Groupbox, xm w180 vvGestureBox Center, Enable or Disable
 		GUIControlGet, iGestureBoxPos, Pos, vGestureBox ; Needed for dynamic position of controls to follow.
 		local sChecks := "EnableCircle|EnableSwipe|EnableKeyTap|EnableScreenTap"
 		Loop, Parse, sChecks, |
@@ -1862,7 +1916,6 @@ class LeapDlgs
 		this.m_vGesturesConfigIni.Save()
 		this._ShowSaveMsg()
 
-		this.m_bGesturesConfigSettingsChanged := true
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1882,13 +1935,14 @@ class LeapDlgs
 		; If the user, Canceled, Escaped, Alt+F4'd, etc.
 		if (!this.m_bGesturesConfigDlg_IsSaved && (A_GuiControl = "&Cancel" || A_GuiControl == A_Blank))
 		{
-			MsgBox, 8195, % "Close " this.m_sLeapTM " Gesture Settings", Save your settings before closing?
+			MsgBox, 8195, % "Close Gesture Settings", Save your settings before closing?
 
 			IfMsgBox Yes
 				this.GesturesConfigDlg_Save()
 			else IfMsgBox Cancel
 				return
-			else _AutoLeap().m_vGesturesConfigIni := this.m_vOriginalGesturesConfigIni ; We don't want to save settings, so this use the old settings.
+			else
+				_AutoLeap().m_vGesturesConfigIni := this.m_vOriginalGesturesConfigIni ; We don't want to save settings, so this use the old settings.
 		}
 
 		GUI, GesturesConfigDlg_:Hide
@@ -1925,6 +1979,7 @@ class LeapDlgs
 		}
 
 		this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload() ; Need to be certain that ini is up-to-date!
+		this.m_vOriginalGesturesConfigIni := ObjClone(this.m_vGesturesConfigIni)
 
 		if (hOwner)
 		{
@@ -1952,6 +2007,68 @@ class LeapDlgs
 			_AutoLeap().Reload()
 
 		return true
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ControlCenterDlg_HelpMenu_About
+			Purpose: To show the About dialog for license and credits.
+		Parameters
+			
+	*/
+	ControlCenterDlg_HelpMenu_About()
+	{
+		FileRead, sFile, % this.m_sLeapWorkingDir "\ReadMe.txt"
+		this.ShowInfoDlg(sFile, this.m_hControlCenterDlg)
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ShowInfoDlg
+			Purpose: To show an information dialog.
+		Parameters
+			sFile: File to display on dlg.
+			hOwner: Owner to center wnd on.
+			iWidthOverride: Specify this for a wider dialog.
+	*/
+	ShowInfoDlg(sFile, hOwner, iWidthOverride=450)
+	{
+		global
+		; http://msdn.microsoft.com/en-us/library/windows/desktop/aa511453.aspx#sizing
+		static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
+		local iVersion, iFarRight, iBtnX
+
+		StringReplace, sFile, sFile, `t, %A_Space%%A_Space%%A_Space%%A_Space%, All
+		FileRead, iVersion, version
+		StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
+
+		GUI, InfoDlg_:New, hwndg_hInfoDlg, %g_sName%
+
+		iFarRight := iWidthOverride-s_iMSDNStdBtnW
+		GUI, Add, Link, w%iFarRight%, %sFile%
+		iBtnX := iFarRight-s_iMSDNStdBtnW-s_iMSDNStdBtnSpacing
+		GUI, Add, Button, X%iBtnX% W%s_iMSDNStdBtnW% H%s_iMSDNStdBtnH% gInfoDlg_GUIEscape, &OK
+
+		GUI, Show, x-32768 AutoSize
+		this.CenterWndOnOwner(g_hInfoDlg, hOwner)
+
+		Hotkey, IfWinActive, ahk_id %g_hInfoDlg%
+			Hotkey, Enter, InfoDlg_GUIEscape
+			Hotkey, NumpadEnter, InfoDlg_GUIEscape
+
+		return
+
+		InfoDlg_GUIEscape:
+		InfoDlg_GUIClose:
+		{
+			GUI, InfoDlg_:Destroy
+			return
+		}
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2270,9 +2387,12 @@ class LeapDlgs
 		if (this.ValidateAndSaveAllGestures(sError))
 			this._ShowSaveMsg()
 		else if (sError != "Internal:IsRecording")
+		{
 			Msgbox, 8192,, %sError%
+			return false
+		}
 
-		return
+		return true
 	}
 	;;;;;;;;;;;;;;
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2306,7 +2426,7 @@ class LeapDlgs
 	{
 		if (this.m_bIsRecording)
 		{
-			MsgBox, 8196, % "Close " this.m_sLeapTM " Control Center", Are you sure that you want to stop recording?
+			MsgBox, 8196, % "Close " this.m_sLeapMC " Control Center", Are you sure that you want to stop recording?
 			IfMsgBox No
 				return
 
@@ -2316,7 +2436,7 @@ class LeapDlgs
 		; If the user, Canceled, Escaped, Alt+F4'd, etc.
 		if (!this.m_bControlCenterDlg_IsSaved && (A_GuiControl = "&Cancel" || A_GuiControl == A_Blank))
 		{
-			MsgBox, 8195, % "Close " this.m_sLeapTM " Control Center", Save your settings before closing?
+			MsgBox, 8195, % "Close " this.m_sLeapMC " Control Center", Save your settings before closing?
 
 			IfMsgBox Yes
 			{
@@ -2325,7 +2445,8 @@ class LeapDlgs
 			}
 			else IfMsgBox Cancel
 				return
-			else this.m_vGesturesIni := this.m_vGesturesIni.Reload() ; We don't want to save settings; this will load the old settings.
+			; else undo all changes.
+			_AutoLeap().m_vGesturesIni := this.m_vOriginalGesturesIni ; We don't want to save settings, so this use the old settings.
 		}
 
 		GUI, ControlCenterDlg_:Hide
@@ -2732,5 +2853,3 @@ ControlCenterDlg_OnKeyDown(wParam, lParam, msg, hWnd)
 }
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-#Include %A_ScriptDir%\AutoLeap\ILButton.ahk
