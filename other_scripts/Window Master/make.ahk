@@ -1,6 +1,5 @@
 #SingleInstance Force
-
-; TODO: licenses
+SetFormat, float, 4.2
 
 sFilesToInclude := "
 (
@@ -17,8 +16,10 @@ res\icons\Bunch of Bluish\Save.ico
 res\icons\Bunch of Bluish\Refresh.ico
 res\icons\Free Blue Buttons\Resize2.ico
 res\icons\Free Blue Buttons\Browse2.ico
+res\icons\I Like Buttons\Green.ico
 res\icons\I Like Buttons\Info.ico
 res\icons\I Like Buttons\Off.ico
+res\icons\I Like Buttons\Red.ico
 res\icons\I Like Buttons\Win2.ico
 res\icons\Orb\Down.ico
 res\icons\Primo\Pause.ico
@@ -87,6 +88,7 @@ sAHKFiles := "
 (
 other_scripts\CFlyout\CFlyout.ahk
 other_scripts\CFlyout\CFlyoutMenuHandler.ahk
+other_scripts\CFlyout\CLeapMenu.ahk
 )"
 
 Loop, Parse, sAHKFiles, `n
@@ -104,19 +106,12 @@ Loop, Parse, sAHKFiles, `n
 ; End ahk files
 
 sFileInstalls .= "`; License and other help files.`n"
+sFileInstalls .= "FileInstall, version, version, 1`n"
 sFileInstalls .= "FileInstall, License.txt, License.txt, 1`n"
 sFileInstalls .= "FileInstall, ReadMe.txt, ReadMe.txt, 1`n"
-sFileInstalls .= "`t; Dependencies`n"
-/*
-	1. msvcp120.dll -- Beacuse Leap Forwarder is compiled with Visual Studio 2013.
-	2. msvcr120.dll -- Beacuse Leap Forwarder is compiled with Visual Studio 2013.
-	3. msvcr100.dll -- Beacuse AutoHotkey_H is compiled with Visual Studio 2010.
-	4. Leap.dll -- Because every app needs to include its own copy. See https://community.leapmotion.com/t/resolved-c-how-to-make-app-load-leap-dll-from-core-services-folder/939/2
-*/
-sFileInstalls .= "FileInstall, msvcp120.dll, msvcp120.dll, 1`n"
-sFileInstalls .= "FileInstall, msvcr120.dll, msvcr120.dll, 1`n"
+sFileInstalls .= "`; Dependencies`n"
+; msvcr100.dll -- Beacuse AutoHotkey_H is compiled with Visual Studio 2010.
 sFileInstalls .= "FileInstall, msvcr100.dll, msvcr100.dll, 1`n"
-sFileInstalls .= "FileInstall, Leap.dll, Leap.dll, 1"
 
 clipboard := sFileInstalls
 Msgbox Done! List of FileInstalls are on the clipboard.`n`n%sFileInstalls%
