@@ -1,3 +1,5 @@
+#Include %A_ScriptDir%\CFlyoutMenuHandler.ahk
+
 class CLeapMenu
 {
 	__New(ByRef rFlyoutMenuHandler_c, ByRef rLeap_c)
@@ -22,7 +24,7 @@ class CLeapMenu
 
 	MenuProc(ByRef rLeapData)
 	{
-		static s_iLastFocRow := 0, s_iHoveringFor := 0, s_iHoverLimit := 1000
+		static s_iLastFocRow := 0, s_iHoverLimit := 1000
 
 		if (this.m_bCircleHidden)
 			this.ShowCircle()
@@ -56,17 +58,18 @@ class CLeapMenu
 		if (iFocRow == s_iLastFocRow)
 		{
 			; Inc hovering time.
-			s_iHoveringFor += iLastCall
+			this.m_iHoveringFor += iLastCall
 
 			; When we reach the hover limit, submit/escape/whatever.
-			if (s_iHoveringFor >= s_iHoverLimit)
+			if (this.m_iHoveringFor >= s_iHoverLimit)
 			{
 				if (iFlyoutUnderCircle == -1) ; exit all menus...
 				{
 					; ... but give a little grace period.
-					if (s_iHoveringFor >= (s_iHoverLimit * 2))
+					if (this.m_iHoveringFor >= (s_iHoverLimit * 2))
 					{
-						this.EndMenuProc(s_iHoveringFor)
+						this.m_rLeap_c.OSD_PostMsg("Exit Menu")
+						this.EndMenuProc()
 						return
 					}
 				}
@@ -76,7 +79,7 @@ class CLeapMenu
 					vPrevMenu := this.m_rMH_c.GetMenu_Ref(this.m_rMH_c.m_iNumMenus - 1)
 					if (iFlyoutUnderCircle == vPrevMenu.m_iFlyoutNum && iFocRow == vPrevMenu.GetCurSelNdx()+1)
 					{
-						s_iHoveringFor := 0
+						this.m_iHoveringFor := 0
 						return
 					}
 
@@ -84,19 +87,24 @@ class CLeapMenu
 					while (this.m_rMH_c.m_iNumMenus > iFlyoutUnderCircle)
 						this.m_rMH_c.ExitTopmost()
 					; Now launch the menu item focused.
-					this.m_rMH_c.Submit(iFocRow, bMainMenuExist)
+					this.m_sLastSubmitted := this.m_rMH_c.Submit(iFocRow, bMainMenuExist)
 
+					; Note: this never has been encountered...there are strange issues with bMainMenuExist
+					; I think it has to do with ahkPostFunction somewhere, where basically this
+					; scripts resumes execution before the menu handler has been exited.
 					if (!bMainMenuExist)
 					{
-						this.EndMenuProc(s_iHoveringFor)
+						this.EndMenuProc()
+						; Activate this window because it was the last active window.
+						WinActivate, % "ahk_id" this.m_rMH_c.m_hActiveWndBeforeMenu
 						return
 					}
 
-					s_iHoveringFor := 0
+					this.m_iHoveringFor := 0
 				}
 			}
 		}
-		else s_iHoveringFor := 0
+		else this.m_iHoveringFor := 0
 
 		s_iLastFocRow := iFocRow
 		return
@@ -122,11 +130,11 @@ class CLeapMenu
 		return
 	}
 
-	EndMenuProc(ByRef rs_iHoveringFor)
+	EndMenuProc()
 	{
-		this.m_rMH_c.ExitAllMenus()
+		this.m_rLeap_c.OSD_PostMsg(this.m_sLastSubmitted)
 		this.HideCircle()
-		rs_iHoveringFor := 0
+		this.m_iHoveringFor := 0
 		return
 	}
 
@@ -138,8 +146,7 @@ class CLeapMenu
 		this.m_iCircleRad := this.m_rMH_c.m_iDefH
 
 		; Create a layered window (+E0x80000) that is always on top (+AlwaysOnTop), has no taskbar entry or caption
-		GUI, CircleGUI_: +Hwndg_hCircleGUI LastFound OwnDialogs Owner AlwaysOnTop -Caption E0x80000
-
+		GUI, CircleGUI_: +Hwndg_hCircleGUI LastFound OwnDialogs Owner AlwaysOnTop ToolWindow -Caption E0x80000 E0x20
 		; Create a gdi bitmap with width and height of the work area
 		hbm := CreateDIBSection(this.m_iCircleRad, this.m_iCircleRad)
 
@@ -192,14 +199,15 @@ class CLeapMenu
 
 	MoveCircle(iX, iY, iW="", iH="")
 	{
-		WndMove(iX, iY, "", "", this.m_hCircleGUI, true, false) ; TODO: Un-link dependency on Windows Master.ahk
+		vNewCoord := WndMove(iX, iY, "", "", this.m_hCircleGUI, true, false, false) ; TODO: Un-link dependency on Windows Master.ahk
+		GUI, CircleGUI_: Show, % "X" vNewCoord.iX " Y" vNewCoord.iY " W" this.m_iCircleRad " H" this.m_iCircleRad " NoActivate"
 		GUI, CircleGUI_:+AlwaysOnTop ; Causes a flash, but this is a necessary evil because new CFlyouts will be on top otherwise.
 		return
 	}
 
 	ShowCircle()
 	{
-		GUI, CircleGUI_: Show, % "X0 Y0 W" this.m_iCircleRad " H" this.m_iCircleRad
+		GUI, CircleGUI_: Show, % "X0 Y0 W" this.m_iCircleRad " H" this.m_iCircleRad " NoActivate"
 		GUI, CircleGUI_:+AlwaysOnTop
 		this.m_bCircleHidden := false
 		return
@@ -227,7 +235,8 @@ class CLeapMenu
 
 	m_bCircleHidden := true ; We initialize it with it hidden.
 	m_iCircleRad := 38
+	m_iHoveringFor := 0
+	m_sLastSubmitted  :=
 	m_rMH_c :=
+	m_rLeap_c :=
 }
-
-#Include %A_ScriptDir%\CFlyoutMenuHandler.ahk
