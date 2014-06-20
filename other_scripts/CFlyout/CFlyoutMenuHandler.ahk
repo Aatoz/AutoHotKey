@@ -297,8 +297,7 @@ Suspend(sOnOff)
 
 	SubmitSelected(ByRef rbMainMenuExists=false) ; Defaulted in case callers don't care about this.
 	{
-		this.Submit(this.m_vTopmostMenu.GetCurSelNdx() + 1, rbMainMenuExists)
-		return
+		return this.Submit(this.m_vTopmostMenu.GetCurSelNdx() + 1, rbMainMenuExists)
 	}
 
 	Submit(iRow, ByRef rbMainMenuExists=false) ; Defaulted in case callers don't care about this.
@@ -306,20 +305,21 @@ Suspend(sOnOff)
 		; When used through thread callbacks, it is unnecessary to move
 		; however, when used externally, it is necessary to move.
 		this.m_vTopmostMenu.MoveTo(iRow + this.m_vTopmostMenu.m_iDrawnAtNdx) ; TODO: MoveTo should handle m_iDrawnAtNdx
+		sSubmitted := this.m_vTopmostMenu.GetCurSel()
 		sMenuID := this.m_aiMapMenuNumsToLabels[this.m_vTopmostMenu.m_iFlyoutNum, iRow]
 		this.DoActionFromMenuID(sMenuID)
 
 		rbMainMenuExists := this.MainMenuExist()
-		return
+		return sSubmitted
 	}
 
 	OnClick(vFlyout, msg="")
 	{
 		this.m_bCalledFromClick := true
 
-		; Don't allow clicks on anything other than the topmost flyout.
-		if (vFlyout.m_hFlyout != this.m_vTopmostMenu.m_hFlyout)
-			return
+		; Exit to the hovered menu, if needed.
+		while (this.m_iNumMenus > vFlyout.m_iFlyoutNum)
+			this.ExitTopmost()
 
 		sMenuID := this.m_aiMapMenuNumsToLabels[vFlyout.m_iFlyoutNum, vFlyout.GetCurSelNdx() + 1]
 		this.DoActionFromMenuID(sMenuID)
@@ -352,10 +352,7 @@ Suspend(sOnOff)
 
 		hParent := this.m_vTopmostMenu.m_hParent
 		if (hParent != 0)
-		{
-			WinSet, Enable,, % "ahk_id" hParent
 			WinActivate, % "ahk_id" Parent
-		}
 
 		this.m_aFlyouts.Remove()
 		rbMainMenuExists := this.MainMenuExist()
@@ -464,7 +461,6 @@ Suspend(sOnOff)
 		}
 
 		vFlyout := new CFlyout(hParent, aMenuItems, false, false, -32768, -32768, this.m_iW, this.m_iMaxRows)
-		WinSet, Disable,, ahk_id %hParent% ; will be enabled when deleted with FlyoutMenuHandler_ExitTopmost
 		; We need unique CFlyout titles for class functions (Like MainMenuExist() ).
 		sTitle := "CFMH_" (sMenuSec = "MainMenu" ? sMenuSec : "Submenu")
 		WinSetTitle, % "ahk_id" vFlyout.m_hFlyout,, %sTitle%
@@ -732,12 +728,13 @@ FlyoutMenuHandler_OnClick(vFlyout, msg)
 */
 _CFlyoutMenuHandler(iClassID)
 {
-	global CFlyoutMenuHandler
+	global g_hCFlyoutMenuHandlerThread
 
 	vMH := Object(CFlyoutMenuHandler[iClassID])
 	if (!IsObject(vMH))
 	{
 		Msgbox 8192,, Error: Could not map class ID (%iClassID%) to menu handler class object.
+		g_hCFlyoutMenuHandlerThread := ; Kill the menu
 		return
 	}
 	return vMH
