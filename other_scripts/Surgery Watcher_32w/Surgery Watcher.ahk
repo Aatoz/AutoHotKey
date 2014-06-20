@@ -632,13 +632,13 @@ InitGUI()
 
 	SurgeryWatcher_ReadMe:
 	{
-		ShowInfoDlg(GetReadMeFile())
+		g_vLeap.m_vDlgs.ShowInfoDlg(GetReadMeFile(), g_hSurgeryWatcher, 700)
 		return
 	}
 
 	SurgeryWatcher_Calcs:
 	{
-		ShowInfoDlg(GetLegendFile())
+		g_vLeap.m_vDlgs.ShowInfoDlg(GetLegendFile(), g_hSurgeryWatcher)
 		return
 	}
 
@@ -748,50 +748,6 @@ InitTray()
 	Menu, TRAY, Add, E&xit, SurgeryWatcher_Exit
 	Menu, TRAY, Click, 1
 	return
-}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-/*
-	Author: Verdlin
-	Function: ShowInfoDlg
-		Purpose: To show an information dialog.
-	Parameters
-		sFile: File to display on dlg.
-*/
-ShowInfoDlg(sFIle)
-{
-	global
-
-	StringReplace, sFile, sFile, `t, %A_Space%%A_Space%%A_Space%%A_Space%, All
-	FileRead, iVersion, version
-	StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
-
-	GUI, InfoDlg_:New, hwndg_hInfoDlg, %g_sName%
-
-	local iFarRight := 0
-	if (sInfoFile = "ReadMe.txt")
-		iFarRight := 850-g_iMSDNStdBtnW
-	else iFarRight := 450-g_iMSDNStdBtnW
-	GUI, Add, Link, w%iFarRight%, %sFile%
-	local iBtnX := iFarRight-g_iMSDNStdBtnW-g_iMSDNStdBtnSpacing
-	GUI, Add, Button, X%iBtnX% W%g_iMSDNStdBtnW% H%g_iMSDNStdBtnH% gInfoDlg_GUIEscape, &OK
-
-	GUI, Show, x-32768 AutoSize
-	g_vLeap.m_vDlgs.CenterWndOnOwner(g_hInfoDlg, g_hSurgeryWatcher)
-
-	Hotkey, IfWinActive, ahk_id %g_hInfoDlg%
-		Hotkey, Enter, InfoDlg_GUIEscape
-		Hotkey, NumpadEnter, InfoDlg_GUIEscape
-
-	return
-
-	InfoDlg_GUIEscape:
-	InfoDlg_GUIClose:
-	{
-		GUI, InfoDlg_:Destroy
-		return
-	}
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1096,7 +1052,7 @@ Credits (This links to an external website; web content is not rated or monitore
 		<a href=""http://www.autohotkey.com/board/topic/90481-library-fnt-v05-preview-do-stuff-with-fonts/"">Jballi: Fnt.ahk</a>
 
 	Visual
-		<a href=""http://mebaze.com	"">Mebaze</a> for ""Bunch of Bluish"" icons
+		<a href=""http://mebaze.com"">Mebaze</a> for ""Bunch of Bluish"" icons
 		<a href=""https://www.iconfinder.com/krasnoyarsk"">Aha-Soft</a> for ""Free Blue Buttons"" icons
 		<a href=""http://mazenl77.deviantart.com/"">MazeNL77</a> for ""I Like Buttons"" icons
 	Other
