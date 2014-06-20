@@ -1,3 +1,8 @@
+/*
+License: NO LICENSE
+	I (Noah Graydon) retain all rights and do not permit distribution, reproduction, or derivative works. I soley grant GitHub the required rights according to their terms of service; namely, GitHub users may view and fork this code.
+*/
+
 class WM_Dlg
 {
 	__New()
@@ -1169,18 +1174,24 @@ class SequenceDlg
 		this.m_sEditFunc := sEditFunc
 
 		GUI SequenceDlg_:New, -MaximizeBox -MinimizeBox hwndg_hSequenceDlg
-		GUI, Add, Text, x15 y5 w10 h13, %A_Space%x
-		GUI, Add, Text, xp yp+28 w8 hp, %A_Space%y
-		GUI, Add, Text, xp yp+28 w29 hp, %A_Space%width
-		GUI, Add, Text, xp yp+28 w33 hp, %A_Space%height
-		GUI, Add, Text, x153 y5 w11 hp, `%
-		GUI, Add, Text, xp yp+28 wp hp, `%
-		GUI, Add, Text, xp yp+28 wp hp, `%
-		GUI, Add, Text, xp yp+28 wp hp, `%
-		GUI, Add, Edit, x92 y1 w40 h21 Limit5 vg_vEditX
-		GUI, Add, Edit, xp yp+28 wp hp Limit5 vg_vEditY
-		GUI, Add, Edit, xp yp+28 wp hp Limit5 vg_vEditW
-		GUI, Add, Edit, xp yp+28 wp hp Limit5 vg_vEditH
+		; --------------X, Y, Width, and Height controls--------------
+		local iY := 5
+		GUI, Add, Text, % "x15 y" iY+4 " h21", &X
+		GUI, Add, Edit, xp+77 Y%iY% w40 hp Limit5 vg_vEditX
+		GUI, Add, Text, % "xp+48 Y" iY+4 " w11 h13", `%
+		iY+= 28
+		GUI, Add, Text, % "x15 y" iY+4 " h21", &Y
+		GUI, Add, Edit, xp+77 Y%iY% w40 hp Limit5 vg_vEditY
+		GUI, Add, Text, % "xp+48 Y" iY+4 " w11 h13", `%
+		iY+= 28
+		GUI, Add, Text, % "x15 y" iY+4 " h21", &Width
+		GUI, Add, Edit, xp+77 Y%iY% w40 hp Limit5 vg_vEditW
+		GUI, Add, Text, % "xp+48 Y" iY+4 " w11 h13", `%
+		iY+= 28
+		GUI, Add, Text, % "x15 y" iY+4 " h21", &Height
+		GUI, Add, Edit, xp+77 Y%iY% w40 hp Limit5 vg_vEditH
+		GUI, Add, Text, % "xp+48 Y" iY+4 " w11 h13", `%
+		; ------------------------------------------------------------
 		GUI, Add, Button, x12 yp+33 w154 h23 gSequenceDlg_WindowSet, &Set with Window
 		GUI, Add, Button, xp yp+30 w75 hp gSequenceDlg_OK, &OK
 		GUI, Add, Button, xp+79 yp wp hp gSequenceDlg_Cancel, &Cancel
