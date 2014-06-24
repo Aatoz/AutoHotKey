@@ -16,6 +16,7 @@ res\icons\Bunch of Bluish\Save.ico
 res\icons\Bunch of Bluish\Refresh.ico
 res\icons\Free Blue Buttons\Resize2.ico
 res\icons\Free Blue Buttons\Browse2.ico
+res\icons\Free Object Icons\Revert.ico
 res\icons\I Like Buttons\Green.ico
 res\icons\I Like Buttons\Info.ico
 res\icons\I Like Buttons\Off.ico
