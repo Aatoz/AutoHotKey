@@ -317,6 +317,13 @@ Suspend(sOnOff)
 	{
 		this.m_bCalledFromClick := true
 
+		; If the mouse is hovering over the previous menu and the mouse has clicked what is already selected, do nothing.
+		vPrevMenu := this.GetMenu_Ref(this.m_iNumMenus - 1)
+		iFocRow := this.GetRowFromPos("", iFlyoutUnderCircle)
+		Tooltip % st_concat("`n", iFlyoutUnderCircle, vPrevMenu.m_iFlyoutNum, iFocRow, vPrevMenu.GetCurSelNdx()+1)
+		if (iFlyoutUnderCircle == vPrevMenu.m_iFlyoutNum && iFocRow == vPrevMenu.GetCurSelNdx()+1)
+			return
+
 		; Exit to the hovered menu, if needed.
 		while (this.m_iNumMenus > vFlyout.m_iFlyoutNum)
 			this.ExitTopmost()
@@ -437,9 +444,7 @@ Suspend(sOnOff)
 
 		if (this.m_vTopmostMenu.GetCurSelNdx() == 0)
 			iYOffset := 0
-		; iYOffset-1 because CalcHeightTo returns the Y pos of the row passed in, but we want to pos 1 pixel before that.
-		; Just look at the menu, and you'll see what I mean.
-		else iYOffset := this.m_vTopmostMenu.CalcHeightTo(this.m_vTopmostMenu.GetCurSelNdx() - this.m_vTopmostMenu.m_iDrawnAtNdx) - 1
+		else iYOffset := this.m_vTopmostMenu.CalcHeightTo(this.m_vTopmostMenu.GetCurSelNdx() - this.m_vTopmostMenu.m_iDrawnAtNdx)
 
 		this.CreateFlyoutMenu(sMenuID, this.m_vTopmostMenu.m_hFlyout)
 		; Note: m_vTopmostMenu is now the newly created menu ( See __Get() ).
