@@ -22,7 +22,6 @@ res\icons\I Like Buttons\Info.ico
 res\icons\I Like Buttons\Off.ico
 res\icons\I Like Buttons\Red.ico
 res\icons\I Like Buttons\Win2.ico
-res\icons\Orb\Down.ico
 res\icons\Primo\Pause.ico
 res\icons\Primo\Play.ico
 res\icons\Windows Master\Default Flyout Menu 1.jpg
