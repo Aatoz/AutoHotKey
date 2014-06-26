@@ -169,17 +169,25 @@ class AutoLeap
 		Function: Reload
 			Purpose: So that users may reload without destroying the object.
 		Parameters
-			None
+			bReloadExe=true
 	*/
 	Reload()
 	{
-		this.m_bReloading := false
+		this.m_bReloaded := false
+
+		; Reload inis.
+		; IMPORTANT: m_vGesturesConfigIni should be reloaded BEFORE we relaunch the exe
+		; because it changes settings within the exe.
+		this.m_vGesturesIni := this.m_vGesturesIni.Reload()
+		this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload()
+
 		this.CloseExe(false)
 		this.StartLeap()
 
 		; New PID from StartLeap, so reassign super-global.
 		AutoLeap.PID[this.m_iAutoLeapPID] := &this
-		this.m_bReloading := true
+
+		this.m_bReloaded := true
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -244,7 +252,7 @@ class AutoLeap
 	/*
 		Author: Verdlin
 		Function: MergeGesturesIni
-			Purpose:
+			Purpose: To merge OtherIni with m_vGesturesIni
 		Parameters
 			OtherIni
 	*/
@@ -294,12 +302,12 @@ class AutoLeap
 				[Sliders]
 				Circle.MinRadius=9
 				; Note: Circle.MinArc is multipled by pi.
-				Circle.MinArc=1.08
-				Swipe.MinLength=150
+				Circle.MinArc=1.80
+				Swipe.MinLength=170
 				Swipe.MinVelocity=220
 				KeyTap.MinDownVelocity=440
 				KeyTap.HistorySeconds=0.02
-				KeyTap.MinDistance=2
+				KeyTap.MinDistance=20
 				ScreenTap.MinForwardVelocity=140
 				ScreenTap.HistorySeconds=0.75
 				ScreenTap.MinDistance=55
@@ -440,7 +448,7 @@ class AutoLeap
 		; Handle Connected, Disconnected events as per Leap Motion's app requirements.
 		if (vLeapData.Header.HasKey("Initialized") && this.m_bIsFirstRun)
 			this.OSD_PostMsg("Ready to receive " this.m_sLeapMC " input")
-		else if (vLeapData.Header.HasKey("Connected") && !this.m_bReloading)
+		else if (vLeapData.Header.HasKey("Connected") && !this.m_bReloaded)
 			this.OSD_PostMsg(this.m_sLeapMC " is connected")
 		else if (vLeapData.Header.HasKey("Disconnected"))
 			this.OSD_PostMsg(this.m_sLeapMC " was disconnected")
@@ -517,7 +525,7 @@ class AutoLeap
 				{
 					GUI, ControlCenterDlg_:Default
 					; The gestures will actually be added in PostRecordedData().
-					GUIControl,, g_vControlCenterDlg_RecordOutputEdit, % st_glue(asGestures, ", ")
+					GUIControl,, g_vControlCenterDlg_GestureChainEdit, % st_glue(asGestures, ", ")
 				}
 			}
 		}
@@ -985,11 +993,10 @@ class AutoLeap
 			Purpose: Wrapper to LeapDlgs.ShowGesturesConfigDlg()
 		Parameters
 			hOwner: Optional window handle to the owner of this dialog
-			bReloadOnExit: If true, reloads AutoLeap.exe once the dialog has been dismissed.
 	*/
-	ShowGesturesConfigDlg(hOwner=0, bReloadOnExit=true)
+	ShowGesturesConfigDlg(hOwner=0)
 	{
-		this.m_vDlgs.ShowGesturesConfigDlg(hOwner, bReloadOnExit)
+		this.m_vDlgs.ShowGesturesConfigDlg(hOwner)
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1064,7 +1071,7 @@ AutoLeap_OnCopyData(wParam, lParam)
 /*
 	-------------------------------------------------------------------
 	-------------------------------------------------------------------
-								Begin LeapDlgs								
+	-------------------------Begin LeapDlgs-------------------------
 	-------------------------------------------------------------------
 	-------------------------------------------------------------------
 */
@@ -1085,6 +1092,10 @@ class LeapDlgs
 
 		sOldWorkingDir := A_WorkingDir
 		SetWorkingDir, % this.m_sLeapWorkingDir
+
+		; Note: we *must* set up separate inis here. Writing to memory doesn't work when calling inis _AutoLeap().
+		this.m_vGesturesIni := class_EasyIni(_AutoLeap().m_vGesturesIni.GetFileName())
+		this.m_vGesturesConfigIni := class_EasyIni(_AutoLeap().m_vGesturesConfigIni.GetFileName())
 
 		this.MakeControlCenterDlg()
 		this.MakeGesturesConfigDlg()
@@ -1130,12 +1141,6 @@ class LeapDlgs
 			return _AutoLeap().m_sLeapTM
 		if (var = "m_sLeapMC")
 			return _AutoLeap().m_sLeapMC
-
-		; Inis.
-		if (var = "m_vGesturesIni")
-			return _AutoLeap().m_vGesturesIni
-		if (var = "m_vGesturesConfigIni")
-			return _AutoLeap().m_vGesturesConfigIni
 
 		return
 	}
@@ -1276,14 +1281,18 @@ class LeapDlgs
 		Menu, ControlCenterDlg_FileMenu, Icon, &Save`tCtrl + S, Save.ico,, 16
 		Menu, ControlCenterDlg_FileMenu, Add, Save &As...`tCtrl + Alt + S, ControlCenterDlg_SaveAs
 		Menu, ControlCenterDlg_FileMenu, Icon, Save &As...`tCtrl + Alt + S, Save As.ico,, 16
+		Menu, ControlCenterDlg_FileMenu, Add, &Import Settings`tCtrl + I, ControlCenterDlg_Import
+		Menu, ControlCenterDlg_FileMenu, Icon, &Import Settings`tCtrl + I, Download.ico,, 16
 		Menu, ControlCenterDlg_FileMenu, Add, E&xit, ControlCenterDlg_GUIClose
 		Menu, ControlCenterDlg_FileMenu, Icon, E&xit, Exit.ico,, 16
 
 		; Edit
-		Menu, ControlCenterDlg_EditMenu, Add, &Gesture Settings`tCtrl + G, ControlCenterDlg_EditMenu_GestureConfig
-		Menu, ControlCenterDlg_EditMenu, Icon, &Gesture Settings`tCtrl + G, Config.ico,, 16
 		Menu, ControlCenterDlg_EditMenu, Add, &Record`tCtrl + R, ControlCenterDlg_RecordBtn
 		Menu, ControlCenterDlg_EditMenu, Icon, &Record`tCtrl + R, Red.ico,, 16
+		Menu, ControlCenterDlg_EditMenu, Add, &Undo`tCtrl + Z, ControlCenterDlg_UndoOnceBtn
+		Menu, ControlCenterDlg_EditMenu, Icon, &Undo`tCtrl + Z, Rotate 3D.ico,, 16
+		Menu, ControlCenterDlg_EditMenu, Add, &Gesture Settings`tCtrl + G, ControlCenterDlg_EditMenu_GestureConfig
+		Menu, ControlCenterDlg_EditMenu, Icon, &Gesture Settings`tCtrl + G, Config.ico,, 16
 
 		; Help
 		Menu, ControlCenterDlg_HelpMenu, Add, &About`tF1, ControlCenterDlg_HelpMenu_About
@@ -1381,85 +1390,46 @@ class LeapDlgs
 		;~ -------------------------------------------------------------------------------------------------------
 
 		GUI, Font, s12 c83B8G7
-		GUI, Add, Edit, xp-310 yp+51 r6 w409 ReadOnly -TabStop vg_vControlCenterDlg_RecordOutputEdit
+		GUI, Add, Edit, xp-310 yp+51 r6 w409 ReadOnly -TabStop vg_vControlCenterDlg_GestureChainEdit
 		GUI, Font, s8
-		GUI, Add, Button, xp+415 yp+75 w%s_iMSDNStdBtnW% h%s_iMSDNStdBtnH% vg_vControlCenterDlg_RecordBtn gControlCenterDlg_RecordBtn, Record
+		GUI, Add, Button, xp+415 yp+45 w%s_iMSDNStdBtnW% h%s_iMSDNStdBtnH% vg_vControlCenterDlg_RecordBtn gControlCenterDlg_RecordBtn, Record
+		GUI, Add, Button, xp yp+30 w%s_iMSDNStdBtnW% h%s_iMSDNStdBtnH% vg_vControlCenterDlg_UndoOnceBtn gControlCenterDlg_UndoOnceBtn, U&ndo Once
 		GUI, Add, Button, xp yp+30 wp hp vg_vControlCenterDlg_ClearBtn gControlCenterDlg_ClearBtn, Cle&ar
 
 		this.ControlCenterDlg_AddAllMenuItems()
 
 		return
 
+		; TODO: If _AutoLeap fails on unique PIDs, then make dlg name ControlCenterDlgN, and pass this on.
 		ControlCenterDlg_NameEditProc:
-		{
-			; TODO: If _AutoLeap fails on unique PIDs, then make dlg name ControlCenterDlgN, and pass this on.
-			_Dlgs().ControlCenterDlg_NameEditProc()
-			return
-		}
-
 		ControlCenterDlg_AddGestureID:
-		{
-			_Dlgs().ControlCenterDlg_AddGestureID()
-			return
-		}
-
 		ControlCenterDlg_DeleteBtn:
-		{
-			_Dlgs().ControlCenterDlg_DeleteBtn()
-			return
-		}
-
 		ControlCenterDlg_GestureLVProc:
+		ControlCenterDlg_RecordBtn:
+		ControlCenterDlg_UndoOnceBtn:
+		ControlCenterDlg_ClearBtn:
+		ControlCenterDlg_OKBtn:
+		ControlCenterDlg_Save:
+		ControlCenterDlg_SaveAs:
+		ControlCenterDlg_Import:
+		ControlCenterDlg_HelpMenu_About:
 		{
-			_Dlgs().ControlCenterDlg_GestureLVProc()
+			if (IsFunc("LeapDlgs." A_ThisLabel))
+				_Dlgs()[A_ThisLabel]()
+			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+
 			return
 		}
 
 		ControlCenterDlg_GestureBtnProc:
 		{
-			_Dlgs().ControlCenterDlg_GestureBtnProc(A_GuiControl)
-			return
-		}
-
-		ControlCenterDlg_RecordBtn:
-		{
-			_Dlgs().ControlCenterDlg_RecordBtn()
-			return
-		}
-
-		ControlCenterDlg_ClearBtn:
-		{
-			_Dlgs().ControlCenterDlg_ClearBtn()
-			return
-		}
-
-		ControlCenterDlg_OKBtn:
-		{
-			_Dlgs().ControlCenterDlg_OKBtn()
-			return
-		}
-
-		ControlCenterDlg_Save:
-		{
-			_Dlgs().ControlCenterDlg_Save()
-			return
-		}
-
-		ControlCenterDlg_SaveAs:
-		{
-			_Dlgs().ControlCenterDlg_SaveAs()
+			_Dlgs()[A_ThisLabel](A_GUIControl)
 			return
 		}
 
 		ControlCenterDlg_EditMenu_GestureConfig:
 		{
 			_Dlgs().ShowGesturesConfigDlg(g_hControlCenterDlg)
-			return
-		}
-
-		ControlCenterDlg_HelpMenu_About:
-		{
-			_Dlgs().ControlCenterDlg_HelpMenu_About()
 			return
 		}
 
@@ -1487,7 +1457,8 @@ class LeapDlgs
 		this._SetLV()
 
 		this.m_vGesturesIni := this.m_vGesturesIni.Reload() ; Need to be certain that ini is up-to-date!
-		this.m_vOriginalGesturesIni := ObjClone(this.m_vGesturesIni)
+		; Note: ObjClone was incorrectly copying the address instead of the memory.
+		this.m_vOriginalGesturesIni := class_EasyIni(this.m_vGesturesIni.GetFileName())
 		this.m_bControlCenterDlg_IsSaved := true
 
 		if (hOwner)
@@ -1497,18 +1468,7 @@ class LeapDlgs
 			WinSet, Disable,, ahk_id %g_hControlCenterDlgOwner%
 		}
 
-		; Update the LV with the (possibly new) gestures from this.m_vGesturesIni.
-		LV_Delete()
-		sGestureIDs := this.m_vGesturesIni.GetSections()
-		Loop, Parse, sGestureIDs, `n
-			LV_Add("", A_LoopField)
-
-		this.m_bSelectInEdit := true ; so that we select the whole gesture ID in the edit.
-		if (sSelect == A_Blank)
-			this.SetSel(1) ; Select and focus the first item in the LV.
-		else this.SetSelText(sSelect) ; Select and focus this item in the LV.
-
-		GUIControl, Focus, g_vControlCenterDlg_NameEdit
+		this.LoadGestureIDs(sSelect)
 
 		GUI, Show, x-32768 AutoSize
 		if (g_hControlCenterDlgOwner)
@@ -1524,12 +1484,37 @@ class LeapDlgs
 		}
 
 		if (bReloadOnExit)
-			this.Reload()
+			_AutoLeap().Reload()
 
 		if (!this.m_bSubmit)
 			return
-
 		return this.GetSelText()
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: LoadGestureIDs
+			Purpose: To load gesture IDs into the LV
+		Parameters
+			
+	*/
+	LoadGestureIDs(sSelect="")
+	{
+		; Update the LV with the (possibly new) gestures from this.m_vGesturesIni.
+		LV_Delete()
+		sGestureIDs := this.m_vGesturesIni.GetSections()
+		Loop, Parse, sGestureIDs, `n
+			LV_Add("", A_LoopField)
+
+		this.m_bSelectInEdit := true ; so that we select the whole gesture ID in the edit.
+		if (sSelect == A_Blank)
+			this.SetSel(1) ; Select and focus the first item in the LV.
+		else this.SetSelText(sSelect) ; Select and focus this item in the LV.
+
+		GUIControl, Focus, g_vControlCenterDlg_NameEdit
+		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1544,6 +1529,8 @@ class LeapDlgs
 		Menu, GesturesConfigDlg_FileMenu, Icon, &Save`tCtrl + S, Save.ico,, 16
 		Menu, GesturesConfigDlg_FileMenu, Add, Save &As...`tCtrl + Alt + S, GesturesConfigDlg_SaveAs
 		Menu, GesturesConfigDlg_FileMenu, Icon, Save &As...`tCtrl + Alt + S, Save As.ico,, 16
+		Menu, GesturesConfigDlg_FileMenu, Add, &Import Settings`tCtrl + I, GesturesConfigDlg_Import
+		Menu, GesturesConfigDlg_FileMenu, Icon, &Import Settings`tCtrl + I, Download.ico,, 16
 		Menu, GesturesConfigDlg_FileMenu, Add, E&xit, GesturesConfigDlg_GUIClose
 		Menu, GesturesConfigDlg_FileMenu, Icon, E&xit, Exit.ico,, 16
 
@@ -1579,13 +1566,10 @@ class LeapDlgs
 
 		GUI, Add, Groupbox, xm w180 vvGestureBox Center, Enable or Disable
 		GUIControlGet, iGestureBoxPos, Pos, vGestureBox ; Needed for dynamic position of controls to follow.
-		local sChecks := "EnableCircle|EnableSwipe|EnableKeyTap|EnableScreenTap"
-		Loop, Parse, sChecks, |
-			s%A_LoopField% := (this.m_vGesturesConfigIni.AvailableGestures[A_LoopField] ? "Checked" : "")
-		GUI, Add, Checkbox, xp+5 yp+20 vEnableCircle gGesturesConfigDlg_GestureCheckProc %sEnableCircle%, Circles
-		GUI, Add, Checkbox, xp+82 yp vEnableSwipe gGesturesConfigDlg_GestureCheckProc %sEnableSwipe%, Swipes
-		GUI, Add, Checkbox, xm+5 yp+20 vEnableKeyTap gGesturesConfigDlg_GestureCheckProc %sEnableKeyTap%, KeyTaps
-		GUI, Add, Checkbox, xp+82 yp vEnableScreenTap gGesturesConfigDlg_GestureCheckProc %sEnableScreenTap%, ScreenTaps
+		GUI, Add, Checkbox, xp+5 yp+20 vEnableCircle gGesturesConfigDlg_GestureCheckProc, Circles
+		GUI, Add, Checkbox, xp+82 yp vEnableSwipe gGesturesConfigDlg_GestureCheckProc, Swipes
+		GUI, Add, Checkbox, xm+5 yp+20 vEnableKeyTap gGesturesConfigDlg_GestureCheckProc, KeyTaps
+		GUI, Add, Checkbox, xp+82 yp vEnableScreenTap gGesturesConfigDlg_GestureCheckProc, ScreenTaps
 
 		iSliderFarLeft := iGestureBoxPosX+25
 		iNewRow := 3
@@ -1652,48 +1636,31 @@ class LeapDlgs
 		GUI, Add, Groupbox, Xm Y%iBoxY% W%iGestureBoxW% H%iBoxH% Center, Sensitivity
 
 		this.GesturesConfigDlg_AddAllMenuItems()
-
-		; Check whatever needs checking.
-		Loop, Parse, sChecks, |
-			this.GesturesConfigDlg_GestureCheckProc(A_LoopField)
+		this.LoadSettings()
 
 		return
 
 		GesturesConfigDlg_SliderProc:
-		{
-			Critical
-			_Dlgs().GesturesConfigDlg_SliderProc()
-			return
-		}
-
 		GesturesConfigDlg_GestureCheckProc:
 		{
 			Critical
-			_Dlgs().GesturesConfigDlg_GestureCheckProc()
+			if (IsFunc("LeapDlgs." A_ThisLabel))
+				_Dlgs()[A_ThisLabel]()
+			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+
 			return
 		}
 
 		GesturesConfigDlg_DefaultBtn:
-		{
-			_Dlgs().GesturesConfigDlg_DefaultBtn()
-			return
-		}
-
 		GesturesConfigDlg_SaveAs:
-		{
-			_Dlgs().GesturesConfigDlg_SaveAs()
-			return
-		}
-
 		GesturesConfigDlg_Save:
-		{
-			_Dlgs().GesturesConfigDlg_Save()
-			return
-		}
-
+		GesturesConfigDlg_Import:
 		GesturesConfigDlg_OKBtn:
 		{
-			_Dlgs().GesturesConfigDlg_OKBtn()
+			if (IsFunc("LeapDlgs." A_ThisLabel))
+				_Dlgs()[A_ThisLabel]()
+			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+
 			return
 		}
 
@@ -1855,13 +1822,43 @@ class LeapDlgs
 	GesturesConfigDlg_DefaultBtn()
 	{
 		this.m_vGesturesConfigIni := class_EasyIni(this.m_vGesturesConfigIni.GetFileName(), _AutoLeap().GetDefaultGesturesConfigIni())
+		this.m_bGesturesConfigDlg_IsSaved := false
+
+		; Gesture sensitivity sliders.
+		this.LoadSettings()
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: LoadSettings
+			Purpose: Loading keys and values from Config.ini into their appropriate sliders
+				
+		Parameters
+			None
+	*/
+	LoadSettings()
+	{
+		GUI, GesturesConfigDlg_:Default
 
 		; Gesture enabling/disabling.
 		for key, val in this.m_vGesturesConfigIni.AvailableGestures
 			GUIControl,, %key%, %val%
 
-		; Gesture sensitivity sliders.
-		this.LoadSettingsIntoSliders()
+		; Enable/Disable sliders.
+		sChecks := "EnableCircle|EnableSwipe|EnableKeyTap|EnableScreenTap"
+		Loop, Parse, sChecks, |
+			this.GesturesConfigDlg_GestureCheckProc(A_LoopField)
+
+		; Load values into sliders.
+		for key, val in this.m_vGesturesConfigIni.Sliders
+		{
+			sSliderCtrl := this.SliderCtrlFromKey(key)
+			this.GeturesConfigDlg_UpdateSliderCtrl(sSliderCtrl, val, false)
+		}
+
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1923,6 +1920,33 @@ class LeapDlgs
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
+		Function: GesturesConfigDlg_Import
+			Purpose: To import exported settings from the gestures configuration dialog.
+		Parameters
+			
+	*/
+	GesturesConfigDlg_Import()
+	{
+		FileSelectFile, sFile,, % this.m_vGesturesConfigIni.GetFileName(), Select ini to import, *ini
+
+		if (sFile)
+		{
+			FileCopy, %sFile%, % this.m_vGesturesConfigIni.GetFileName(), 1
+			this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload()
+			; We aren't saved beacuse we just overwrote the original ini!
+			; This gives a user a chance to revert the ini back to it's previous state.
+			this.m_bGesturesConfigDlg_IsSaved := false
+
+			this.LoadSettings()
+		}
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
 		Function: GesturesConfigDlg_GUIClose
 			Purpose:
 		Parameters
@@ -1937,12 +1961,15 @@ class LeapDlgs
 		{
 			MsgBox, 8195, % "Close Gesture Settings", Save your settings before closing?
 
-			IfMsgBox Yes
-				this.GesturesConfigDlg_Save()
-			else IfMsgBox Cancel
+			IfMsgBox Cancel
 				return
-			else
-				_AutoLeap().m_vGesturesConfigIni := this.m_vOriginalGesturesConfigIni ; We don't want to save settings, so this use the old settings.
+			IfMsgBox No ; undo all changes.
+			{
+				this.m_vGesturesConfigIni := ObjClone(this.m_vOriginalGesturesConfigIni) ; We don't want to save settings, so this use the old settings.
+				this.m_vGesturesConfigIni.Save() ; Save, but don't alert the user because that will be confusing.
+			}
+			else IfMsgBox Yes
+				this.GesturesConfigDlg_Save()
 		}
 
 		GUI, GesturesConfigDlg_:Hide
@@ -1967,7 +1994,7 @@ class LeapDlgs
 			hOwner: Optional window handle to the owner of this dialog
 			bReloadOnExit: If true, reloads AutoLeap.exe once the dialog has been dismissed
 	*/
-	ShowGesturesConfigDlg(hOwner=0, bReloadOnExit=true)
+	ShowGesturesConfigDlg(hOwner=0)
 	{
 		global g_hGesturesConfigDlgOwner
 		GUI, GesturesConfigDlg_:Default
@@ -1979,7 +2006,8 @@ class LeapDlgs
 		}
 
 		this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload() ; Need to be certain that ini is up-to-date!
-		this.m_vOriginalGesturesConfigIni := ObjClone(this.m_vGesturesConfigIni)
+		; Note: ObjClone was incorrectly copying the address instead of the memory.
+		this.m_vOriginalGesturesConfigIni := class_EasyIni(this.m_vGesturesConfigIni.GetFileName())
 
 		if (hOwner)
 		{
@@ -1988,8 +2016,8 @@ class LeapDlgs
 			WinSet, Disable,, ahk_id %g_hGesturesConfigDlgOwner%
 		}
 
-		; Update the LV with the (possibly new) options from this.m_vGesturesConfigIni.
-		this.LoadSettingsIntoSliders()
+		; Update with the (possibly new) options from this.m_vGesturesConfigIni.
+		this.LoadSettings()
 
 		GUI, Show, x-32768 AutoSize
 		if (g_hGesturesConfigDlgOwner)
@@ -2003,8 +2031,8 @@ class LeapDlgs
 			continue
 		}
 
-		if (bReloadOnExit)
-			_AutoLeap().Reload()
+		; Reload settings so they take effect in the exe.
+		_AutoLeap().Reload()
 
 		return true
 	}
@@ -2091,7 +2119,7 @@ class LeapDlgs
 		sGesture := this.m_vGesturesIni[sGestureID].Gesture
 
 		GUIControl,, g_vControlCenterDlg_NameEdit, %sGestureID%
-		GUIControl,, g_vControlCenterDlg_RecordOutputEdit, % sGesture
+		GUIControl,, g_vControlCenterDlg_GestureChainEdit, % sGesture
 		if (this.m_bSelectInEdit)
 			SendMessage, EM_SETSEL, 0, -1,, % "ahk_id" this.m_hControlCenterDlg_NameEdit
 		else SendMessage, EM_SETSEL, -2, -1,, % "ahk_id" this.m_hControlCenterDlg_NameEdit
@@ -2144,7 +2172,7 @@ class LeapDlgs
 		if (!this.m_vGesturesIni.HasKey(sGestureID))
 			this.ControlCenterDlg_AddGestureID(sGestureID)
 
-		GUIControl,, g_vControlCenterDlg_RecordOutputEdit, %sGesture% ; Replace the output with sGesture.
+		GUIControl,, g_vControlCenterDlg_GestureChainEdit, %sGesture% ; Replace the output with sGesture.
 
 		this.m_vGesturesIni[sGestureID].Gesture := sGesture
 		this.m_bControlCenterDlg_IsSaved := false
@@ -2176,13 +2204,13 @@ class LeapDlgs
 		if (!this.m_vGesturesIni.HasKey(sGestureID))
 			this.ControlCenterDlg_AddGestureID(sGestureID)
 
-		GUIControlGet, sCurGestures,, g_vControlCenterDlg_RecordOutputEdit
+		GUIControlGet, sCurGestures,, g_vControlCenterDlg_GestureChainEdit
 
 		sAllGestures := sGesture
 		if (sCurGestures != A_Blank)
 			sAllGestures := sCurGestures ", " sGesture
 
-		GUIControl,, g_vControlCenterDlg_RecordOutputEdit, % sAllGestures
+		GUIControl,, g_vControlCenterDlg_GestureChainEdit, %sAllGestures%
 
 		this.m_vGesturesIni[sGestureID].Gesture := sAllGestures
 		this.m_bControlCenterDlg_IsSaved := false
@@ -2203,11 +2231,11 @@ class LeapDlgs
 		if (this.m_bLastGestureIDExisted)
 		{
 			; Clear the output since that is specific to whatever gesture is selected in the LV...
-			GUIControl,, g_vControlCenterDlg_RecordOutputEdit
+			GUIControl,, g_vControlCenterDlg_GestureChainEdit
 		}
 		else
 		{
-			GUIControlGet, sGesture,, g_vControlCenterDlg_RecordOutputEdit
+			GUIControlGet, sGesture,, g_vControlCenterDlg_GestureChainEdit
 			if (!this.ValidateGesture(sGestureID, sGesture, false, sError))
 			{
 				; Validate, but allow the adding no matter what.
@@ -2289,14 +2317,14 @@ class LeapDlgs
 			this.SetSelText(sGestureID)
 
 			; Update the output Edit with this gesture.
-			GUIControl,, g_vControlCenterDlg_RecordOutputEdit, % this.m_vGesturesIni[sGestureID].Gesture
+			GUIControl,, g_vControlCenterDlg_GestureChainEdit, % this.m_vGesturesIni[sGestureID].Gesture
 		}
 		else
 		{
 			GUIControl, Enable, g_vControlCenterDlg_AddBtn
 
 			if (this.m_bLastGestureIDExisted)
-				GUIControl,, g_vControlCenterDlg_RecordOutputEdit, ; Clear the output.
+				GUIControl,, g_vControlCenterDlg_GestureChainEdit, ; Clear the output.
 		}
 
 		this.m_bLastGestureIDExisted := this.m_vGesturesIni.HasKey(sGestureID)
@@ -2318,13 +2346,13 @@ class LeapDlgs
 		if (this.m_bIsRecording)
 		{
 			GUIControl,, g_vControlCenterDlg_RecordBtn, Stop (Ctrl + R)
-			GUIControl,, g_vControlCenterDlg_RecordOutputEdit
+			GUIControl,, g_vControlCenterDlg_GestureChainEdit
 			this.m_vGesturesIni[sGestureID].Gesture := ""
 		}
 		else ; finished recording, so restore Record button and register this gesture.
 		{
 			GUIControl,, g_vControlCenterDlg_RecordBtn, Record
-			GUIControlGet, sInput,, g_vControlCenterDlg_RecordOutputEdit
+			GUIControlGet, sInput,, g_vControlCenterDlg_GestureChainEdit
 			sGestureToUse := this.GetSelText()
 			this.GetGesturesIni()[sGestureToUse].Gesture := sInput
 		}
@@ -2332,6 +2360,32 @@ class LeapDlgs
 		return
 	}
 	;;;;;;;;;;;;;;
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ControlCenterDlg_UndoOnceBtn
+			Purpose: To remove the last gesture from the chain
+		Parameters
+			
+	*/
+	ControlCenterDlg_UndoOnceBtn()
+	{
+		GUI, ControlCenterDlg_:Default
+
+		sGestureID := this.GetGestureID()
+		GUIControlGet, sGestureChain,, g_vControlCenterDlg_GestureChainEdit
+
+		; Remove final item from chain.
+		sGestureChain := SubStr(sGestureChain, 1, InStr(sGestureChain, ",", false, -1)-1) ; Search RTL.
+		GUIControl,, g_vControlCenterDlg_GestureChainEdit, %sGestureChain%
+		; Make changes in ini.
+		this.m_vGesturesIni[sGestureID].Gesture := sGestureChain
+		this.m_bControlCenterDlg_IsSaved := false
+
+		return
+	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2345,8 +2399,13 @@ class LeapDlgs
 	ControlCenterDlg_ClearBtn()
 	{
 		GUI, ControlCenterDlg_:Default
-		GUIControl,, g_vControlCenterDlg_RecordOutputEdit
+
+		; Clear entire chain.
+		GUIControl,, g_vControlCenterDlg_GestureChainEdit
+		; Make changes in ini.
 		this.m_vGesturesIni[this.GetGestureID()].Gesture := A_Blank
+		this.m_bControlCenterDlg_IsSaved := false
+
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2421,6 +2480,33 @@ class LeapDlgs
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ControlCenterDlg_Import
+			Purpose: To import exported settings from the control center.
+		Parameters
+			
+	*/
+	ControlCenterDlg_Import()
+	{
+		FileSelectFile, sFile,, % this.m_vGesturesIni.GetFileName(), Select ini to import, *ini
+
+		if (sFile)
+		{
+			FileCopy, %sFile%, % this.m_vGesturesIni.GetFileName(), 1
+			this.m_vGesturesIni := this.m_vGesturesIni.Reload()
+			; We aren't saved beacuse we just overwrote the original ini!
+			; This gives a user a chance to revert the ini back to it's previous state.
+			this.m_bControlCenterDlg_IsSaved := false
+
+			this.LoadGestureIDs(this.GetSelText())
+		}
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;;;;;;;;;;;;;;
 	ControlCenterDlg_Close()
 	{
@@ -2438,15 +2524,18 @@ class LeapDlgs
 		{
 			MsgBox, 8195, % "Close " this.m_sLeapMC " Control Center", Save your settings before closing?
 
-			IfMsgBox Yes
+			IfMsgBox Cancel
+				return
+			IfMsgBox No ; undo all changes.
+			{
+				this.m_vGesturesIni := ObjClone(this.m_vOriginalGesturesIni) ; We don't want to save settings, so this use the old settings.
+				this.m_vGesturesIni.Save()
+			}
+			else IfMsgBox Yes
 			{
 				if (!this.ControlCenterDlg_Save())
 					return
 			}
-			else IfMsgBox Cancel
-				return
-			; else undo all changes.
-			_AutoLeap().m_vGesturesIni := this.m_vOriginalGesturesIni ; We don't want to save settings, so this use the old settings.
 		}
 
 		GUI, ControlCenterDlg_:Hide
@@ -2495,7 +2584,7 @@ class LeapDlgs
 		GUIControl, %s%, g_vControlCenterDlg_Swipe_DownBtn
 		GUIControl, %s%, g_vControlCenterDlg_Swipe_BackwardBtn
 		GUIControl, %s%, g_vControlCenterDlg_ScreenTapBtn
-		GUIControl, %s%, g_vControlCenterDlg_RecordOutputEdit
+		GUIControl, %s%, g_vControlCenterDlg_GestureChainEdit
 		GUIControl, %s%, g_vControlCenterDlg_ClearBtn
 
 		if (bEnable)
@@ -2616,33 +2705,9 @@ class LeapDlgs
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-	/*
-		Author: Verdlin
-		Function: LoadSettingsIntoSliders
-			Purpose: Loading keys and values from Config.ini into their appropriate sliders
-				
-		Parameters
-			None
-	*/
-	LoadSettingsIntoSliders()
-	{
-		GUI, GesturesConfigDlg_:Default
-
-		for key, val in this.m_vGesturesConfigIni.Sliders
-		{
-			sSliderCtrl := this.SliderCtrlFromKey(key)
-			this.GeturesConfigDlg_UpdateSliderCtrl(sSliderCtrl, val, false)
-		}
-
-		return
-	}
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;;;;;;;;;;;;;;
 	ControlCenterDlg_OnKeyDown(wParam, lParam, msg, hWnd)
 	{
-
 		if (this.m_bIsRecording)
 			return ; All controls, except for the record button, should be disabled, so nothing to do but forward the keys.
 
@@ -2804,13 +2869,13 @@ class LeapDlgs
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; Member variables
-	m_bLastGestureIDExisted		:= true ; Because the first gesture is always selected by default.
+	m_bLastGestureIDExisted					:= true ; Because the first gesture is always selected by default.
 	m_bControlCenterDlg_IsSaved		:= true
-	m_bGesturesConfigDlg_IsSaved	:= true
+	m_bGesturesConfigDlg_IsSaved		:= true
 	m_hMsgHandlerFunc						:=
 	m_vGesturesIni									:=
 	m_vLeap												:=
-	m_vGesturesConfigUnitsMapping := Object("Circle.MinRadius", "mm"
+	m_vGesturesConfigUnitsMapping	:= Object("Circle.MinRadius", "mm"
 		, "Circle.MinArc", "(*pi) radians"
 		, "Swipe.MinLength", "mm"
 		, "Swipe.MinVelocity", "mm/s"
