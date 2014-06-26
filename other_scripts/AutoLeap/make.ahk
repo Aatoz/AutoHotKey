@@ -9,6 +9,8 @@ res\icons\Bunch of Bluish\Save2.ico
 res\icons\Bunch of Bluish\Save As.ico
 res\icons\Bunch of Bluish\Info.ico
 res\icons\Free Blue Buttons\Measure.ico
+res\icons\Free Blue Buttons\Download.ico
+res\icons\Free Blue Buttons\Rotate 3D.ico
 res\Icons\I Like Buttons\Red.ico
 res\Icons\Orb\Add.ico
 res\Icons\Orb\Delete.ico
