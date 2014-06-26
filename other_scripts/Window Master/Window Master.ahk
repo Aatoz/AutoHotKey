@@ -43,7 +43,6 @@ FileInstall, images\Info.ico, images\Info.ico, 1
 FileInstall, images\Close.ico, images\Close.ico, 1
 FileInstall, images\Red.ico, images\Red.ico, 1
 FileInstall, images\Open.ico, images\Open.ico, 1
-FileInstall, images\Import.ico, images\Import.ico, 1
 FileInstall, images\Pause.ico, images\Pause.ico, 1
 FileInstall, images\Play.ico, images\Play.ico, 1
 FileInstall, images\Default Flyout Menu 1.jpg, images\Default Flyout Menu 1.jpg, 1
@@ -234,6 +233,7 @@ InitAllInis()
 
 	; For custom hotkeys and sequences
 	g_SequencesIni := class_EasyIni(A_ScriptDir "\sequences.ini")
+	g_vDefaultSequencesIni := class_EasyIni("", GetDefaultSequencesIni())
 	; Note: Cannot merge sequences ini since secs are simply integers, and users may add and remove as they please.
 	if (!FileExist(g_SequencesIni.GetFileName()))
 	{
@@ -247,6 +247,7 @@ InitAllInis()
 	; "Static" hotkeys
 	; Given the delicate relationship between labels and hotkeys, this requires some special handling.
 	local vDefaultHotkeysIni := class_EasyIni("", GetDefaultHotkeysIni())
+	g_vDefaultHotkeysIni := class_EasyIni("", GetDefaultHotkeysIni())
 	g_HotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini")
 	; To allow removal of old settings and additions of new settings, merge vDefaultHotkeysIni and g_HotkeysIni.
 	; bRemoveNonMatching: If true, removes sections and keys that do not exist in both inis.
@@ -265,6 +266,7 @@ InitAllInis()
 	; Leap actions. Handling is quite similar to g_HotkeysIni.
 	local vDefaultLeapActionsIni := class_EasyIni("", GetDefaultLeapActionsIni())
 	g_LeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini")
+	g_vDefaultLeapActionsIni := class_EasyIni("", GetDefaultLeapActionsIni())
 	local vExceptionsForLeapActionsIni := class_EasyIni("", GetExceptionsForLeapActionsIni())
 	; Merge in similar fashion as g_HotkeysIni.
 	vDefaultLeapActionsIni.EasyIni_ReservedFor_m_sFile := g_LeapActionsIni.GetFileName()
@@ -274,6 +276,7 @@ InitAllInis()
 
 	;~ g_sInisForParsing := "g_SequencesIni|g_PrecisionIni|g_HotkeysIni|g_LeapActionsIni"
 	g_sInisForParsing := "g_SequencesIni|g_HotkeysIni|g_LeapActionsIni"
+	g_sDefaultInis := "g_vDefaultSequencesIni|g_vDefaultHotkeysIni|g_vDefaultLeapActionsIni"
 
 	return
 }
@@ -563,20 +566,23 @@ MakeMainDlg()
 
 	Menu, WM_Menu_Import, Add, Import WinSplit &Settings`tCtrl + W, ConvertWinSplitXMLSettingsToInis
 	Menu, WM_ImportMenu, Add, I&mport, :WM_Menu_Import
-	Menu, WM_ImportMenu, Icon, I&mport, images\Import.ico,, 16
+	Menu, WM_ImportMenu, Icon, I&mport, AutoLeap\Download.ico,, 16
 	Menu, WM_ImportMenu, Add, E&xit, Window_Master_GUIClose
 	Menu, WM_ImportMenu, Icon, E&xit, AutoLeap\Exit.ico,, 16
 
-	if (g_bIsDev)
-	{
-		Menu, WM_Menu_Settings, Add, &Quick Menu`tCtrl + M, QuickMenu_EditSettings
-		Menu, WM_Menu_Settings, Icon, &Quick Menu`tCtrl + M, images\Menu Settings.ico,, 16
-	}
+	Menu, WM_Menu_Settings, Add, &Revert These Settings to Defaults`tCtrl + R, Window_Master_RevertSettingsInTab
+	Menu, WM_Menu_Settings, Icon, &Revert These Settings to Defaults`tCtrl + R, images\Revert.ico,, 16
 
 	if (g_bHasLeap)
 	{
 		Menu, WM_Menu_Settings, Add, % "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", Window_Master_ShowControlCenterDlg
 		Menu, WM_Menu_Settings, Icon,% "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", AutoLeap\Leap.ico,, 16
+	}
+
+	if (g_bIsDev)
+	{
+		Menu, WM_Menu_Settings, Add, &Quick Menu`tCtrl + M, QuickMenu_EditSettings
+		Menu, WM_Menu_Settings, Icon, &Quick Menu`tCtrl + M, images\Menu Settings.ico,, 16
 	}
 
 	Menu, WM_Menu_Help, Add, &Using Window Master`tF1, Window_Master_Help
@@ -667,7 +673,7 @@ AddAllControls()
 
 	local iTab1LVX := 230
 	local iTab1LVY := 23
-	local iTab1LVW := 317
+	local iTab1LVW := 319
 	local iTab1LVH := 170
 
 	; HK LV
@@ -678,22 +684,27 @@ AddAllControls()
 	local iTmpX := iTab1LVX
 	GUI, Add, ListView, x%iTab1LVX% y%iTab1LVY% w%iTab1LVW% h%iTab1LVH% hwndg_hHKList vvHotkeysLV gHKList AltSubmit Checked Grid -Multi, %sHKLVCols%
 
+	local iStdXSpacing := g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing
 	iBtnY := iTab1LVY+iTab1LVH+3
 	GUI, Add, Button, xp y%iBtnY% w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% vvEditHK hwndg_hEditHK gEditHK
 	ILButton(g_hEditHK, "images\Edit.ico", 32, 32, 4)
-	GUI, Add, Button, % "xp+" g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing " yp wp hp vvAddHKForSequence hwndg_hAddHKForSequence gAddHKForSequence"
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vvAddHKForSequence hwndg_hAddHKForSequence gAddHKForSequence
 	ILButton(g_hAddHKForSequence, "images\Add.ico", 32, 32, 4)
-	GUI, Add, Button, % "xp+" g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing " yp wp hp vvDelHK hwndg_hDeleteHK gDeleteHK"
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vvDelHK hwndg_hDeleteHK gDeleteHK
 	ILButton(g_hDeleteHK, "images\Delete.ico", 32, 32, 4)
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gDefaultLVItem
+	ILButton(g_hDefaultHK, "images\Revert.ico", 32, 32, 4)
 
 	iTmpX += iTab1LVW+g_iMSDNStdBtnSpacing
 	GUI, Add, ListView, x%iTmpX% y%iTab1LVY% w%iTab1LVW% h%iTab1LVH% hwndg_hSequence vvSequenceLV gSequence AltSubmit Grid -Multi, Sequence in percent (`%)
 	GUI, Add, Button, xp y%iBtnY% w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% hwndg_hEditSeq vvEditSeq gEditSeq
 	ILButton(g_hEditSeq, "images\Edit.ico", 32, 32, 4)
-	GUI, Add, Button, % "xp+" g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing "yp wp hp hwndg_hAddSeq vvAddSeq gAddSeq"
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hAddSeq vvAddSeq gAddSeq
 	ILButton(g_hAddSeq, "images\Add.ico", 32, 32, 4)
-	GUI, Add, Button, % "xp+" g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing "yp wp hp hwndg_hDelSeq vvDelSeq gDeleteSeq"
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDelSeq vvDelSeq gDeleteSeq
 	ILButton(g_hDelSeq, "images\Delete.ico", 32, 32, 4)
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDefaultSeq vg_vDefaultSeq gDefaultLVItem
+	ILButton(g_hDefaultSeq, "images\Revert.ico", 32, 32, 4)
 
 	InitSequenceControls()
 	g_vWMMainTab.Highlight(1)
@@ -721,7 +732,8 @@ AddAllControls()
 	, g_asTabs[5]: "Interactive, " g_vLeap.m_sLeapMC " Actions`n(When using, keep fingers apart until you are ready to stop)."}
 
 	GUI, Font, s15 c83B8G7
-	GUI, Add, Text, x230 y13 w646 h50 hwndg_hGenericText vvGenericText Center Hidden
+	local iGenericW := (iStdXSpacing*2)+iTab1LVX+iTab1LVW+3
+	GUI, Add, Text, x%iTab1LVX% y13 w%iGenericW% h50 hwndg_hGenericText vvGenericText Center Hidden
 	GUI, Font, s8 cBlack
 
 	local sGenericLVCols := "Action|Hotkey"
@@ -731,9 +743,11 @@ AddAllControls()
 
 	GUI, Add, Button, xp yp+357 w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% hwndg_hGenericLVEditBtn vvGenericLVEdit gGenericLVModify Hidden
 	ILButton(g_hGenericLVEditBtn, "images\Edit.ico", 32, 32, 4)
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gDefaultLVItem Hidden
+	ILButton(g_hGenericLVDefaultBtn, "images\Revert.ico", 32, 32, 4)
 
 	GUI, Font, s12 c83B8G7
-	GUI, Add, Text, % "xp+" g_iMyStdImgBtnRect+g_iMSDNStdBtnSpacing "yp w605 hp vvGenericLVHelpTxt Center Hidden"
+	GUI, Add, Text, xp+%iStdXSpacing% yp w513 hp vvGenericLVHelpTxt Center Hidden
 	GUI, Font, s8 cBlack
 
 /*
@@ -888,6 +902,7 @@ Window_Master_TabProc:
 	{
 		GUIControl, Show, vPrecisionLVEdit
 		GUIControl, Hide, vGenericLVEdit
+		GUIControl, Hide, g_vGenericLVDefaultBtn
 
 		GUIControl, Show, vPrecisionAdd
 		GUIControl, Show, vPrecisionDelete
@@ -896,6 +911,7 @@ Window_Master_TabProc:
 	{
 		GUIControl, Hide, vPrecisionLVEdit
 		GUIControl, %sShowHideGeneric%, vGenericLVEdit
+		GUIControl, %sShowHideGeneric%, g_vGenericLVDefaultBtn
 
 		GUIControl, Hide, vPrecisionAdd
 		GUIControl, Hide, vPrecisionDelete
@@ -1052,12 +1068,13 @@ MoveGenericButtons()
 		return
 
 	GUIControlGet, iGenericLV, Pos, vGenericLV
-	GUIControlGet, iBtn, Pos, vPrecisionAdd
+	GUIControlGet, iBtn, Pos, vGenericLVEdit
 	iGenericLVX-- ; It is more aesthetic to start the first button 1pixel before the ListView.
 	iBtnW += g_iMSDNStdBtnSpacing
 
 	if (PrecisionTabIsActive())
 	{
+		GUIControlGet, iBtn, Pos, vPrecisionAdd
 		GUIControl, Move, vPrecisionLVEdit, % "X" iGenericLVX
 		GUIControl, Move, vPrecisionAdd, % "X" iGenericLVX+iBtnW
 		GUIControl, Move, vPrecisionDelete, % "X" iGenericLVX+(iBtnW*2)
@@ -1065,6 +1082,7 @@ MoveGenericButtons()
 	else
 	{
 		GUIControl, Move, vGenericLVEdit, % "X" iGenericLVX
+		GUIControl, Move, g_vGenericLVDefaultBtn, % "X" iGenericLVX+iBtnW
 	}
 
 	return
@@ -1086,8 +1104,6 @@ GenericLVModify:
 		}
 		else
 		{
-			LV_SetDefault("Window_Master_", "vGenericLV")
-			sHK := LV_GetSelText(2)
 			sAppendToTitle := LV_GetSelText()
 			sGestureID := g_HotkeysIni[sAppendToTitle].GestureName
 			g_vDlgs.ShowHKDlg_ForGenericLV(g_hWindowMaster, sHK, sGestureID, sAppendToTitle)
@@ -1109,11 +1125,13 @@ GenericLVProc:
 	{
 		GUIControl, Disable, vPrecisionLVEdit
 		GUIControl, Disable, vGenericLVEdit
+		GUIControl, Disable, g_vGenericLVDefaultBtn
 	}
 	else
 	{
 		GUIControl, Enable, vPrecisionLVEdit
 		GUIControl, Enable, vGenericLVEdit
+		GUIControl, Enable, g_vGenericLVDefaultBtn
 	}
 
 	sIni := GetCurIniForSave()
@@ -1236,6 +1254,40 @@ GenericLV_ModifyLeap(sHK, sGestureID)
 
 	g_bShouldSave := true
 	return true
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: GenericLV_Default
+		Purpose: To change selected item to it's default value
+	Parameters
+		
+*/
+GenericLV_Default()
+{
+	global g_LeapActionsIni, g_vDefaultLeapActionsIni, g_HotkeysIni, g_vDefaultHotkeysIni, g_bShouldSave
+
+	LV_SetDefault("Window_Master_", "vGenericLV")
+	iRow := LV_GetSel()
+	sec := LV_GetSelText()
+	sHK := LV_GetSelText(2)
+	sGesture := LV_GetSelText(3)
+
+	if (LeapTabIsActive())
+	{
+		g_LeapActionsIni[sec] := ObjClone(g_vDefaultLeapActionsIni[sec])
+		LV_Modify(iRow, "", sec, g_vDefaultLeapActionsIni[sec].Hotkey, g_vDefaultLeapActionsIni[sec].GestureName)
+	}
+	else
+	{
+		g_HotkeysIni[sec] := ObjClone(g_vDefaultHotkeysIni[sec])
+		LV_Modify(iRow, "", sec, g_vDefaultHotkeysIni[sec].Hotkey, g_vDefaultHotkeysIni[sec].GestureName)
+	}
+
+	g_bShouldSave := true
+	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1548,6 +1600,23 @@ DeleteSeq:
 	DeleteSequence()
 	return
 }
+DefaultLVItem:
+{
+	if (A_GuiControl = "g_vDefaultHK")
+	{
+		DefaultHK()
+	}
+	else if (A_GuiControl = "g_vDefaultSeq")
+	{
+		DefaultSequence()
+	}
+	else ; g_vDefaultGeneric
+	{
+		GenericLV_Default()
+	}
+
+	return
+}
 Window_Master_GUISize:
 {
 	; This fixes a strang resizing bug, likely somewhere in my own code instead of in Anchor2(),
@@ -1569,11 +1638,13 @@ Window_Master_GUISize:
 	Anchor2("Window_Master_:vAddHKForSequence", "xwyh", "0, 0, 1, 0")
 	Anchor2("Window_Master_:vEditHK", "xwyh", "0, 0, 1, 0")
 	Anchor2("Window_Master_:vDelHK", "xwyh", "0, 0, 1, 0")
+	Anchor2("Window_Master_:g_vDefaultHK", "xwyh", "0, 0, 1, 0")
 	; Sequence
 	Anchor2("Window_Master_:vSequenceLV", "xwyh", "0.5, 0.5, 0, 1")
 	Anchor2("Window_Master_:vAddSeq", "xwyh", "0.5, 0, 1, 0")
 	Anchor2("Window_Master_:vEditSeq", "xwyh", "0.5, 0, 1, 0")
 	Anchor2("Window_Master_:vDelSeq", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Window_Master_:g_vDefaultSeq", "xwyh", "0.5, 0, 1, 0")
 	; Preview
 	Anchor2("Window_Master_:vGroupPreview", "xwyh", "0.5, 0, 1, 0")
 	Anchor2("Window_Master_:vMonitorFramePic", "xwyh", "0.5, 0, 1, 0")
@@ -1588,6 +1659,7 @@ Window_Master_GUISize:
 	Anchor2("Window_Master_:vGenericLVHelpTxt", "xwyh", "0, 1, 1, 0")
 	Anchor2("Window_Master_:vGenericLV", "xwyh", "0, 1, 0, 1")
 	Anchor2("Window_Master_:vGenericLVEdit", "xwyh", "0, 0, 1, 0")
+	Anchor2("Window_Master_:g_vGenericLVDefaultBtn", "xwyh", "0, 0, 1, 0")
 	; Precision
 	;~ Anchor2("Window_Master_:vPrecisionAdd", "xwyh", "0, 0, 1, 0")
 	;~ Anchor2("Window_Master_:vPrecisionLVEdit", "xwyh", "0, 0, 1, 0")
@@ -2293,6 +2365,50 @@ IsInLinearArray(a, search, ByRef riNdx="")
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Window_Master_RevertSettingsInTab
+		Purpose:
+	Parameters
+		
+*/
+Window_Master_RevertSettingsInTab:
+{
+	Window_Master_RevertSettingsInTab()
+	return
+}
+
+Window_Master_RevertSettingsInTab()
+{
+	global
+
+	iPrevSel := LV_GetSel()
+
+	if (SequencingTabIsActive())
+		g_SequencesIni := ObjClone(g_vDefaultSequencesIni)
+	else
+	{
+		LV_SetDefault("Window_Master_", "vGenericLV")
+		local sec, aSecs := []
+		Loop % LV_GetCount()
+		{
+			LV_GetText(sec, A_Index)
+			if (LeapTabIsActive())
+				g_LeapActionsIni[sec] := ObjClone(g_vDefaultLeapActionsIni[sec])
+			else g_HotkeysIni[sec] := ObjClone(g_vDefaultHotkeysIni[sec])
+		}
+	}
+
+	gosub Window_Master_TabProc
+	; It's nice to select where we left off.
+	LV_SetSel(iPrevSel)
+
+	g_bShouldSave := true
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 AddSequence(vSeq, iSeqNum="")
 {
 	global g_SequencesIni, g_bShouldSave
@@ -2377,6 +2493,21 @@ DeleteSequence(iSeq="", bRemoveFromIni=true)
 	gosub HKList
 
 	g_bShouldSave := true
+	return
+}
+
+DefaultSequence(iSeq="")
+{
+	global g_SequencesIni, g_vDefaultSequencesIni, g_bShouldSave
+
+	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	iHK := LV_GetSel()
+
+	g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
+	g_bShouldSave := true
+
+	LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
+
 	return
 }
 
@@ -2628,6 +2759,27 @@ DeleteHK(iHK="")
 	GUIControl, Focus, vHotkeysLV
 
 	g_bShouldSave := true
+	return
+}
+
+DefaultHK(iHK="")
+{
+	global g_SequencesIni, g_vDefaultSequencesIni
+
+	LV_SetDefault("Window_Master_", "vHotkeysLV")
+
+	if (iHK == A_Blank)
+		iHK := LV_GetSel()
+	LV_GetText(sHK, iHK)
+
+	; Use default from ini.
+	if (g_vDefaultSequencesIni.HasKey(iHK))
+	{
+		ModifyHKForSequence(g_vDefaultSequencesIni[iHK].Hotkey, g_vDefaultSequencesIni[iHK].GestureName)
+		g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
+		LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
+	}
+
 	return
 }
 
