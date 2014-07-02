@@ -3,7 +3,7 @@ License: NO LICENSE
 
 Version: %VERSION%
 
-Credits (This links to an external website; web content is not rated or monitored)
+Credits (This links to an external website, web content is not rated or monitored)
 	AutoHotkey
 		<a href="http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=9238">HotKeyIt @ AutoHotkey</a>
 		<a href="http://www.autohotkey.com/forum/profile.php?mode=viewprofile&u=3754">Lexikos @ AutoHotkey</a>
