@@ -112,7 +112,7 @@ class EasyIni
 	CreateIniObj(parms*)
 	{
 		; Define prototype object for ini arrays:
-		static base := {__Set: "EasyIni_Set", _NewEnum: "EasyIni_NewEnum", Remove: "EasyIni_Remove", Insert: "EasyIni_Insert", InsertBefore: "EasyIni_InsertBefore", AddSection: "EasyIni.AddSection", RenameSection: "EasyIni.RenameSection", DeleteSection: "EasyIni.DeleteSection", GetSections: "EasyIni.GetSections", FindSecs: "EasyIni.FindSecs", AddKey: "EasyIni.AddKey", RenameKey: "EasyIni.RenameKey", DeleteKey: "EasyIni.DeleteKey", GetKeys: "EasyIni.GetKeys", FindKeys: "EasyIni.FindKeys", GetVals: "EasyIni.GetVals", FindVals: "EasyIni.FindVals", HasVal: "EasyIni.HasVal", Copy: "EasyIni.Copy", Merge: "EasyIni.Merge", GetFileName: "EasyIni.GetFileName", IsEmpty:"EasyIni.IsEmpty", Reload: "EasyIni.Reload", GetIsSaved: "EasyIni.GetIsSaved", Save: "EasyIni.Save", ToVar: "EasyIni.ToVar"}
+		static base := {__Set: "EasyIni_Set", _NewEnum: "EasyIni_NewEnum", Remove: "EasyIni_Remove", Insert: "EasyIni_Insert", InsertBefore: "EasyIni_InsertBefore", AddSection: "EasyIni.AddSection", RenameSection: "EasyIni.RenameSection", DeleteSection: "EasyIni.DeleteSection", GetSections: "EasyIni.GetSections", FindSecs: "EasyIni.FindSecs", AddKey: "EasyIni.AddKey", RenameKey: "EasyIni.RenameKey", DeleteKey: "EasyIni.DeleteKey", GetKeys: "EasyIni.GetKeys", FindKeys: "EasyIni.FindKeys", GetVals: "EasyIni.GetVals", FindVals: "EasyIni.FindVals", HasVal: "EasyIni.HasVal", Copy: "EasyIni.Copy", Merge: "EasyIni.Merge", GetFileName: "EasyIni.GetFileName", GetOnlyIniFileName:"EasyIni.GetOnlyIniFileName", IsEmpty:"EasyIni.IsEmpty", Reload: "EasyIni.Reload", GetIsSaved: "EasyIni.GetIsSaved", Save: "EasyIni.Save", ToVar: "EasyIni.ToVar"}
 		; Create and return new object:
 		return Object("_keys", Object(), "base", base, parms*)
 	}
@@ -295,10 +295,32 @@ class EasyIni
 		return false
 	}
 
-	Copy(vSourceIni, sDestIniFile="")
+	; SourceIni: May be EasyIni object or simply a path to an ini file.
+	; bCopyFileName = true: Allow copying of data without copying the file name.
+	Copy(SourceIni, bCopyFileName = true)
 	{
-		this := vSourceIni
-		this.EasyIni_ReservedFor_m_sFile := sDestIniFile
+		; Get ini as string.
+		if (IsObject(SourceIni))
+			sIniString := SourceIni.ToVar()
+		else FileRead, sIniString, %SourceIni%
+
+		; Effectively make this function static by allow calls via EasyIni.Copy.
+		if (IsObject(this))
+		{
+			if (bCopyFileName)
+				sOldFileName := this.GetFileName()
+			this := A_Blank ; avoid any copy constructor issues.
+
+			; ObjClone doesn't work consistently. It's likely a problem with the meta-function overrides,
+			; but this is a nice, quick hack.
+			this := class_EasyIni(SourceIni.GetFileName(), sIniString)
+
+			; Restore file name.
+			this.EasyIni_ReservedFor_m_sFile := sOldFileName
+		}
+		else
+			return class_EasyIni(bCopyFileName ? SourceIni.GetFileName() : "", sIniString)
+
 		return this
 	}
 
@@ -359,6 +381,20 @@ class EasyIni
 	GetFileName()
 	{
 		return this.EasyIni_ReservedFor_m_sFile
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetFileName
+			Purpose: Wrapper to return just the .ini name without the path.
+		Parameters
+			None
+	*/
+	GetOnlyIniFileName()
+	{
+		return SubStr(this.EasyIni_ReservedFor_m_sFile, InStr(this.EasyIni_ReservedFor_m_sFile,"\", false, -1)+1)
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
