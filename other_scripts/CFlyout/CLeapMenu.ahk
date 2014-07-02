@@ -162,13 +162,8 @@ class CLeapMenu
 		; Set the smoothing mode to antialias = 4 to make shapes appear smother (only used for vector drawing and filling)
 		Gdip_SetSmoothingMode(G, 4)
 
-		; Get a random colour for the background and foreground of hatch style used to fill the ellipse,
+		; Get a colour for the background and foreground of hatch style used to fill the ellipse,
 		; as well as random brush style, x and y coordinates and width/height
-		; 0 = 0x00000000 and 4294967295 = 0xffffffff as the latest version of ahk has broken Random function that dont use floating point values
-		;~ Random, RandBackColour, 0, 4294967295.0
-		;~ Random, RandForeColour, 0, 4294967295.0
-		;~ Random, RandBrush, 0, 53
-
 		RandBackColour := 654800120.00
 		RandForeColour := 3290788387.00
 		RandBrush := 7
@@ -233,7 +228,7 @@ class CLeapMenu
 		return abs(arr[id,1]-arr[id,0])
 	}
 
-	m_bCircleHidden := true ; We initialize it with it hidden.
+	m_bCircleHidden := true ; We initialize with it hidden.
 	m_iCircleRad := 38
 	m_iHoveringFor := 0
 	m_sLastSubmitted  :=
