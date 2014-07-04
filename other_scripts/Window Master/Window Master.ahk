@@ -76,11 +76,11 @@ Menu, TRAY, Click, 1
 
 if (!A_IsCompiled)
 {
-	Menu, TRAY, Add, &Reload, Window_Master_Reload
+	Menu, TRAY, Add, &Reload, Windows_Master_Reload
 	Menu, TRAY, Icon, &Reload, images\Refresh.ico,, 16
 
 	Hotkey, IfWinActive
-		Hotkey, #+R, Window_Master_Reload
+		Hotkey, #+R, Windows_Master_Reload
 }
 
 ; If the Leap Module is used, then an option is added to the tray menu. That is why InitEverything is called here.
@@ -88,7 +88,7 @@ InitEverything()
 
 SetStartsWithWindowsTrayIcon()
 
-Menu, TRAY, Add, E&xit, Window_Master_Exit
+Menu, TRAY, Add, E&xit, Windows_Master_Exit
 Menu, TRAY, Icon, E&xit, AutoLeap\Exit.ico,, 16
 
 SplashOff()
@@ -125,8 +125,8 @@ InitEverything()
 
 	MakeMainDlg()
 
-	OnMessage(WM_DISPLAYCHANGE:=126, "Window_Master_OnDisplayChange")
-	OnMessage(WM_SETTINGCHANGE:=26, "Window_Master_OnSettingChange")
+	OnMessage(WM_DISPLAYCHANGE:=126, "Windows_Master_OnDisplayChange")
+	OnMessage(WM_SETTINGCHANGE:=26, "Windows_Master_OnSettingChange")
 
 	; NOTE: If you place this call an earlier, than initial creation fails in Win8, for some strange reason.
 	VolumeOSD_Init()
@@ -138,7 +138,7 @@ InitEverything()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_OnDisplayChange
+	Function: Windows_Master_OnDisplayChange
 		Purpose: To update monitor information stored in memory whenever the display configuration changes
 	Parameters
 		wParam
@@ -146,7 +146,7 @@ InitEverything()
 		msg
 		hWnd
 */
-Window_Master_OnDisplayChange(wParam, lParam, msg, hWnd)
+Windows_Master_OnDisplayChange(wParam, lParam, msg, hWnd)
 {
 	Sleep 1000 ; On my computer, at least, Windows take FOREVER to figure out the new display configuration.
 	InitMonInfo()
@@ -213,9 +213,9 @@ InitLeap()
 
 		if (g_vLeap)
 		{
-			Menu, TRAY, Add, &Gestures, Window_Master_ShowControlCenterDlg
+			Menu, TRAY, Add, &Gestures, Windows_Master_ShowControlCenterDlg
 			Menu, TRAY, Icon, &Gestures, AutoLeap\Leap.ico,, 16
-			Menu, TRAY, Add, Pause &Tracking, Window_Master_PlayPauseLeap
+			Menu, TRAY, Add, Pause &Tracking, Windows_Master_PlayPauseLeap
 			Menu, TRAY, Icon, Pause &Tracking, images\Pause.ico,, 16
 
 			; In case ini data has been modified externally.
@@ -519,7 +519,7 @@ InitMenuHandler()
 		if (g_bHasLeap)
 			g_vLeapMH := new CLeapMenu(g_vFlyoutMH, g_vLeap)
 
-		;~ SetTimer, Window_Master_HotCorner, 350
+		;~ SetTimer, Windows_Master_HotCorner, 350
 		g_iActivatedSince := 11
 	}
 	return
@@ -527,12 +527,12 @@ InitMenuHandler()
 
 QuickMenu_EditSettings:
 {
-	; Note: Not calling g_vFlyoutMH.GUIEditSettings(g_hWindowMaster) because that causes a lockup.
-	CFlyout.GUIEditSettings(g_hWindowMaster)
+	; Note: Not calling g_vFlyoutMH.GUIEditSettings(g_hWindowsMaster) because that causes a lockup.
+	CFlyout.GUIEditSettings(g_hWindowsMaster)
 	return
 }
 
-Window_Master_HotCorner:
+Windows_Master_HotCorner:
 {
 	Critical
 
@@ -557,26 +557,26 @@ Window_Master_HotCorner:
 
 LaunchMainDlg:
 {
-	if (WinActive("ahk_id" g_hWindowMaster) || !DllCall("IsWindowEnabled", uint, g_hWindowMaster))
-		return ; If this window is disabled, then that is because another dialog, owned by g_hWindowMaster, is active.
+	if (WinActive("ahk_id" g_hWindowsMaster) || !DllCall("IsWindowEnabled", uint, g_hWindowsMaster))
+		return ; If this window is disabled, then that is because another dialog, owned by g_hWindowsMaster, is active.
 
 	if (g_bFirstLaunch)
 	{
-		GUI Window_Master_: Show, w890 h494
+		GUI Windows_Master_: Show, w890 h494
 		g_bFirstLaunch := false
 
 		if (g_vProfilesIni[A_UserName].FirstTime)
 		{
-			g_vDlgs.IntroDlg.ShowDlg(g_hWindowMaster, g_vLeap)
+			g_vDlgs.IntroDlg.ShowDlg(g_hWindowsMaster, g_vLeap)
 			g_vProfilesIni[A_UserName].FirstTime := false
 
 			; This is an internal setting, so save it now.
 			g_vProfilesIni.Save()
 		}
 	}
-	else GUI Window_Master_: Show
+	else GUI Windows_Master_: Show
 
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
 
@@ -585,21 +585,21 @@ MakeMainDlg()
 	global
 
 	g_bFirstLaunch := true
-	GUI Window_Master_: New, hwndg_hWindowMaster MinSize Resize, Windows Master
+	GUI Windows_Master_: New, hwndg_hWindowsMaster MinSize Resize, Windows Master
 
-	Menu, WM_Menu_Import, Add, &Windows Master Settings`tCtrl + M, Window_Master_Import
+	Menu, WM_Menu_Import, Add, &Windows Master Settings`tCtrl + M, Windows_Master_Import
 	Menu, WM_Menu_Import, Icon, &Windows Master Settings`tCtrl + M, images\Main.ico
 	Menu, WM_Menu_Import, Add, WinSplit &Settings`tCtrl + N, ConvertWinSplitXMLSettingsToInis
 	Menu, WM_ImportMenu, Add, &Import, :WM_Menu_Import
 	Menu, WM_ImportMenu, Icon, &Import, images\Import.ico,, 16
 	Menu, WM_ImportMenu, Add, &Export, WM_Menu_Export
 	Menu, WM_ImportMenu, Icon, &Export, images\Export.ico,, 16
-	Menu, WM_ImportMenu, Add, E&xit, Window_Master_GUIClose
+	Menu, WM_ImportMenu, Add, E&xit, Windows_Master_GUIClose
 	Menu, WM_ImportMenu, Icon, E&xit, AutoLeap\Exit.ico,, 16
 
-	Menu, WM_Menu_Settings, Add, &Revert These Settings to Defaults`tCtrl + R, Window_Master_RevertSettingsInTab
+	Menu, WM_Menu_Settings, Add, &Revert These Settings to Defaults`tCtrl + R, Windows_Master_RevertSettingsInTab
 	Menu, WM_Menu_Settings, Icon, &Revert These Settings to Defaults`tCtrl + R, images\Revert.ico,, 16
-	Menu, WM_Menu_Settings, Add, &Revert Gestures to Defaults`tCtrl + G, Window_Master_RevertGesturesToDefaults
+	Menu, WM_Menu_Settings, Add, &Revert Gestures to Defaults`tCtrl + G, Windows_Master_RevertGesturesToDefaults
 	Menu, WM_Menu_Settings, Icon, &Revert Gestures to Defaults`tCtrl + G, images\Revert.ico,, 16
 
 	if (g_bIsDev)
@@ -610,15 +610,15 @@ MakeMainDlg()
 
 	if (g_bHasLeap)
 	{
-		Menu, WM_Menu_Settings, Add, % "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", Window_Master_ShowControlCenterDlg
+		Menu, WM_Menu_Settings, Add, % "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", Windows_Master_ShowControlCenterDlg
 		Menu, WM_Menu_Settings, Icon,% "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", AutoLeap\Leap.ico,, 16
 	}
 
-	Menu, WM_Menu_Help, Add, &Using Windows Master`tF1, Window_Master_Help
+	Menu, WM_Menu_Help, Add, &Using Windows Master`tF1, Windows_Master_Help
 	Menu, WM_Menu_Help, Icon, &Using Windows Master`tF1, images\Info.ico,, 16
-	Menu, WM_Menu_Help, Add, &About, Window_Master_About
+	Menu, WM_Menu_Help, Add, &About, Windows_Master_About
 	Menu, WM_Menu_Help, Icon, &About, AutoLeap\Info.ico,, 16
-	Menu, WM_Menu_Help, Add, Start T&utorial`tCtrl + U, Window_Master_Tutorial
+	Menu, WM_Menu_Help, Add, Start T&utorial`tCtrl + U, Windows_Master_Tutorial
 	Menu, WM_Menu_Help, Icon, Start T&utorial`tCtrl + U, AutoLeap\Info.ico,, 16
 
 	Menu, WM_MainMenu, Add, &File, :WM_ImportMenu
@@ -634,9 +634,9 @@ MakeMainDlg()
 		g_asTabs.Insert("&Interactive")
 
 	GUI, Font, s18 ; c83B8G7
-	GUI, Add, Tab2, x5 y5 w215 Buttons +Theme -Background hwndhWMTab Choose1 gWindow_Master_TabProc vvWMTab, % st_glue(g_asTabs, "|")
+	GUI, Add, Tab2, x5 y5 w215 Buttons +Theme -Background hwndhWMTab Choose1 gWindows_Master_TabProc vvWMTab, % st_glue(g_asTabs, "|")
 
-	Hotkey, IfWinActive, ahk_id %g_hWindowMaster%
+	Hotkey, IfWinActive, ahk_id %g_hWindowsMaster%
 	{
 		; Tabs
 		Loop % g_asTabs.MaxIndex()
@@ -644,27 +644,27 @@ MakeMainDlg()
 			local sTab := g_asTabs[A_Index]
 			sHK := "!" SubStr(sTab, InStr(sTab, "&") + 1, 1)
 			if (A_Index == 1)
-				Hotkey, %sHK%, Window_Master_GoToSequencingTab
+				Hotkey, %sHK%, Windows_Master_GoToSequencingTab
 			else if (A_Index == 2)
-				Hotkey, %sHK%, Window_Master_GoToResizingTab
+				Hotkey, %sHK%, Windows_Master_GoToResizingTab
 			else if (A_Index == 3)
-				Hotkey, %sHK%, Window_Master_GoToSnapTab
+				Hotkey, %sHK%, Windows_Master_GoToSnapTab
 			;~ else if (A_Index == 4)
-				;~ Hotkey, %sHK%, Window_Master_GoToPrecisionTab
+				;~ Hotkey, %sHK%, Windows_Master_GoToPrecisionTab
 			else if (A_Index == 4)
-				Hotkey, %sHK%, Window_Master_GoToOtherActionsTab
+				Hotkey, %sHK%, Windows_Master_GoToOtherActionsTab
 			else if (A_Index == 5)
-				Hotkey, %sHK%, Window_Master_GoToLeapTab
+				Hotkey, %sHK%, Windows_Master_GoToLeapTab
 		}
 
 		; ListViews
-		Hotkey, !A, Window_Master_Add
-		Hotkey, !=, Window_Master_Add
-		Hotkey, !E, Window_Master_Edit ; F2 works, too!
-		Hotkey, !D, Window_Master_Delete
-		Hotkey, !-, Window_Master_Delete
-		Hotkey, Delete, Window_Master_Delete
-		Hotkey, !v, Window_Master_Revert
+		Hotkey, !A, Windows_Master_Add
+		Hotkey, !=, Windows_Master_Add
+		Hotkey, !E, Windows_Master_Edit ; F2 works, too!
+		Hotkey, !D, Windows_Master_Delete
+		Hotkey, !-, Windows_Master_Delete
+		Hotkey, Delete, Windows_Master_Delete
+		Hotkey, !v, Windows_Master_Revert
 	}
 
 	local iNumIcons := 4+g_bHasLeap
@@ -688,8 +688,8 @@ MakeMainDlg()
 	GUI, Add, GroupBox, x220 y-10 w664 h474 vvMainBorder
 
 	GUI, Font, s8 cBlack
-	GUI, Add, Button, % "x728 y468 w" g_iMSDNStdBtnW " h" g_iMSDNStdBtnH " vg_vWindow_Master_OKBtn gWindow_Master_Ok", &OK
-	GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp vg_vWindow_Master_CancelBtn gWindow_Master_GUICancel", &Cancel
+	GUI, Add, Button, % "x728 y468 w" g_iMSDNStdBtnW " h" g_iMSDNStdBtnH " vg_vWindows_Master_OKBtn gWindows_Master_Ok", &OK
+	GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp vg_vWindows_Master_CancelBtn gWindows_Master_GUICancel", &Cancel
 
 	AddAllControls()
 
@@ -724,7 +724,7 @@ AddAllControls()
 	ILButton(g_hAddHKForSequence, "images\Add.ico", 32, 32, 4)
 	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vvDelHK hwndg_hDeleteHK gDeleteHK
 	ILButton(g_hDeleteHK, "images\Delete.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gWindow_Master_Revert
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gWindows_Master_Revert
 	ILButton(g_hDefaultHK, "images\Revert.ico", 32, 32, 4)
 
 	iTmpX += iTab1LVW+g_iMSDNStdBtnSpacing
@@ -773,7 +773,7 @@ AddAllControls()
 
 	GUI, Add, Button, xp yp+357 w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% hwndg_hGenericLVEditBtn vvGenericLVEdit gGenericLVModify Hidden
 	ILButton(g_hGenericLVEditBtn, "images\Edit.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gWindow_Master_Revert Hidden
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gWindows_Master_Revert Hidden
 	ILButton(g_hGenericLVDefaultBtn, "images\Revert.ico", 32, 32, 4)
 
 	GUI, Font, s12 c83B8G7
@@ -806,9 +806,9 @@ Precision controls. TODO: Uncomment if/when this feature is re-added -- Verdlin:
 	Parameters
 		
 */
-Window_Master_Add:
+Windows_Master_Add:
 {
-	hFocused := Window_Master_GetCtrlFocusedHwnd()
+	hFocused := Windows_Master_GetCtrlFocusedHwnd()
 
 	if (hFocused == g_hSequence)
 		gosub AddSeq
@@ -824,14 +824,14 @@ Window_Master_Add:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_Edit
+	Function: Windows_Master_Edit
 		Purpose: Hotkey handler to edit rows in List Views.
 	Parameters
 		None
 */
-Window_Master_Edit:
+Windows_Master_Edit:
 {
-	hFocused := Window_Master_GetCtrlFocusedHwnd()
+	hFocused := Windows_Master_GetCtrlFocusedHwnd()
 
 	if (hFocused == g_hSequence)
 	{
@@ -862,14 +862,14 @@ Window_Master_Edit:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_Delete
+	Function: Windows_Master_Delete
 		Purpose: Hotkey handler to delete rows in ListViews
 	Parameters
 		None
 */
-Window_Master_Delete:
+Windows_Master_Delete:
 {
-	hFocused := Window_Master_GetCtrlFocusedHwnd()
+	hFocused := Windows_Master_GetCtrlFocusedHwnd()
 
 	if (hFocused == g_hSequence)
 		gosub DeleteSeq
@@ -885,14 +885,14 @@ Window_Master_Delete:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_Revert
+	Function: Windows_Master_Revert
 		Purpose: Hotkey handler to revert rows in ListViews to defaults
 	Parameters
 		
 */
-Window_Master_Revert:
+Windows_Master_Revert:
 {
-	hFocused := Window_Master_GetCtrlFocusedHwnd()
+	hFocused := Windows_Master_GetCtrlFocusedHwnd()
 
 	if (A_GUIControl = "g_vDefaultSeq" || A_GUIControl = "g_vDefaultHK"
 		|| hFocused == g_hSequence || hFocused = g_hHKList)
@@ -912,21 +912,21 @@ Window_Master_Revert:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_GetCtrlFocusedHwnd
+	Function: Windows_Master_GetCtrlFocusedHwnd
 		Purpose: To get the hWnd of the currently focused control.
 	Parameters
 		None
 */
-Window_Master_GetCtrlFocusedHwnd()
+Windows_Master_GetCtrlFocusedHwnd()
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 	GUIControlGet, sFocused, Focus
 	ControlGet, hFocused, hwnd,, %sFocused%
 	return hFocused
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-Window_Master_TabProc:
+Windows_Master_TabProc:
 {
 	if (SequencingTabIsActive())
 		InitSequenceControls()
@@ -979,76 +979,76 @@ Window_Master_TabProc:
 	return
 }
 
-Window_Master_GoToSequencingTab:
+Windows_Master_GoToSequencingTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (SequencingTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 1
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
-Window_Master_GoToResizingTab:
+Windows_Master_GoToResizingTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (ResizingTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 2
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
-Window_Master_GoToSnapTab:
+Windows_Master_GoToSnapTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (SnapTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 3
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
-Window_Master_GoToPrecisionTab:
+Windows_Master_GoToPrecisionTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (PrecisionTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 4
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
-Window_Master_GoToOtherActionsTab:
+Windows_Master_GoToOtherActionsTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (OtherActionsTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 4
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
-Window_Master_GoToLeapTab:
+Windows_Master_GoToLeapTab:
 {
-	GUI, Window_Master_:Default
+	GUI, Windows_Master_:Default
 
 	if (LeapTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 5
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	return
 }
 
 InitSequenceControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadAllHKs()
 	LoadSequencesForHK(GetFirstHK())
@@ -1061,7 +1061,7 @@ InitSequenceControls()
 
 InitResizingControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadOpts("Resizing")
 	SelectAndFocusGenericLV()
@@ -1071,7 +1071,7 @@ InitResizingControls()
 
 InitSnapControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadOpts("Snap")
 	SelectAndFocusGenericLV()
@@ -1081,7 +1081,7 @@ InitSnapControls()
 
 InitPrecisionControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadPrecisionOpts()
 	SelectAndFocusGenericLV()
@@ -1091,7 +1091,7 @@ InitPrecisionControls()
 
 InitSettingsControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadOpts("Settings")
 	SelectAndFocusGenericLV()
@@ -1101,7 +1101,7 @@ InitSettingsControls()
 
 InitLeapControls()
 {
-	GUI Window_Master_: Default
+	GUI Windows_Master_: Default
 
 	LoadLeapOpts()
 	SelectAndFocusGenericLV()
@@ -1111,7 +1111,7 @@ InitLeapControls()
 
 SelectAndFocusGenericLV()
 {
-	GUIControl, Window_Master_:Focus, vGenericLV
+	GUIControl, Windows_Master_:Focus, vGenericLV
 	LV_Modify(1, "Focus")
 	LV_Modify(1, "Select")
 	return
@@ -1147,7 +1147,7 @@ MoveGenericButtons()
 
 GenericLVModify:
 {
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (GetCurIniForSave() = "g_HotkeysIni" || GetCurIniForSave() = "g_InteractiveIni")
 	{
@@ -1157,13 +1157,13 @@ GenericLVModify:
 		{
 			sAppendToTitle := LV_GetSelText()
 			sGestureID := g_InteractiveIni[LV_GetSelText()].GestureName
-			g_vDlgs.ShowHKDlg_ForInteractive(g_hWindowMaster, sHK, sGestureID, sAppendToTitle)
+			g_vDlgs.ShowHKDlg_ForInteractive(g_hWindowsMaster, sHK, sGestureID, sAppendToTitle)
 		}
 		else
 		{
 			sAppendToTitle := LV_GetSelText()
 			sGestureID := g_HotkeysIni[sAppendToTitle].GestureName
-			g_vDlgs.ShowHKDlg_ForGenericLV(g_hWindowMaster, sHK, sGestureID, sAppendToTitle)
+			g_vDlgs.ShowHKDlg_ForGenericLV(g_hWindowsMaster, sHK, sGestureID, sAppendToTitle)
 		}
 	}
 	else GenericLV_ModifyPrecision()
@@ -1174,7 +1174,7 @@ GenericLVModify:
 GenericLVProc:
 {
 	Critical ; so that we receive checked and unchecked notifications.
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	LV_CheckProc(ErrorLevel)
 
@@ -1215,7 +1215,7 @@ GenericLVProc:
 GenericLV_ModifyPrecision()
 {
 	global
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (LV_GetCount() > 0)
 	{
@@ -1224,7 +1224,7 @@ GenericLV_ModifyPrecision()
 		GetSequenceValsForEditDlg(iX, iY, iW, iH)
 		sAction := "Placement #" LV_GetSel()
 
-		g_vDlgs.PrecisionDlg.ShowDlg(g_hWindowMaster, sHK, sGesture, iX, iY, iW, iH, sAction)
+		g_vDlgs.PrecisionDlg.ShowDlg(g_hWindowsMaster, sHK, sGesture, iX, iY, iW, iH, sAction)
 	}
 
 	return
@@ -1243,7 +1243,7 @@ GenericLV_ModifyPrecision()
 GenericLV_ModifyHK(sHK, sGestureID="", bMustHaveHotkey=true)
 {
 	global g_HotkeysIni, g_bHasLeap, g_bShouldSave
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (bMustHaveHotkey && !GenericLV_ValidateHK(sHK, sError))
 	{
@@ -1284,7 +1284,7 @@ GenericLV_ModifyHK(sHK, sGestureID="", bMustHaveHotkey=true)
 GenericLV_ModifyInteractive(sHK, sGestureID)
 {
 	global g_InteractiveIni, g_bShouldSave
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	sec := LV_GetSelText()
 
@@ -1326,7 +1326,7 @@ GenericLV_Default()
 {
 	global g_InteractiveIni, g_vDefaultInteractiveIni, g_HotkeysIni, g_vDefaultHotkeysIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 	iRow := LV_GetSel()
 	sec := LV_GetSelText()
 	sHK := LV_GetSelText(2)
@@ -1361,7 +1361,7 @@ GenericLV_ValidateHK(sHK, ByRef rsError)
 {
 	rsError := ""
 
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 	return core_ValidateHK(sHK, 2, true, rsError)
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1377,7 +1377,7 @@ GenericLV_ValidateHK(sHK, ByRef rsError)
 */
 GenericLV_ClearAll()
 {
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 	LV_Delete()
 
 	Loop % LV_GetCount("Column")
@@ -1506,7 +1506,7 @@ LoadLeapOpts()
 HKList:
 {
 	Critical ; Needed for checking/unchecking
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 
 	iThisErrorLevel := ErrorLevel
 
@@ -1516,7 +1516,7 @@ HKList:
 
 	if (!g_SequencesIni.HasKey(1))
 	{	; No sequences exist
-		LV_SetDefault("Window_Master_", "vSequenceLV")
+		LV_SetDefault("Windows_Master_", "vSequenceLV")
 		LV_Delete() ; Clear this out in case the last hotkey was just deleted.
 		return
 	}
@@ -1538,7 +1538,7 @@ HKList:
 		|| A_ThisHotkey == "Delete"
 		|| A_ThisHotkey == "!-")
 	{
-		LV_SetDefault("Window_Master_", "vHotkeysLV")
+		LV_SetDefault("Windows_Master_", "vHotkeysLV")
 		iCurSel := LV_GetSel()
 		sCurSelHK := LV_GetSelText()
 
@@ -1559,13 +1559,13 @@ HKList:
 }
 AddHKForSequence:
 {
-	g_vDlgs.ShowHKDlg_ForSequence(g_hWindowMaster, false)
+	g_vDlgs.ShowHKDlg_ForSequence(g_hWindowsMaster, false)
 	return
 }
 
 EditHK:
 {
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 
 	if (g_bHasLeap)
 	{
@@ -1574,7 +1574,7 @@ EditHK:
 	}
 	else sAppendToTitle := sExistingGesture := ""
 
-	g_vDlgs.ShowHKDlg_ForSequence(g_hWindowMaster, true, LV_GetSelText(), sExistingGesture, sAppendToTitle)
+	g_vDlgs.ShowHKDlg_ForSequence(g_hWindowsMaster, true, LV_GetSelText(), sExistingGesture, sAppendToTitle)
 	return
 }
 DeleteHK:
@@ -1589,7 +1589,7 @@ DeleteHK:
 }
 Sequence:
 {
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 	if (LV_GetCount() == 0)
 		GUIControl, Disable, vEditSeq
@@ -1622,7 +1622,7 @@ Sequence:
 		|| A_EventInfo == 38 ; ArrowUp
 		|| A_EventInfo == 40) ; ArrowDown
 	{
-		LV_SetDefault("Window_Master_", "vSequenceLV")
+		LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 		GUIControlGet, iMonFrame, Pos, vDesktopPic
 		GetDimsPctForSeq(FormatSequenceForIni(GetSequenceFromIni()), iXPct, iYPct, iWPct, iHPct)
@@ -1639,17 +1639,17 @@ Sequence:
 }
 AddSeq:
 {
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
-	g_vDlgs.SequenceDlg.ShowDlg(g_hWindowMaster, false)
+	g_vDlgs.SequenceDlg.ShowDlg(g_hWindowsMaster, false)
 	return
 }
 EditSeq:
 {
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 	GetSequenceValsForEditDlg(iX, iY, iW, iH)
-	g_vDlgs.SequenceDlg.ShowDlg(g_hWindowMaster, true, iX, iY, iW, iH)
+	g_vDlgs.SequenceDlg.ShowDlg(g_hWindowsMaster, true, iX, iY, iW, iH)
 	return
 }
 DeleteSeq:
@@ -1657,7 +1657,7 @@ DeleteSeq:
 	DeleteSequence()
 	return
 }
-Window_Master_GUISize:
+Windows_Master_GUISize:
 {
 	; This fixes a strang resizing bug, likely somewhere in my own code instead of in Anchor2(),
 	; where the GUI height is 0 and the width is 890. This happens upon initialization,
@@ -1669,60 +1669,60 @@ Window_Master_GUISize:
 
 	ControlGetPos, iX, iY, iW, iH,, ahk_id %g_hSequence%
 
-	Anchor2("Window_Master_:vMainBorder", "xwyh", "0, 1, 0, 1")
-	Anchor2("Window_Master_:g_vWindow_Master_OKBtn", "xwyh", "1, 0, 1, 0")
-	Anchor2("Window_Master_:g_vWindow_Master_CancelBtn", "xwyh", "1, 0, 1, 0")
-	Anchor2("Window_Master_:vSeqHKGroupBox", "xwyh", "0, 1, 0, 1")
+	Anchor2("Windows_Master_:vMainBorder", "xwyh", "0, 1, 0, 1")
+	Anchor2("Windows_Master_:g_vWindows_Master_OKBtn", "xwyh", "1, 0, 1, 0")
+	Anchor2("Windows_Master_:g_vWindows_Master_CancelBtn", "xwyh", "1, 0, 1, 0")
+	Anchor2("Windows_Master_:vSeqHKGroupBox", "xwyh", "0, 1, 0, 1")
 	; Hotkeys
-	Anchor2("Window_Master_:vHotkeysLV", "xwyh", "0, 0.5, 0, 1")
-	Anchor2("Window_Master_:vAddHKForSequence", "xwyh", "0, 0, 1, 0")
-	Anchor2("Window_Master_:vEditHK", "xwyh", "0, 0, 1, 0")
-	Anchor2("Window_Master_:vDelHK", "xwyh", "0, 0, 1, 0")
-	Anchor2("Window_Master_:g_vDefaultHK", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:vHotkeysLV", "xwyh", "0, 0.5, 0, 1")
+	Anchor2("Windows_Master_:vAddHKForSequence", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:vEditHK", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:vDelHK", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:g_vDefaultHK", "xwyh", "0, 0, 1, 0")
 	; Sequence
-	Anchor2("Window_Master_:vSequenceLV", "xwyh", "0.5, 0.5, 0, 1")
-	Anchor2("Window_Master_:vAddSeq", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:vEditSeq", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:vDelSeq", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:g_vDefaultSeq", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vSequenceLV", "xwyh", "0.5, 0.5, 0, 1")
+	Anchor2("Windows_Master_:vAddSeq", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vEditSeq", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vDelSeq", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:g_vDefaultSeq", "xwyh", "0.5, 0, 1, 0")
 	; Preview
-	Anchor2("Window_Master_:vGroupPreview", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:vMonitorFramePic", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:vDesktopPic", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:vWndPic", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:sXText", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:sYText", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:sWText", "xwyh", "0.5, 0, 1, 0")
-	Anchor2("Window_Master_:sHText", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vGroupPreview", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vMonitorFramePic", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vDesktopPic", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:vWndPic", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:sXText", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:sYText", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:sWText", "xwyh", "0.5, 0, 1, 0")
+	Anchor2("Windows_Master_:sHText", "xwyh", "0.5, 0, 1, 0")
 	; Generic LV/Other tabs
-	Anchor2("Window_Master_:vGenericText", "xwyh", "0.5, 0, 0, 0")
-	Anchor2("Window_Master_:vGenericLVHelpTxt", "xwyh", "0, 1, 1, 0")
-	Anchor2("Window_Master_:vGenericLV", "xwyh", "0, 1, 0, 1")
-	Anchor2("Window_Master_:vGenericLVEdit", "xwyh", "0, 0, 1, 0")
-	Anchor2("Window_Master_:g_vGenericLVDefaultBtn", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:vGenericText", "xwyh", "0.5, 0, 0, 0")
+	Anchor2("Windows_Master_:vGenericLVHelpTxt", "xwyh", "0, 1, 1, 0")
+	Anchor2("Windows_Master_:vGenericLV", "xwyh", "0, 1, 0, 1")
+	Anchor2("Windows_Master_:vGenericLVEdit", "xwyh", "0, 0, 1, 0")
+	Anchor2("Windows_Master_:g_vGenericLVDefaultBtn", "xwyh", "0, 0, 1, 0")
 	; Precision
-	;~ Anchor2("Window_Master_:vPrecisionAdd", "xwyh", "0, 0, 1, 0")
-	;~ Anchor2("Window_Master_:vPrecisionLVEdit", "xwyh", "0, 0, 1, 0")
-	;~ Anchor2("Window_Master_:vPrecisionDelete", "xwyh", "0, 0, 1, 0")
+	;~ Anchor2("Windows_Master_:vPrecisionAdd", "xwyh", "0, 0, 1, 0")
+	;~ Anchor2("Windows_Master_:vPrecisionLVEdit", "xwyh", "0, 0, 1, 0")
+	;~ Anchor2("Windows_Master_:vPrecisionDelete", "xwyh", "0, 0, 1, 0")
 
 	sLVParse := "vHotkeysLV|vSequenceLV|vGenericLV"
 	Loop, Parse, sLVParse, |
 		SizeLV(A_LoopField)
 
-	WinSet, Redraw,, ahk_id %g_hWindowMaster%
+	WinSet, Redraw,, ahk_id %g_hWindowsMaster%
 	return
 }
-Window_Master_GUICancel:
+Windows_Master_GUICancel:
 {
 	; Don't save anything, just close.
 	g_bShouldSave := false
-	gosub Window_Master_GUIClose
+	gosub Windows_Master_GUIClose
 	return
 }
 
-Window_Master_OK:
-Window_Master_GUIEscape:
-Window_Master_GUIClose:
+Windows_Master_OK:
+Windows_Master_GUIEscape:
+Windows_Master_GUIClose:
 {
 	; If the user, Canceled, Escaped, Alt+F4'd, etc.
 	if (g_bShouldSave
@@ -1739,8 +1739,8 @@ Window_Master_GUIClose:
 	}
 
 	; We reload all inis in CloseProc. That has started to take awhile, so now we hide the GUI before doing so.
-	GUI, Window_Master_:Hide
-	gosub Window_Master_CloseProc
+	GUI, Windows_Master_:Hide
+	gosub Windows_Master_CloseProc
 
 	; Note: The below block was originally placed in LaunchMainDlg; it has been moved because RegRead is VERY slow.
 	; Also note how we do this AFTER we have hidden the GUI.
@@ -1748,7 +1748,7 @@ Window_Master_GUIClose:
 		; Update the GUI picture control showing the desktop background, just in case that picture has changed.
 		; Note: Not using WM_SettingChange because this does not get trigged when a desktop background
 		; changes as a result of moving to a new slide (When multiple images are seleceted, this is slideshow mode).
-		GUI, Window_Master_:Default
+		GUI, Windows_Master_:Default
 		RegRead, sCurBgd, HKEY_CURRENT_USER, Control Panel\Desktop, Wallpaper
 		if (sCurBgd == "")
 			sCurBgd := "images\Default Flyout Menu 1.jpg"
@@ -1758,7 +1758,7 @@ Window_Master_GUIClose:
 	return
 }
 
-Window_Master_Reload:
+Windows_Master_Reload:
 {
 	IfWinActive, % "ahk_id" g_vLeap.m_hGesturesConfigDlg
 		WinClose
@@ -1769,7 +1769,7 @@ Window_Master_Reload:
 	g_vDLL := g_vFlyoutMH := g_vLeap := ""
 	Reload
 } ; Fall through
-Window_Master_Exit:
+Windows_Master_Exit:
 {
 	g_vDLL := g_vFlyoutMH := g_vLeap := "" ; g_vLeap should be released since it is responsible for AutoLeap.exe
 	ExitApp
@@ -1778,12 +1778,12 @@ Window_Master_Exit:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_CloseProc
+	Function: Windows_Master_CloseProc
 		Purpose: To handle saving/discard changes to inis, which also includes handling the various hotkey threads.
 	Parameters
 		None
 */
-Window_Master_CloseProc:
+Windows_Master_CloseProc:
 {
 	if (g_bShouldSave)
 	{
@@ -1884,7 +1884,7 @@ LoadSequencesForHK(sHK)
 {
 	global g_SequencesIni
 
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 	LV_Delete() ; As a habit, clear out listview before loading.
 
 	for sec, aData in g_SequencesIni
@@ -1892,7 +1892,7 @@ LoadSequencesForHK(sHK)
 			for k, v in aData
 				if (abs(k) >= 0) ; Numbers are sequences, anything else are internal keys.
 				{	; If I don't set the default LV here, then, sometimes, the sequnces get loaded into the hotkeys.
-					LV_SetDefault("Window_Master_", "vSequenceLV")
+					LV_SetDefault("Windows_Master_", "vSequenceLV")
 					LV_Add("", FormatSequenceForLV(v))
 				}
 
@@ -1930,9 +1930,9 @@ GetSequenceFromIni(sSeq="")
 
 	if (!sSeq)
 	{
-		LV_SetDefault("Window_Master_", "vHotkeysLV")
+		LV_SetDefault("Windows_Master_", "vHotkeysLV")
 		sec := LV_GetSel()
-		LV_SetDefault("Window_Master_", "vSequenceLV")
+		LV_SetDefault("Windows_Master_", "vSequenceLV")
 		iSeq := LV_GetSel()
 		sSeq := g_SequencesIni[sec][iSeq]
 	}
@@ -1978,14 +1978,14 @@ GetSequenceValsForEditDlg(ByRef riX, ByRef riY, ByRef riW, ByRef riH, vSeq="")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_Import
+	Function: Windows_Master_Import
 		Purpose: To import existing Windows Master settings
 	Parameters
 		
 */
-Window_Master_Import:
+Windows_Master_Import:
 {
-	g_vDlgs.ImportDlg.ShowDlg(g_hWindowMaster)
+	g_vDlgs.ImportDlg.ShowDlg(g_hWindowsMaster)
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2008,10 +2008,10 @@ WM_Menu_Export:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Label: Window_Master_Help
+	Label: Windows_Master_Help
 		Purpose: To launch the Windows Master help file.
 */
-Window_Master_Help:
+Windows_Master_Help:
 {
 	MsgBox, 8240,, This links to an external website`; web content is not rated or monitored.
 
@@ -2024,14 +2024,14 @@ Window_Master_Help:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Label: Window_Master_Credits
+	Label: Windows_Master_Credits
 		Purpose: To give credit to whom credit is due.
 */
-Window_Master_About:
+Windows_Master_About:
 {
 	FileRead, sFile, ReadMe.txt
 	; Use super-global LeapDlgs in case !g_bHasLeap
-	LeapDlgs.ShowInfoDlg(sFile, g_hWindowMaster, 850)
+	LeapDlgs.ShowInfoDlg(sFile, g_hWindowsMaster, 850)
 	sFile :=
 
 	return
@@ -2041,12 +2041,12 @@ Window_Master_About:
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_Tutorial
+	Function: Windows_Master_Tutorial
 		Purpose: To start the Windows Master tutorial!!!
 */
-Window_Master_Tutorial:
+Windows_Master_Tutorial:
 {
-	g_vDlgs.IntroDlg.ShowDlg(g_hWindowMaster, g_vLeap)
+	g_vDlgs.IntroDlg.ShowDlg(g_hWindowsMaster, g_vLeap)
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2062,7 +2062,7 @@ CreateAndShowImportDlg()
 	global
 
 	; TODO: Idea of function to add an text, edit, and an ellipsis button (FIle selector edit)
-	GUI, XMLImportDlg_:New, hwndg_hXMLImportDlg +Owner%g_hWindowMaster%, Import WinSplit Settings
+	GUI, XMLImportDlg_:New, hwndg_hXMLImportDlg +Owner%g_hWindowsMaster%, Import WinSplit Settings
 	GUI, Add, Text, x10 y5 h20 gXMLImportDlg_SelectHotkeysXML, Path to &Hotkeys.xml:
 	GUI, Add, Edit, xp+100 yp-3 w300 hp vg_vXMLImportDlg_HotkeysXMLEdit -TabStop ReadOnly,
 	GUI, Add, Button, xp+301 yp-1 w20 h22 gXMLImportDlg_SelectHotkeysXML, ...
@@ -2075,9 +2075,9 @@ CreateAndShowImportDlg()
 	GUI, Add, Button, xp+265 yp+32 w75 h23 vg_vXMLImportDlg_OKBtn gXMLImportDlg_DoImport Disabled, &OK
 	GUI, Add, Button, xp+79 yp wp hp gXMLImportDlg_GUIClose, &Cancel
 
-	WinSet, Disable,, ahk_id %g_hWindowMaster%
+	WinSet, Disable,, ahk_id %g_hWindowsMaster%
 	GUI, Show, x-32768 AutoSize
-	CenterWndOnOwner(g_hXMLImportDlg, g_hWindowMaster)
+	CenterWndOnOwner(g_hXMLImportDlg, g_hWindowsMaster)
 
 	return
 
@@ -2112,7 +2112,7 @@ CreateAndShowImportDlg()
 		}
 
 		; Refresh current tab
-		gosub Window_Master_TabProc
+		gosub Windows_Master_TabProc
 		; Exit GUI
 		gosub XMLImportDlg_GUIEscape
 		return
@@ -2121,7 +2121,7 @@ CreateAndShowImportDlg()
 	XMLImportDlg_GUIEscape:
 	XMLImportDlg_GUIClose:
 	{
-		WinSet, Enable,, ahk_id %g_hWindowMaster%
+		WinSet, Enable,, ahk_id %g_hWindowsMaster%
 		GUI, XMLImportDlg_:Destroy
 
 		return
@@ -2532,7 +2532,7 @@ Windows_Master_ImportSettings(sSequencesIni, sHotkeysIni, sInteractiveIni, ByRef
 		g_InteractiveIni := g_InteractiveIni.Copy(vInteractiveIni)
 
 	rsError := st_glue(aErrors)
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 
 	g_bShouldSave := true
 	return (rsError == A_Blank)
@@ -2574,18 +2574,18 @@ WM_Menu_Export()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_RevertSettingsInTab
+	Function: Windows_Master_RevertSettingsInTab
 		Purpose:
 	Parameters
 		
 */
-Window_Master_RevertSettingsInTab:
+Windows_Master_RevertSettingsInTab:
 {
-	Window_Master_RevertSettingsInTab()
+	Windows_Master_RevertSettingsInTab()
 	return
 }
 
-Window_Master_RevertSettingsInTab()
+Windows_Master_RevertSettingsInTab()
 {
 	global
 
@@ -2595,7 +2595,7 @@ Window_Master_RevertSettingsInTab()
 		g_SequencesIni.Copy(g_vDefaultSequencesIni)
 	else
 	{
-		LV_SetDefault("Window_Master_", "vGenericLV")
+		LV_SetDefault("Windows_Master_", "vGenericLV")
 		local sec
 		Loop % LV_GetCount()
 		{
@@ -2606,7 +2606,7 @@ Window_Master_RevertSettingsInTab()
 		}
 	}
 
-	gosub Window_Master_TabProc
+	gosub Windows_Master_TabProc
 	; It's nice to select where we left off.
 	LV_SetSel(iPrevSel)
 
@@ -2619,7 +2619,7 @@ AddSequence(vSeq, iSeqNum="")
 {
 	global g_SequencesIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 	; ValidateSequence(sSeq)
 
@@ -2627,14 +2627,14 @@ AddSequence(vSeq, iSeqNum="")
 		iSeqNum := LV_GetCount() + 1
 
 	; Save to ini
-	LV_SetDefault("Window_Master_", "vHotkeysLV") ; Needed to identify section number
+	LV_SetDefault("Windows_Master_", "vHotkeysLV") ; Needed to identify section number
 	if (!g_SequencesIni.AddKey(LV_GetSel(), iSeqNum, FormatSequenceForIni(vSeq), sError))
 	{
 		Msgbox(sError, 2)
 		return false
 	}
 
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 	LV_Insert(iSeqNum, "", FormatSequenceForLV(vSeq))
 	LV_SetSel(iSeqNum)
 
@@ -2646,16 +2646,16 @@ ModifySequence(vSeq, iAt=0)
 {
 	global g_SequencesIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 	; ValidateSequence(vSeq)
 
 	if (!iAt)
 		iAt := LV_GetSel()
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 	iCurSec := LV_GetSel()
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 	g_SequencesIni[iCurSec][iAt] := FormatSequenceForIni(vSeq)
 
 	LV_Modify(iAt, "", FormatSequenceForLV(vSeq))
@@ -2668,7 +2668,7 @@ DeleteSequence(iSeq="", bRemoveFromIni=true)
 {
 	global g_SequencesIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vSequenceLV")
+	LV_SetDefault("Windows_Master_", "vSequenceLV")
 
 	if (iSeq == -1 && !bRemoveFromIni)
 	{
@@ -2680,13 +2680,13 @@ DeleteSequence(iSeq="", bRemoveFromIni=true)
 		iSeq := LV_GetSel()
 	LV_Delete(iSeq)
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 	iHK := LV_GetSel()
 
 	if (bRemoveFromIni)
 	{ ; Remove from ini.
 		g_SequencesIni.DeleteKey(iHK, iSeq)
-		LV_SetDefault("Window_Master_", "vSequenceLV")
+		LV_SetDefault("Windows_Master_", "vSequenceLV")
 	}
 
 	if (iSeq > LV_GetCount())
@@ -2706,7 +2706,7 @@ AddPrecisionItem(vSeq, s2, sGestureID="")
 {
 	global g_PrecisionIni, g_bHasLeap, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (!ValidatePrecisionItem(s2, false))
 		return false
@@ -2741,7 +2741,7 @@ AddPrecisionItem(vSeq, s2, sGestureID="")
 ModifyPrecisionItem(sNewPlacement, sNewHK, sGestureID="", bMustHaveHotkey=true)
 {
 	global g_PrecisionIni, g_bHasLeap, g_bShouldSave
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (bMustHaveHotkey && !ValidatePrecisionItem(sNewHK, true))
 		return false
@@ -2770,13 +2770,13 @@ ModifyPrecisionItem(sNewPlacement, sNewHK, sGestureID="", bMustHaveHotkey=true)
 
 ValidatePrecisionItem(sHK, bModifyExisting, ByRef rsError="")
 {
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 	return core_ValidateHK(sHK, 2, bModifyExisting, rsError)
 }
 
 AddPrecisionPlacement:
 {
-	g_vDlgs.PrecisionDlg.ShowDlg(g_hWindowMaster)
+	g_vDlgs.PrecisionDlg.ShowDlg(g_hWindowsMaster)
 	return
 }
 
@@ -2796,7 +2796,7 @@ DeletePrecisionItem(iAt=0)
 {
 	global g_PrecisionIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vGenericLV")
+	LV_SetDefault("Windows_Master_", "vGenericLV")
 
 	if (iAt == A_Blank || iAt == 0)
 		iAt := LV_GetSel()
@@ -2821,12 +2821,12 @@ LoadAllHKs()
 {
 	global g_SequencesIni, g_bHasLeap
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 	LV_Delete() ; As a habit, clear out listview before loading
 
 	for sec, aData in g_SequencesIni
 	{
-		LV_SetDefault("Window_Master_", "vHotkeysLV") ; If I don't put this here, then, sometimes, the hotkeys get loaded into the sequences.
+		LV_SetDefault("Windows_Master_", "vHotkeysLV") ; If I don't put this here, then, sometimes, the hotkeys get loaded into the sequences.
 
 		sCheckState := GetCheckState(aData.Activate)
 		if (A_Index == 1)
@@ -2857,7 +2857,7 @@ AddHKForSequence(sHK, sGestureID="")
 {
 	global g_SequencesIni, g_bHasLeap, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 
 	if (!ValidateHK(sHK, false))
 		return false
@@ -2913,12 +2913,12 @@ ValidateHK(sHK, bModifyExisting, ByRef rsError="")
 {
 	if (SequencingTabIsActive())
 	{
-		LV_SetDefault("Window_Master_", "vHotkeysLV")
+		LV_SetDefault("Windows_Master_", "vHotkeysLV")
 		iHKCol := 1
 	}
 	else
 	{
-		LV_SetDefault("Window_Master_", "vGenericLV")
+		LV_SetDefault("Windows_Master_", "vGenericLV")
 		iHKCol := 2
 	}
 
@@ -2929,7 +2929,7 @@ DeleteHK(iHK="")
 {
 	global g_SequencesIni, g_iPrevSel, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 
 	if (iHK == A_Blank)
 		iHK := LV_GetSel()
@@ -2957,7 +2957,7 @@ DefaultHK(iHK="")
 {
 	global g_SequencesIni, g_vDefaultSequencesIni, g_bShouldSave
 
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	LV_SetDefault("Windows_Master_", "vHotkeysLV")
 	iHK := LV_GetSel()
 
 	; This gets around some really strange bug with ObjClone.
@@ -3161,13 +3161,13 @@ core_ValidateGesture(sGestureID, bFromEdit, ByRef rsError)
 
 	if (bFromEdit)
 	{	; then we have to make sure we don't validate the selected gesture!
-		LV_SetDefault("Window_Master_", "vGenericLV")
+		LV_SetDefault("Windows_Master_", "vGenericLV")
 
 		if (SequencingTabIsActive())
 		{
 			sSkipIni := "g_SequencesIni"
 
-			LV_SetDefault("Window_Master_", "vHotkeysLV")
+			LV_SetDefault("Windows_Master_", "vHotkeysLV")
 			sSecToSkip := LV_GetSel()
 		}
 		else if (PrecisionTabIsActive())
@@ -3577,7 +3577,7 @@ EnableDisableKeyInIni(b, iRow)
 
 	if (sIni != "g_SequencesIni" && sIni != "g_PrecisionIni")
 	{
-		LV_SetDefault("Window_Master_", "vGenericLV")
+		LV_SetDefault("Windows_Master_", "vGenericLV")
 		LV_GetText(sec, iRow)
 	}
 	else sec := iRow
@@ -4064,9 +4064,9 @@ WM_AbortGesture:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-Window_Master_ShowControlCenterDlg:
+Windows_Master_ShowControlCenterDlg:
 {
-	ShowControlCenterDlg(g_hWindowMaster)
+	ShowControlCenterDlg(g_hWindowsMaster)
 	return
 }
 ;;;;;;;;;;;;;;
@@ -4074,13 +4074,13 @@ Window_Master_ShowControlCenterDlg:
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-Window_Master_PlayPauseLeap:
+Windows_Master_PlayPauseLeap:
 {
-	Window_Master_PlayPauseLeap(A_ThisMenuItem = "Resume &Tracking")
+	Windows_Master_PlayPauseLeap(A_ThisMenuItem = "Resume &Tracking")
 	return
 }
 
-Window_Master_PlayPauseLeap(bPlay)
+Windows_Master_PlayPauseLeap(bPlay)
 {
 	global g_vLeap, g_bLeapIsTracking
 
@@ -4707,7 +4707,7 @@ Leap_ToggleTracking()
 	global g_bLeapIsTracking
 
 	; Toggle.
-	Window_Master_PlayPauseLeap(!g_bLeapIsTracking)
+	Windows_Master_PlayPauseLeap(!g_bLeapIsTracking)
 	ResetLeapMsgProcessor()
 
 	return
@@ -4748,12 +4748,12 @@ ShowControlCenterDlg(hOwner=0, sGestureToSelect="", sGUI="", sCtrl="")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: Window_Master_RevertGesturesToDefaults
+	Function: Windows_Master_RevertGesturesToDefaults
 		Purpose: To revert gestures to defaults.
 	Parameters
 		
 */
-Window_Master_RevertGesturesToDefaults:
+Windows_Master_RevertGesturesToDefaults:
 {
 	RevertGesturesToDefaults()
 	return
@@ -5515,7 +5515,7 @@ QuitApplication:
 	CornerNotify(1.5, "Exiting", "Windows Master is exiting.", "hc vc")
 	Sleep 250
 
-	gosub Window_Master_Exit
+	gosub Windows_Master_Exit
 	return
 }
 ResizeToBottomHalf:
