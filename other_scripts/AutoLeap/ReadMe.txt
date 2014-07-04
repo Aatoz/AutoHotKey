@@ -1,7 +1,7 @@
 License: MIT LICENSE (See License.txt)
 	Note: Applies ONLY to AutoLeap module within this program.
 
-Version: 1.00
+Version: %VERSION%
 
 Credits (This links to an external website; web content is not rated or monitored)
 	AutoHotkey

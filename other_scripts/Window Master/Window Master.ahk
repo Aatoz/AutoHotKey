@@ -2030,8 +2030,9 @@ Windows_Master_Help:
 Windows_Master_About:
 {
 	FileRead, sFile, ReadMe.txt
+	FileRead, iVersion, version
 	; Use super-global LeapDlgs in case !g_bHasLeap
-	LeapDlgs.ShowInfoDlg(sFile, g_hWindowsMaster, 850)
+	LeapDlgs.ShowInfoDlg(sFile, iVersion, g_hWindowsMaster, 850)
 	sFile :=
 
 	return
@@ -6198,11 +6199,16 @@ IsResizable(hwnd="A")
 */
 IsDesktop(hWnd)
 {
-	static s_sDesktops := "wndclass_desked_gsk,WorkerW"
+	static s_aDesktops_c := ["wndclass_desked_gsk","WorkerW"]
 
 	MakeValidHwnd(hWnd)
 	WinGetClass, class, ahk_id %hwnd%
-	return (class in s_sDesktops)
+
+	for i, v in s_aDesktops_c
+		if (v = class)
+			return true
+
+	return false
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -6473,7 +6479,7 @@ GetDefaultHotkeysIni()
 			Activate=true
 			Hotkey=Ctrl + Alt + 4
 			Type=Settings
-			GestureName=
+			GestureName=Activate App
 			HelpDesc=Activates this main configuration window.
 
 			[Browser Backward]

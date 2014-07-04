@@ -2063,7 +2063,8 @@ class LeapDlgs
 	ControlCenterDlg_HelpMenu_About()
 	{
 		FileRead, sFile, % this.m_sLeapWorkingDir "\ReadMe.txt"
-		this.ShowInfoDlg(sFile, this.m_hControlCenterDlg)
+		FileRead, iVersion, % this.m_sLeapWorkingDir "\version"
+		this.ShowInfoDlg(sFile, iVersion, this.m_hControlCenterDlg)
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2075,18 +2076,18 @@ class LeapDlgs
 			Purpose: To show an information dialog.
 		Parameters
 			sFile: File to display on dlg.
+			iVersion: File version.
 			hOwner: Owner to center wnd on.
 			iWidthOverride: Specify this for a wider dialog.
 	*/
-	ShowInfoDlg(sFile, hOwner, iWidthOverride=450)
+	ShowInfoDlg(sFile, iVersion, hOwner, iWidthOverride=450)
 	{
 		global
 		; http://msdn.microsoft.com/en-us/library/windows/desktop/aa511453.aspx#sizing
 		static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
-		local iVersion, iFarRight, iBtnX
+		local iFarRight, iBtnX
 
 		StringReplace, sFile, sFile, `t, %A_Space%%A_Space%%A_Space%%A_Space%, All
-		FileRead, iVersion, version
 		StringReplace, sFile, sFile, `%VERSION`%, %iVersion%, All
 
 		GUI, InfoDlg_:New, hwndg_hInfoDlg, %g_sName%

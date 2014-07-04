@@ -136,9 +136,10 @@ FileError()
 /* 
 sInfo := "
 (
+
 1 VERSIONINFO
-FILEVERSION 1,0,0,0
-PRODUCTVERSION 1,0,0,0
+FILEVERSION 1,0,10,0
+PRODUCTVERSION 1,0,10,0
 FILEOS 0x4
 FILETYPE 0x1
 {
@@ -147,12 +148,12 @@ BLOCK "StringFileInfo"
 	BLOCK "040904B0"
 	{
 		VALUE "FileDescription", "Windows Master"
-		VALUE "FileVersion", "1.0"
-		VALUE "InternalName", "AutoHotkey_H"
+		VALUE "FileVersion", "1.0.10.00"
+		VALUE "InternalName", "Windows Master"
 		VALUE "LegalCopyright", "Copyright (C) 2014"
-		VALUE "OriginalFilename", "Windows Master_LM.exe"
+		VALUE "OriginalFilename", "WindowsMaster_LM.exe"
 		VALUE "ProductName", "Windows Master"
-		VALUE "ProductVersion", "1.0"
+		VALUE "ProductVersion", "1.0.10.00"
 	}
 }
 
@@ -161,6 +162,8 @@ BLOCK "VarFileInfo"
 	VALUE "Translation", 0x0409 0x04B0
 }
 }
+
+
 )
 Msgbox % "Here is the string info for ResHacker`n`n"
  */
