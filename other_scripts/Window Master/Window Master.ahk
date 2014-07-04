@@ -938,7 +938,7 @@ Windows_Master_TabProc:
 		;~ InitPrecisionControls()
 	else if (OtherActionsTabIsActive())
 		InitSettingsControls()
-	else if (LeapTabIsActive())
+	else if (InteractiveTabIsActive())
 		InitLeapControls()
 
 	MoveGenericButtons()
@@ -1038,7 +1038,7 @@ Windows_Master_GoToLeapTab:
 {
 	GUI, Windows_Master_:Default
 
-	if (LeapTabIsActive())
+	if (InteractiveTabIsActive())
 		return
 
 	GUIControl, Choose, vWMTab, 5
@@ -1153,7 +1153,7 @@ GenericLVModify:
 	{
 		sHK := LV_GetSelText(2)
 
-		if (LeapTabIsActive())
+		if (InteractiveTabIsActive())
 		{
 			sAppendToTitle := LV_GetSelText()
 			sGestureID := g_InteractiveIni[LV_GetSelText()].GestureName
@@ -1332,7 +1332,7 @@ GenericLV_Default()
 	sHK := LV_GetSelText(2)
 	sGesture := LV_GetSelText(3)
 
-	if (LeapTabIsActive())
+	if (InteractiveTabIsActive())
 	{
 		g_InteractiveIni[sec] := ObjClone(g_vDefaultInteractiveIni[sec])
 		LV_Modify(iRow, GetCheckState(g_InteractiveIni[sec].Activate), sec, g_InteractiveIni[sec].Hotkey, g_InteractiveIni[sec].GestureName)
@@ -2600,7 +2600,7 @@ Windows_Master_RevertSettingsInTab()
 		Loop % LV_GetCount()
 		{
 			LV_GetText(sec, A_Index)
-			if (LeapTabIsActive())
+			if (InteractiveTabIsActive())
 				g_InteractiveIni[sec] := ObjClone(g_vDefaultInteractiveIni[sec])
 			else g_HotkeysIni[sec] := ObjClone(g_vDefaultHotkeysIni[sec])
 		}
@@ -3037,6 +3037,8 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, ByRef rsOptError="")
 	}
 	else if (OtherActionsTabIsActive())
 		sSkipType := "Settings"
+	else if (InteractiveTabIsActive())
+		sSkipType := "Settings"
 
 	if (sSkipIni = "g_SequencesIni")
 		sAction := "Sequence Hotkey #"
@@ -3175,7 +3177,7 @@ core_ValidateGesture(sGestureID, bFromEdit, ByRef rsError)
 			sSkipIni := "g_PrecisionIni"
 			sSecToSkip := LV_GetSel()
 		}
-		else if (LeapTabIsActive())
+		else if (InteractiveTabIsActive())
 		{
 			sSkipIni := "g_InteractiveIni"
 			sSecToSkip := LV_GetSelText()
@@ -3600,7 +3602,7 @@ GetCurIniForSave()
 		return "g_HotkeysIni"
 	else if (PrecisionTabIsActive())
 		return "g_PrecisionIni"
-	else if (LeapTabIsActive())
+	else if (InteractiveTabIsActive())
 		return "g_InteractiveIni"
 	else return "" ; Error. Perhaps this should be handled?
 }
@@ -3703,7 +3705,7 @@ OtherActionsTabIsActive()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-LeapTabIsActive()
+InteractiveTabIsActive()
 {
 	global g_vWMMainTab
 	; TODO: Once the Precision feature is re-enabled, this function should return 6
