@@ -19,12 +19,15 @@ class CLeapMenu
 		; References m_rMH_c.
 		this.CircleGUI_Init()
 
+		this.m_rMH_c.m_hCallbackHack := Func("CLeapMenu_ExitProc")
+
+		CLeapMenu.1 := &this
 		return this
 	}
 
 	MenuProc(ByRef rLeapData)
 	{
-		static s_iLastFocRow := 0, s_iHoverLimit := 1000
+		static s_iLastFocMenu := 0, s_iLastFocRow := 0, s_iHoverLimit := 1000
 
 		if (this.m_bCircleHidden)
 			this.ShowCircle()
@@ -52,10 +55,11 @@ class CLeapMenu
 
 		this.MoveCircle(iNewX, iNewY)
 
-		iFocRow := this.m_rMH_c.GetRowFromPos(this.m_hCircleGUI, iFlyoutUnderCircle, bIsUnderTopmost)
+		iFocRow := this.m_rMH_c.GetRowFromPos(this.m_hCircleGUI, iFocMenu, bIsUnderTopmost)
+		vFocMenu := this.m_rMH_c.GetMenu_Ref(iFocMenu)
 		iLastCall := this.TimeSinceLastCall()
 
-		if (iFocRow == s_iLastFocRow)
+		if (iFocMenu == s_iLastFocMenu && iFocRow == s_iLastFocRow)
 		{
 			; Inc hovering time.
 			this.m_iHoveringFor += iLastCall
@@ -63,38 +67,44 @@ class CLeapMenu
 			; When we reach the hover limit, submit/escape/whatever.
 			if (this.m_iHoveringFor >= s_iHoverLimit)
 			{
-				if (iFlyoutUnderCircle == -1) ; exit all menus...
+				if (iFocMenu == -1) ; exit all menus...
 				{
 					; ... but give a little grace period.
-					if (this.m_iHoveringFor >= (s_iHoverLimit * 2))
+					if (this.m_iHoveringFor >= (s_iHoverLimit * 2.5))
 					{
-						this.m_rLeap_c.OSD_PostMsg("Exit Menu")
-						this.EndMenuProc()
+						this.m_rMH_c.ExitAllMenus()
+						this.EndMenuProc(false)
 						return
 					}
 				}
 				else ; submit selection under appropriate menu.
 				{
-					; If we are hovering over the previous menu and we are also hovering over what is already selected, do nothing.
-					vPrevMenu := this.m_rMH_c.GetMenu_Ref(this.m_rMH_c.m_iNumMenus - 1)
-					if (iFlyoutUnderCircle == vPrevMenu.m_iFlyoutNum && iFocRow == vPrevMenu.GetCurSelNdx()+1)
+					; If we are hovering over a non-topmost menu, see if we should select something.
+					if (this.m_rMH_c.m_vTopmostMenu.m_iFlyoutNum != iFocMenu)
 					{
-						this.m_iHoveringFor := 0
-						return
+						; If we are hovering over a menu item that is already selected, do nothing.
+						if (iFocRow == vFocMenu.m_FromCLM_iLastSubmitted)
+						{
+							s_iLastFocRow := iFocRow
+							s_iLastFocMenu := iFocMenu
+							this.m_iHoveringFor := 0
+							return
+						}
 					}
 
 					; Exit to the hovered menu, if needed.
-					while (this.m_rMH_c.m_iNumMenus > iFlyoutUnderCircle)
+					while (this.m_rMH_c.m_iNumMenus > iFocMenu)
 						this.m_rMH_c.ExitTopmost()
 					; Now launch the menu item focused.
 					this.m_sLastSubmitted := this.m_rMH_c.Submit(iFocRow, bMainMenuExist)
+					vFocMenu.m_FromCLM_iLastSubmitted := vFocMenu.GetCurSelNdx() + 1
 
 					; Note: this never has been encountered...there are strange issues with bMainMenuExist
 					; I think it has to do with ahkPostFunction somewhere, where basically this
 					; scripts resumes execution before the menu handler has been exited.
 					if (!bMainMenuExist)
 					{
-						this.EndMenuProc()
+						this.EndMenuProc(true)
 						; Activate this window because it was the last active window.
 						WinActivate, % "ahk_id" this.m_rMH_c.m_hActiveWndBeforeMenu
 						return
@@ -104,9 +114,20 @@ class CLeapMenu
 				}
 			}
 		}
-		else this.m_iHoveringFor := 0
+		else
+		{
+			vFocMenu.MoveTo(iFocRow)
+			this.m_iHoveringFor := 0
+		}
 
 		s_iLastFocRow := iFocRow
+		s_iLastFocMenu := iFocMenu
+		return
+	}
+
+	__Delete()
+	{
+		CLeapMenu.1 :=
 		return
 	}
 
@@ -130,11 +151,16 @@ class CLeapMenu
 		return
 	}
 
-	EndMenuProc()
+	EndMenuProc(bSubmitted)
 	{
-		this.m_rLeap_c.OSD_PostMsg(this.m_sLastSubmitted)
+		; If the user simply cancelled, then we don't want to show anything.
+		if (bSubmitted || this.m_iHoveringFor < 1000) ; If we passed the hover limit, trust that nothing was submitted over bSubmitted.
+			this.m_rLeap_c.OSD_PostMsg(this.m_sLastSubmitted)
+		else this.m_rLeap_c.OSD_PostMsg("Exit Menu")
+
 		this.HideCircle()
 		this.m_iHoveringFor := 0
+		this.m_sLastSubmitted :=
 		return
 	}
 
@@ -234,4 +260,10 @@ class CLeapMenu
 	m_sLastSubmitted  :=
 	m_rMH_c :=
 	m_rLeap_c :=
+}
+
+CLeapMenu_ExitProc()
+{
+	Object(CLeapMenu.1).EndMenuProc(false)
+	return 
 }
