@@ -1278,7 +1278,7 @@ GenericLV_ModifyHK(sHK, sGestureID="", bMustHaveHotkey=true)
 	Function: GenericLV_ModifyInteractive
 		Purpose: To modify items in the GenericLV under the Leap tab.
 	Parameters
-		sHK: Actually can be blank, but paramters are not reversed due to the generic (and rightly so) code in class HKDlg.
+		sHK: Actually can be blank, but parameters are not reversed due to the generic (and rightly so) code in class HKDlg.
 		sGestureID
 */
 GenericLV_ModifyInteractive(sHK, sGestureID)
@@ -3025,6 +3025,7 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, ByRef rsOptError="")
 	{
 		sSkipIni := "g_SequencesIni"
 		sParse := "g_InteractiveIni|g_PrecisionIni"
+		sAction := "Sequence Hotkey #"
 	}
 	else if (ResizingTabIsActive())
 		sSkipType := "Resizing"
@@ -3034,24 +3035,23 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, ByRef rsOptError="")
 	{
 		sSkipIni := "g_PrecisionIni"
 		sParse := "g_SequencesIni|g_InteractiveIni"
+		sAction := "Precise Placement Hotkey #"
 	}
 	else if (OtherActionsTabIsActive())
 		sSkipType := "Settings"
 	else if (InteractiveTabIsActive())
-		sSkipType := "Settings"
+	{
+		sSkipIni := "g_InteractiveIni"
+		sParse := "g_SequencesIni|g_PrecisionIni"
+	}
 
-	if (sSkipIni = "g_SequencesIni")
-		sAction := "Sequence Hotkey #"
-	else if (sSkipIni = "g_PrecisionIni")
-		sAction := "Precise Placement Hotkey #"
-
-	bUseTextFromLV := sAction == A_Blank
+	bUseTextFromLV := (sAction == A_Blank)
 
 	GetLRHKModifiers(sHK, sHKLRCtrl, sHKLRAlt, sHKLRShift, sHKLRWin)
 	sTranslatedHKToValidate := TranslateHKForHotkeyCmd(sHK)
 
 	aHotkeysToValidate := []
-	iSkip := bModifyExisting ? LV_GetSel() : -1
+	iSkip := (bModifyExisting ? LV_GetSel() : -1)
 	Loop % LV_GetCount()
 	{
 		if (A_Index != iSkip)
@@ -6198,11 +6198,11 @@ IsResizable(hwnd="A")
 */
 IsDesktop(hWnd)
 {
-	static s_sDesktops := "wndclass_desked_gsk,SHELLDLL_DefView1"
+	static s_sDesktops := "wndclass_desked_gsk,WorkerW"
 
 	MakeValidHwnd(hWnd)
 	WinGetClass, class, ahk_id %hwnd%
-	return class in s_sDesktops
+	return (class in s_sDesktops)
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -6987,6 +6987,8 @@ GetDefaultLeapGesturesIni()
 			Gesture=Swipe Right
 			[Window to Top Half]
 			Gesture=Swipe Up, Circle Right
+			[Zoom]
+			Gesture=Swipe Up, Swipe Down, Circle Left
 		)"
 }
 ;;;;;;;;;;;;;;
