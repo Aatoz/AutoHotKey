@@ -664,6 +664,7 @@ MakeMainDlg()
 		Hotkey, !D, Window_Master_Delete
 		Hotkey, !-, Window_Master_Delete
 		Hotkey, Delete, Window_Master_Delete
+		Hotkey, !v, Window_Master_Revert
 	}
 
 	local iNumIcons := 4+g_bHasLeap
@@ -723,7 +724,7 @@ AddAllControls()
 	ILButton(g_hAddHKForSequence, "images\Add.ico", 32, 32, 4)
 	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vvDelHK hwndg_hDeleteHK gDeleteHK
 	ILButton(g_hDeleteHK, "images\Delete.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gRevertItemInLV
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gWindow_Master_Revert
 	ILButton(g_hDefaultHK, "images\Revert.ico", 32, 32, 4)
 
 	iTmpX += iTab1LVW+g_iMSDNStdBtnSpacing
@@ -734,8 +735,6 @@ AddAllControls()
 	ILButton(g_hAddSeq, "images\Add.ico", 32, 32, 4)
 	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDelSeq vvDelSeq gDeleteSeq
 	ILButton(g_hDelSeq, "images\Delete.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDefaultSeq vg_vDefaultSeq gRevertItemInLV
-	ILButton(g_hDefaultSeq, "images\Revert.ico", 32, 32, 4)
 
 	InitSequenceControls()
 	g_vWMMainTab.Highlight(1)
@@ -774,7 +773,7 @@ AddAllControls()
 
 	GUI, Add, Button, xp yp+357 w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% hwndg_hGenericLVEditBtn vvGenericLVEdit gGenericLVModify Hidden
 	ILButton(g_hGenericLVEditBtn, "images\Edit.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gRevertItemInLV Hidden
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gWindow_Master_Revert Hidden
 	ILButton(g_hGenericLVDefaultBtn, "images\Revert.ico", 32, 32, 4)
 
 	GUI, Font, s12 c83B8G7
@@ -879,6 +878,33 @@ Window_Master_Delete:
 	else if (PrecisionTabIsActive() && hFocused == g_hGenericLV)
 		DeletePrecisionItem()
 
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Window_Master_Revert
+		Purpose: Hotkey handler to revert rows in ListViews to defaults
+	Parameters
+		
+*/
+Window_Master_Revert:
+{
+	hFocused := Window_Master_GetCtrlFocusedHwnd()
+
+	if (A_GUIControl = "g_vDefaultSeq" || A_GUIControl = "g_vDefaultHK"
+		|| hFocused == g_hSequence || hFocused = g_hHKList)
+	{
+		DefaultHK()
+	}
+	else if (A_GUIControl = "g_vGenericLVDefaultBtn" || hFocused == g_hGenericLV)
+	{
+		GenericLV_Default()
+	}
+
+	g_bShouldSave := true
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1629,23 +1655,6 @@ EditSeq:
 DeleteSeq:
 {
 	DeleteSequence()
-	return
-}
-RevertItemInLV:
-{
-	if (A_GUIControl = "g_vDefaultSeq")
-	{
-		DefaultSequence()
-	}
-	else if (A_GUIControl = "g_vDefaultHK")
-	{
-		DefaultHK()
-	}
-	else ; g_vDefaultGeneric
-	{
-		GenericLV_Default()
-	}
-
 	return
 }
 Window_Master_GUISize:
@@ -2693,21 +2702,6 @@ DeleteSequence(iSeq="", bRemoveFromIni=true)
 	return
 }
 
-DefaultSequence(iSeq="")
-{
-	global g_SequencesIni, g_vDefaultSequencesIni, g_bShouldSave
-
-	LV_SetDefault("Window_Master_", "vHotkeysLV")
-	iHK := LV_GetSel()
-
-	g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
-	g_bShouldSave := true
-
-	LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
-
-	return
-}
-
 AddPrecisionItem(vSeq, s2, sGestureID="")
 {
 	global g_PrecisionIni, g_bHasLeap, g_bShouldSave
@@ -2961,20 +2955,19 @@ DeleteHK(iHK="")
 
 DefaultHK(iHK="")
 {
-	global g_SequencesIni, g_vDefaultSequencesIni
+	global g_SequencesIni, g_vDefaultSequencesIni, g_bShouldSave
 
 	LV_SetDefault("Window_Master_", "vHotkeysLV")
+	iHK := LV_GetSel()
 
-	if (iHK == A_Blank)
-		iHK := LV_GetSel()
+	; This gets around some really strange bug with ObjClone.
+	; Note that the bug does not appear to be present for any other Default btn action.
+	g_vDefaultSequencesIni := class_EasyIni("", GetDefaultSequencesIni())
+	g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
+	g_bShouldSave := true
 
-	; Use default from ini.
-	if (g_vDefaultSequencesIni.HasKey(iHK))
-	{
-		g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
-		LV_Modify(iHK, GetCheckState(g_SequencesIni[iHK].Activate))
-		LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
-	}
+	LV_Modify(iHK, GetCheckState(g_SequencesIni[iHK].Activate), g_SequencesIni[iHK].Hotkey, g_SequencesIni[iHK].GestureName)
+	LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
 
 	return
 }
