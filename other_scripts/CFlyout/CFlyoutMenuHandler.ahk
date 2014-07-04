@@ -151,21 +151,29 @@ FlyoutMenuHandler_MoveUp:
 FlyoutMenuHandler_SubmitSelected:
 FlyoutMenuHandler_ExitTopmost:
 FlyoutMenuHandler_ExitAllMenus:
+FlyoutMenuHandler_ExitAllMenus_OnFocusLost:
 {
 	Critical
 	g_vExe.ahkPostFunction[A_ThisLabel, " this.m_iClassID "]
 	return
 }
 
-FlyoutMenuHandler_ExitWhenInactive:
+FlyoutMenuHandler_StartExitTimer()
+{
+	SetTimer, FlyoutMenuHandler_ExitOnFocusLost, 100
+	return
+}
+
+FlyoutMenuHandler_ExitOnFocusLost:
 {
 	Critical
 
 	WinGetClass, sClass, A
 	WinGetActiveTitle, sActiveTitle
+
 	if (sClass != ""AutoHotkeyGUI"" || !InStr(sActiveTitle, ""CFMH_""))
 	{
-		gosub FlyoutMenuHandler_ExitAllMenus
+		gosub FlyoutMenuHandler_ExitAllMenus_OnFocusLost
 		`; Send action on through.
 	}
 	return
@@ -280,7 +288,6 @@ Suspend(sOnOff)
 		WinMove, % "ahk_id" this.m_vMainMenu.m_hFlyout,, this.m_iX, this.m_iY
 		WinActivate
 
-		;~ SetTimer FlyoutMenuHandler_ExitWhenInactive, 100
 		return
 	}
 
@@ -317,12 +324,17 @@ Suspend(sOnOff)
 	{
 		this.m_bCalledFromClick := true
 
-		; If the mouse is hovering over the previous menu and the mouse has clicked what is already selected, do nothing.
+		; If the mouse is hovering over the previous menu and the mouse is about to click what is already selected, do nothing.
 		vPrevMenu := this.GetMenu_Ref(this.m_iNumMenus - 1)
 		iFocRow := this.GetRowFromPos("", iFlyoutUnderCircle)
-		Tooltip % st_concat("`n", iFlyoutUnderCircle, vPrevMenu.m_iFlyoutNum, iFocRow, vPrevMenu.GetCurSelNdx()+1)
+
 		if (iFlyoutUnderCircle == vPrevMenu.m_iFlyoutNum && iFocRow == vPrevMenu.GetCurSelNdx()+1)
 			return
+
+		; Perform actual mouse click on flyout
+		CoordMode, Mouse, Relative
+		MouseGetPos,, iMouseY
+		vFlyout.Click(iMouseY)
 
 		; Exit to the hovered menu, if needed.
 		while (this.m_iNumMenus > vFlyout.m_iFlyoutNum)
@@ -354,6 +366,12 @@ Suspend(sOnOff)
 		if (this.m_vMainMenu.m_hFlyout == this.m_vTopmostMenu.m_hFlyout)
 		{
 			this.ExitAllMenus()
+
+			; This hack is used by CLeapMenu
+			; It is used to determine whether or not an item was actually submitted.
+			if (this.m_hCallbackHack)
+				this.m_hCallbackHack.()
+
 			return
 		}
 
@@ -366,7 +384,7 @@ Suspend(sOnOff)
 		return
 	}
 
-	ExitAllMenus()
+	ExitAllMenus(bFromExitTimer=false)
 	{
 		; To avoid crashes from infinite recursion, only reload when needed.
 		if (this.m_aFlyouts.MaxIndex() == A_Blank)
@@ -379,8 +397,10 @@ Suspend(sOnOff)
 		; Reloading is fast, so let's just be happy with this workaround.
 		this.m_hThread.ahkReload()
 
-		; Stop
-		;~ SetTimer FlyoutMenuHandler_ExitWhenInactive, Off
+		; See comment in ExitTopmost()
+		if (bFromExitTimer && this.m_hCallbackHack)
+			this.m_hCallbackHack.()
+
 		return
 	}
 
@@ -444,7 +464,8 @@ Suspend(sOnOff)
 
 		if (this.m_vTopmostMenu.GetCurSelNdx() == 0)
 			iYOffset := 0
-		else iYOffset := this.m_vTopmostMenu.CalcHeightTo(this.m_vTopmostMenu.GetCurSelNdx() - this.m_vTopmostMenu.m_iDrawnAtNdx)
+		else iYOffset := this.m_vTopmostMenu.CalcHeightTo(this.m_vTopmostMenu.GetCurSelNdx() - this.m_vTopmostMenu.m_iDrawnAtNdx) - 1
+			; Note: not sure why we need to -1, but it works. Maybe it has to do with aligning with the selection vs. the menu window itself?
 
 		this.CreateFlyoutMenu(sMenuID, this.m_vTopmostMenu.m_hFlyout)
 		; Note: m_vTopmostMenu is now the newly created menu ( See __Get() ).
@@ -498,6 +519,8 @@ Suspend(sOnOff)
 		; Note: See FlyoutMenuHandler_OnClick.
 		vFlyout.m_iCFMH_ClassID := this.m_iClassID
 		this.m_aFlyouts.Insert(vFlyout)
+
+		this.m_hThread.ahkPostFunction["FlyoutMenuHandler_StartExitTimer"]
 
 		return
 	}
@@ -714,6 +737,12 @@ FlyoutMenuHandler_ExitAllMenus(iClassID)
 {
 	vMH := _CFlyoutMenuHandler(iClassID)
 	return vMH.ExitAllMenus()
+}
+
+FlyoutMenuHandler_ExitAllMenus_OnFocusLost(iClassID)
+{
+	vMH := _CFlyoutMenuHandler(iClassID)
+	return vMH.ExitAllMenus(true)
 }
 
 FlyoutMenuHandler_OnClick(vFlyout, msg)
