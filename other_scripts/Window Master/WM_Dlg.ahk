@@ -2146,8 +2146,11 @@ class CIntroDlg
 
 	Next()
 	{
-		if (this.m_iPage > this.m_iTotalPages)
+		if (this.m_iPage >= this.m_iTotalPages)
+		{
+			this.GUIClose()
 			return
+		}
 
 		this.m_bWaitingOnGesture := false
 		this.m_sNeededGesture := ""
@@ -2215,7 +2218,7 @@ class CIntroDlg
 			else if (sGesture = "Swipe Left")
 			{
 				GUIControlGet, bEnabled, Enabled, g_vNext
-				if (bEnabled)
+				if (bEnabled || this.m_iPage >= this.m_iTotalPages)
 					this.Next()
 			}
 		}
@@ -2238,10 +2241,10 @@ class CIntroDlg
 				Text=Let's cover another basic item, namely gestures. These are just as important hotkeys, so let's get familiar with gestures.``n``nPlace your hand above the Leap Motion Controller and make both circular and swiping motions. As you do this, notice the text that is outputted at the top of your screen.``n``nThis text will persist until you retract your hand. Retract your hand now to confirm the gesture.`n`nYou sucessfully performed a gesture!
 				Gesture=Any
 				[4]
-				Text=Now try a simple gesture.``n``nPerform the gesture, ""Swipe Left"" by placing your hand above the Leap Motion Controller and then swiping your hand to the left. Remember that you must retract your hand to confirm the gesture.``n``nNote: if you are accidentally performing other gestures, remove your hand and try performing the gesture more slowly.
+				Text=Now try a simple gesture.``n``nPerform the gesture, ""Swipe Left"" by placing your hand above the Leap Motion Controller and then swiping your hand to the left. Remember that you must retract your hand to confirm the gesture.``n``nNote: it's easy to accidentally trigger ""Swipe Forward"" when placing your hand above the Leap Motion Controller. Pay special attention to what the output is showing.
 				Gesture=Swipe Left
 				[5]
-				Text=Excellent! You can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chans.
+				Text=Excellent! You can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chains.
 				[6]
 				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures over the Leap Motion Controller without retracting your hand. As you build the chain, it will be outputted on the top of the screen in a format such as , ""Swipe Left, Swipe Right."" End the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
 				Gesture=Swipe Left, Swipe Right

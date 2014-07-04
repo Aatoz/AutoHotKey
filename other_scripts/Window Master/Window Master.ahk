@@ -4980,6 +4980,9 @@ MinimizeWindow(hWnd="A")
 {
 	MakeValidHwnd(hWnd)
 
+	if (IsDesktop(hWnd))
+		return
+
 	iMinMaxState := GetMinMaxState(hWnd)
 	WinActivate, ahk_id %hWnd%
 
@@ -6173,19 +6176,39 @@ Author(s):
 */
 IsResizable(hwnd="A")
 {
-	static s_sExceptions := "Chrome_XPFrame,Chrome_WidgetWin_1,MozillaUIWindowClass,MozillaWindowClass,wndclass_desked_gsk,QPasteClass,Notepad++,SciTEWindow"
+	static s_sExceptions := "Chrome_XPFrame,Chrome_WidgetWin_1,MozillaUIWindowClass,MozillaWindowClass,QPasteClass,Notepad++,SciTEWindow"
+	static s_sDesktops := "wndclass_desked_gsk,SHELLDLL_DefView1"
 	MakeValidHwnd(hWnd)
 
 	WinGetClass, Class, ahk_id %hwnd%
-	if Class in %s_sExceptions%
-	{
+	if Class in s_sDesktops
+		return false
+	if Class in s_sExceptions
 		return true
-	}
+
 	WinGet, CurStyle, Style, ahk_id %hwnd%
 	return (CurStyle & 0x40000) ; WS_SIZEBOX
 }
 
 ;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: IsDesktop
+		Purpose:
+	Parameters
+		hWnd
+*/
+IsDesktop(hWnd)
+{
+	static s_sDesktops := "wndclass_desked_gsk,SHELLDLL_DefView1"
+
+	MakeValidHwnd(hWnd)
+	WinGetClass, class, ahk_id %hwnd%
+	return class in s_sDesktops
+}
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
