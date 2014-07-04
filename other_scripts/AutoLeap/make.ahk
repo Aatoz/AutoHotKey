@@ -47,9 +47,31 @@ Loop, Parse, sFilesToInclude, `n
 		sFileInstalls .= "FileInstall, AutoLeap\" sFileName ", AutoLeap\" sFileName ", 1`n"
 		FileCopy, %A_LoopField%, %A_ScriptDir%\%sFileName%, 1
 	}
-	else FileError()
+	else FileError(A_WorkingDir "\" A_LoopField)
 }
 
+; Copy over exes and dlls.
+aBinaries := ["M:\Documents\Visual Studio\Leap Forwarder\Release\Leap Forwarder_32.exe"
+	, "M:\Documents\Visual Studio\Leap Forwarder\Release\Leap.dll"
+	, "M:\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap Forwarder_64.exe"
+	, "M:\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap.dll"]
+for i, sFullFilePath in aBinaries
+{
+	if (!FileExist(sFullFilePath))
+		FileError(sFullFilePath)
+
+	; Extract just the filename
+	StringSplit, aFileName, sFullFilePath, \
+	sFileName := aFileName%aFileName0%
+	if (sFileName = "Leap.dll")
+	{
+		sPrevFile := aBinaries[i-1]
+		s32_64 := SubStr(sPrevFile, InStr(sPrevFile, "_"), 3)
+		StringReplace, sFileName, sFileName, Leap, Leap%s32_64%
+	}
+
+	FileCopy, %sFullFilePath%, %A_ScriptDir%\%sFileName%, 1
+}
 sFileInstalls .= "`; License and other help files.`n"
 sFileInstalls .= "FileInstall, AutoLeap\version, AutoLeap\version, 1`n"
 sFileInstalls .= "FileInstall, AutoLeap\License.txt, AutoLeap\License.txt, 1`n"
@@ -72,8 +94,8 @@ clipboard := sFileInstalls
 Msgbox Done! List of FileInstalls are on the clipboard.`n`n%sFileInstalls%
 return
 
-FileError()
+FileError(sFile)
 {
-	Msgbox 8192,, Error: Include file %A_WorkingDir%\%A_LoopField% does not exist.
+	Msgbox 8192,, Error: Include file %sFile% does not exist.
 	ExitApp
 }
