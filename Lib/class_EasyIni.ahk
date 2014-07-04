@@ -490,7 +490,7 @@ class EasyIni
 	ToVar()
 	{
 		sTmpFile := "$$$EasyIni_Temp.ini"
-		this.Save(sTmpFile, true)
+		this.Save(sTmpFile, !A_IsCompiled)
 		FileRead, sIniAsVar, %sTmpFile%
 		FileDelete, %sTmpFile%
 		return sIniAsVar
