@@ -1986,14 +1986,15 @@ class CIntroDlg
 		global
 
 		GUI, IntroDlg_:New, Resize MinSize hwndg_hIntroDlg
+		this.m_iDlgW := 710
 		GUI, Color, 202020
 		GUI, Font, c5C5CF0 s17 wbold, Arial
-		GUI, Add, Text, x0 y0 w595 h400 Center vg_vPage1
-		GUI, Add, Text, x450 y0 w595 h400 Center vg_vPage2
+		GUI, Add, Text, % "x0 y0 w" this.m_iDlgW " h400 Center vg_vPage1"
+		GUI, Add, Text, x450 y0 wp h400 Center vg_vPage2
 
 		GUI, Font, s8, Default
 		GUI, Add, Button, x%g_iMSDNStdBtnSpacing% y400 w%g_iMSDNStdBtnW% h%g_iMSDNStdBtnH% vg_vPrev gIntroDlg_Prev Center Disabled, &Previous
-		GUI, Add, Button, % "x" 590-(g_iMSDNStdBtnW*2)-g_iMSDNStdBtnSpacing " yp wp hp vg_vSkip gIntroDlg_Next Center", &Skip
+		GUI, Add, Button, % "x" this.m_iDlgW-5-(g_iMSDNStdBtnW*2)-g_iMSDNStdBtnSpacing " yp wp hp vg_vSkip gIntroDlg_Next Center", &Skip
 		GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp Center vg_vNext gIntroDlg_Next Disabled", &Next
 		GUI, Add, Button, xp yp wp hp Center vg_vExit gIntroDlg_GUIClose Hidden Disabled, E&xit
 
@@ -2062,7 +2063,7 @@ class CIntroDlg
 		GUI, +Owner%hOwner%
 		WinSet, Disable,, ahk_id %hOwner%
 
-		GUI, Show, x-32768 w595 h430, Welcome to Windows Master
+		GUI, Show, % "x-32768 w" this.m_iDlgW " h430", Welcome to Windows Master
 		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
 
 		return
@@ -2101,7 +2102,12 @@ class CIntroDlg
 			GUIControl, Enable, g_vExit
 			GUIControl, Show, g_vExit
 		}
-		else GUIControl,, g_vNext, % "&Next (" this.m_iPage + 1 ")"
+		else
+		{
+			GUIControl,, g_vNext, % "&Next (" this.m_iPage + 1 ")"
+			GUIControl, Show, g_vNext
+			GUIControl, Hide, g_vExit
+		}
 
 		return
 	}
@@ -2210,17 +2216,25 @@ class CIntroDlg
 			if (sGesture = "Swipe Right")
 				this.Prev()
 			else if (this.m_bWaitingOnGesture && (this.m_sNeededGesture = sGesture || this.m_sNeededGesture = "Any"))
-			{
-				this.m_bWaitingOnGesture := false
-				this.m_sNeededGesture := ""
-				this.Next()
-			}
+				bProceed := true
 			else if (sGesture = "Swipe Left")
 			{
 				GUIControlGet, bEnabled, Enabled, g_vNext
 				if (bEnabled || this.m_iPage >= this.m_iTotalPages)
 					this.Next()
 			}
+		}
+		else if (rLeapData.Header.DataType = "Forward")
+		{
+			if (this.m_sNeededGesture = "Fist" && this.m_rvLeap.IsMakingFist(rLeapData))
+				bProceed := true
+		}
+
+		if (bProceed)
+		{
+			this.m_bWaitingOnGesture := false
+			this.m_sNeededGesture := ""
+			this.Next()
 		}
 
 		return
@@ -2244,11 +2258,14 @@ class CIntroDlg
 				Text=Now try a simple gesture.``n``nPerform the gesture, ""Swipe Left"" by placing your hand above the Leap Motion Controller and then swiping your hand to the left. Remember that you must retract your hand to confirm the gesture.``n``nNote: it's easy to accidentally trigger ""Swipe Forward"" when placing your hand above the Leap Motion Controller. Pay special attention to what the output is showing.
 				Gesture=Swipe Left
 				[5]
-				Text=Excellent! You can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chains.
+				Text=Excellent!``n``nYou can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chains.
 				[6]
-				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures over the Leap Motion Controller without retracting your hand. As you build the chain, it will be outputted on the top of the screen in a format such as , ""Swipe Left, Swipe Right."" End the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
+				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures without retracting your hand from the view of the Leap Motion Controller.``n``nAs you build the chain, it will be outputted on the top of the screen in a format such as , ""Swipe Left, Swipe Right."" Finish the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
 				Gesture=Swipe Left, Swipe Right
 				[7]
+				Text=One more thing: Windows Master has a feature called, ""Interactive actions."" These are actions where you interact with the Leap Motion Controller.``n``nThe actions are activated with a hotkey or gesture; once active, the action will stay active all you bring all of your fingers together so they are touching (By making a fist, for example).``n``nTry making a fist right now.
+				Gesture=Fist
+				[8]
 				Text=You have completed the tutorial! You are well on your way to becoming a master of Windows.``n``nRemember: you can access this tutorial at any time from the Windows Master main menu.``n``nThe path is Help>Start Tutorial.
 
 			)"
