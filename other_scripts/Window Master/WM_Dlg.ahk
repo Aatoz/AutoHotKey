@@ -16,6 +16,8 @@ class WM_Dlg
 		this.SequenceDlg := new SequenceDlg("AddSequence", "ModifySequence")  ; Also uses WindowSetDlg.
 
 		;~ this.LeapGesturesDlg := new LeapGestureDlg()
+		this.ImportDlg := new ImportDlg()
+		this.IntroDlg := new CIntroDlg()
 
 		WM_Dlg.1 := &this
 	}
@@ -69,16 +71,16 @@ class WM_Dlg
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
-		Function: ShowHKDlg_ForLeap
+		Function: ShowHKDlg_ForInteractive
 			Purpose:
 		Parameters
 			hOwner
 	*/
-	ShowHKDlg_ForLeap(hOwner, sHKBeingEdited="", sGestureBeingEdited="", sAppendToTitle="")
+	ShowHKDlg_ForInteractive(hOwner, sHKBeingEdited="", sGestureBeingEdited="", sAppendToTitle="")
 	{
 		; No add function because, with the current design, you cannot add to GenericLV (except for PrecisionDlg the override).
 		this.HKDlg.m_sAddFunc := ""
-		this.HKDlg.m_sEditFunc := "GenericLV_ModifyLeap"
+		this.HKDlg.m_sEditFunc := "GenericLV_ModifyInteractive"
 		this.HKDlg.m_bMustHaveHotkey := false
 
 		this.HKDlg.ShowDlg(hOwner, true, sHKBeingEdited, sGestureBeingEdited, sAppendToTitle)
@@ -440,8 +442,8 @@ class HKDlg
 			GUI, Add, Text, % "x" iX " yp+" iY-iYOffset " w50 h25", Gesture:
 			GUI, Add, DropDownList, % "xp+45 yp-3 w257 g" this.m_sGUI "GestureDDLProc vg_vHKDlg_Gesture", % "|" g_vLeap.m_vGesturesIni.GetSections("|", "C")
 
-			GUI, Add, Button, % "xp+258 yp-1 w25 hp+2 hwndg_hHKDlg_LeapGesturesBtn g" this.m_sGUI "LaunchGesturesDlg"
-			ILButton(g_hHKDlg_LeapGesturesBtn, "AutoLeap\Add.ico", 16, 16, 4)
+			GUI, Add, Button, % "xp+258 yp-1 w25 hp+2 hwndg_hHKDlg_GCCBtn g" this.m_sGUI "LaunchGesturesDlg"
+			ILButton(g_hHKDlg_GCCBtn, "AutoLeap\Add.ico", 16, 16, 4)
 			iY := iYOffset+161
 		}
 		else iY := iYOffset+131
@@ -1431,8 +1433,8 @@ class LeapGestureDlg
 		GUI, Add, Text, w50 h25, Gesture:
 		GUI, Add, DropDownList, xp+45 yp-3 w257 gLeapGestureDlg_GestureDDLProc vg_vLeapGestureDlg_Gesture, % "|" g_vLeap.m_vGesturesIni.GetSections("|", "C")
 		GUIControl, ChooseString, g_vLeapGestureDlg_Gesture, % this.m_sExistingGesture
-		GUI, Add, Button, xp+258 yp-1 w25 hp+2 hwndg_hLeapGestureDlg_LeapGesturesBtn gLeapGestureDlg_LaunchControlCenterDlg
-		ILButton(g_hLeapGestureDlg_LeapGesturesBtn, "AutoLeap\Add.ico", 16, 16, 4)
+		GUI, Add, Button, xp+258 yp-1 w25 hp+2 hwndg_hLeapGestureDlg_GCCBtn gLeapGestureDlg_LaunchControlCenterDlg
+		ILButton(g_hLeapGestureDlg_GCCBtn, "AutoLeap\Add.ico", 16, 16, 4)
 
 		GUI, Add, Text, w330 r5 vg_vLeapGestureDlg_ErrorTxt Hidden
 
@@ -1773,90 +1775,510 @@ class WindowSetDlg
 		Parameters
 			
 	*/
-		WatchWnd()
+	WatchWnd()
+	{
+		global g_DictMonInfo
+		GUI, WindowSetDlg_:Default
+
+		WinGetPos, iX, iY, iW, iH, % "ahk_id" this.m_hDlg
+
+		; Specifies whether to give the percentage of the preview window is taking up on the current monitor,
+		; or whether to simply return absolute X, Y, W, and H coordinates.
+		bUpdateWithWndPct := (this.m_sGUIOwner = "SequenceDlg_")
+		if (bUpdateWithWndPct)
 		{
-			global g_DictMonInfo
-			GUI, WindowSetDlg_:Default
+			iMon := GetMonitorFromWindow(this.m_hDlg)
+			iMonX := g_DictMonInfo[iMon]["Left"]
+			iMonY := g_DictMonInfo[iMon]["Top"]
+			iMonW := g_DictMonInfo[iMon]["W"]
+			iMonH := g_DictMonInfo[iMon]["H"]
 
-			WinGetPos, iX, iY, iW, iH, % "ahk_id" this.m_hDlg
+			iDestMonX := g_DictMonInfo["PrimaryMonLeft"]
+			iDestMonY := g_DictMonInfo["PrimaryMonTop"]
+			iDestMonW := g_DictMonInfo["PrimaryMonRight"]
+			iDestMonH := g_DictMonInfo["PrimaryMonBottom"]
 
-			; Specifies whether to give the percentage of the preview window is taking up on the current monitor,
-			; or whether to simply return absolute X, Y, W, and H coordinates.
-			bUpdateWithWndPct := (this.m_sGUIOwner = "SequenceDlg_")
-			if (bUpdateWithWndPct)
-			{
-				iMon := GetMonitorFromWindow(this.m_hDlg)
-				iMonX := g_DictMonInfo[iMon]["Left"]
-				iMonY := g_DictMonInfo[iMon]["Top"]
-				iMonW := g_DictMonInfo[iMon]["W"]
-				iMonH := g_DictMonInfo[iMon]["H"]
+			; Use resolution difference to scale X and Y.
+			iScaledX := iDestMonX + (iX-iMonX) * (iDestMonW/iMonW)
+			iScaledY := iDestMonY + (iY-iMonY) * (iDestMonH/iMonH)
+			iX := Round((iScaledX * 100) / iMonW, 2)
+			iY := Round((iScaledY * 100) / iMonH, 2)
 
-				iDestMonX := g_DictMonInfo["PrimaryMonLeft"]
-				iDestMonY := g_DictMonInfo["PrimaryMonTop"]
-				iDestMonW := g_DictMonInfo["PrimaryMonRight"]
-				iDestMonH := g_DictMonInfo["PrimaryMonBottom"]
+			GetWndPct(iW, iH, this.m_hDlg)
+	}
 
-				; Use resolution difference to scale X and Y.
-				iScaledX := iDestMonX + (iX-iMonX) * (iDestMonW/iMonW)
-				iScaledY := iDestMonY + (iY-iMonY) * (iDestMonH/iMonH)
-				iX := Round((iScaledX * 100) / iMonW, 2)
-				iY := Round((iScaledY * 100) / iMonH, 2)
-
-				GetWndPct(iW, iH, this.m_hDlg)
-		}
-
-			GUI, % this.m_sGUIOwner ":Default"
-			GUIControl,, g_vEditX, %iX%
-			GUIControl,, g_vEditY, %iY%
-			GUIControl,, g_vEditW, %iW%
-			GUIControl,, g_vEditH, %iH%
-			return
-		}
+		GUI, % this.m_sGUIOwner ":Default"
+		GUIControl,, g_vEditX, %iX%
+		GUIControl,, g_vEditY, %iY%
+		GUIControl,, g_vEditW, %iW%
+		GUIControl,, g_vEditH, %iH%
+		return
+	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 }
 
-/*
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-														
-				DEPRECATED!			
-														
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-*/
-
-; This both Adds and Removes Keys from the DDL.
-; I came up with this design after trying four different methods.
-; Actually, I stumbled upon this one when I was trying the fourth method,
-; and then I realized that this condensed two functions I was using
-; (adding and removing) into one.
-; Keeping it around because it may be useful in other cases.
-HKDlgRepopulateDDL(sDDL, i1, i2, i3)
+class ImportDlg
 {
-	global asModifiers_c
+	__New()
+	{
+		global
 
-	GUI HKDlg_: Default
-	sHK1 := GUIControlGet("", "vK" i1)
-	sHK2 := GUIControlGet("", "vK" i2)
-	sHK3 := GUIControlGet("", "vK" i3)
+		; TODO: Idea of function to add an text, edit, and an ellipsis button (FIle selector edit)
+		GUI, ImportDlg_:New, hwndg_hImportDlg, Import WinSplit Settings
+		; Sequences.
+		GUI, Add, Text, x10 y5 h20 gImportDlg_SelectSequencesIni, Path to &Sequences.ini:
+		GUI, Add, Edit, xp+120 yp-3 w300 hp vg_vImportDlg_SequencesIniEdit -TabStop ReadOnly,
+		GUI, Add, Button, xp+300 yp-1 w20 h22 vg_vImportDlg_SequencesIniEllipsis gImportDlg_SelectSequencesIni, ...
+		; Hotkeys.
+		GUI, Add, Text, xp-420 yp+30 h20 gImportDlg_SelectHotkeysIni, Path to &Hotkeys.ini:
+		GUI, Add, Edit, xp+120 yp-3 w300 hp vg_vImportDlg_HotkeysIniEdit -TabStop ReadOnly,
+		GUI, Add, Button, xp+300 yp-1 w20 h22 gImportDlg_SelectHotkeysIni, ...
+		; Interactive.
+		GUI, Add, Text, xp-420 yp+30 h20 gImportDlg_SelectInteractiveIni, Path to &Interactive.ini:
+		GUI, Add, Edit, xp+120 yp-3 w300 hp vg_vImportDlg_InteractiveIniEdit -TabStop ReadOnly,
+		GUI, Add, Button, xp+300 yp-1 w20 h22 gImportDlg_SelectInteractiveIni, ...
+		; OK/Cancel.
+		GUI, Add, Button, % "xp-135 yp+32 w" g_iMSDNStdBtnW " h"g_iMSDNStdBtnH " vg_vImportDlg_OKBtn gImportDlg_DoImport Disabled", &OK
+		GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp gImportDlg_GUIClose", &Cancel
 
-	Loop % asModifiers_c.MaxIndex()
-		sKeyList .= asModifiers_c[A_Index] "|"
+		Hotkey, IfWInActive, % "ahk_id" this.m_hDlg
+			Hotkey, Enter, ImportDlg_DoImport
+			Hotkey, NumpadEnter, ImportDlg_DoImport
 
-	if (sHK1 != "None")
-		StringReplace, sKeyList, sKeyList, %sHK1%, , All
-	if (sHK2 != "None")
-		StringReplace, sKeyList, sKeyList, %sHK2%, , All
-	if (sHK3 != "None")
-		StringReplace, sKeyList, sKeyList, %sHK3%, , All
+		return this
 
-	StringReplace, sKeyList, sKeyList, ||||, |, All
-	StringReplace, sKeyList, sKeyList, |||, |, All
-	StringReplace, sKeyList, sKeyList, ||, |, All
+		ImportDlg_SelectSequencesIni:
+		{
+			if (ImportDlg.SelectFile("Sequences.ini") && GUIControlGet("", "g_vImportDlg_SequencesIniEdit"))
+				GUIControl, Enable, g_vImportDlg_OKBtn
+			return
+		}
 
-	; Remember current entry, and repopulate DDL with sKeyList.
-	GUIControlGet, hDDL, Hwnd, %sDDL%
-	ControlGet, sCurDDLSel, Choice, ,, % "ahk_id" hDDL
+		ImportDlg_SelectHotkeysIni:
+		{
+			if (ImportDlg.SelectFile("Hotkeys.ini") && GUIControlGet("", "g_vImportDlg_HotkeysIniEdit"))
+				GUIControl, Enable, g_vImportDlg_OKBtn
+			return
+		}
 
-	GUIControl,, %sDDL%, % "|" sKeyList
-	GUIControl, ChooseString, %sDDL%, % sCurDDLSel
-	return
+		ImportDlg_SelectInteractiveIni:
+		{
+			if (ImportDlg.SelectFile("Interactive.ini") && GUIControlGet("", "g_vImportDlg_InteractiveIniEdit"))
+				GUIControl, Enable, g_vImportDlg_OKBtn
+			return
+		}
+
+		ImportDlg_DoImport:
+		{
+			GUI, ImportDlg_:Default
+
+			; Hotkey can trigger import command.
+			GUIControlGet, bEnabled, Enabled, g_vImportDlg_OKBtn
+			if (!bEnabled)
+				return
+
+			sSequencesIni			:= GUIControlGet("", "g_vImportDlg_SequencesIniEdit")
+			sHotkeysIni				:= GUIControlGet("", "g_vImportDlg_HotkeysIniEdit")
+			sInteractiveIni			:= GUIControlGet("", "g_vImportDlg_InteractiveIniEdit")
+
+			if (Windows_Master_ImportSettings(sSequencesIni, sHotkeysIni, sInteractiveIni, sErrors))
+				Msgbox("Windows Master settings were imported successfully.")
+			else
+				Msgbox("Windows Master settings were partially imported. Further details below:`n`n" sErrors)
+
+			gosub ImportDlg_GUIEscape
+			return
+		}
+
+		ImportDlg_GUIEscape:
+		ImportDlg_GUIClose:
+		{
+			WinSet, Enable,, % "ahk_id" g_vDlgs.ImportDlg.m_hOwner
+			GUI, ImportDlg_:Hide
+
+			; Clear controls.
+			GUIControl,, g_vImportDlg_SequencesIniEdit
+			GUIControl,, g_vImportDlg_HotkeysIniEdit
+			GUIControl,, g_vImportDlg_InteractiveIniEdit
+
+			return
+		}
+	}
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: __Get
+			Purpose:
+		Parameters
+			
+	*/
+	__Get(varName)
+	{
+		global
+
+		if (varName = "m_hDlg")
+			return g_hImportDlg
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ShowDlg
+			Purpose:
+		Parameters
+			hOwner
+			iX/iY/iW/iH
+	*/
+	ShowDlg(hOwner, iX="", iY="", iW="", iH="")
+	{
+		global
+
+		this.m_hOwner := hOwner
+
+		GUI, ImportDlg_:Default
+		GUI, +Owner%hOwner%
+		WinSet, Disable,, ahk_id %hOwner%
+
+		GUI, Show, x-32768 AutoSize, Import Windows Master Settings
+		GUIControl, Focus, g_vImportDlg_SequencesIniEllipsis
+		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: SelectFile
+			Purpose: Localize logic for grabbing ini settings files.
+		Parameters
+			sFIleName: The file name to look for.
+	*/
+	SelectFile(sFileName)
+	{
+		GUI, +OwnDialogs
+
+		FileSelectFile, sFile, 1, %A_ScriptDir%, Navigate to %sFileName%, *.ini ; 1 File must exist!
+		if (sFile)
+		{
+			if (sFileName = "Sequences.ini")
+				GUIControl,, g_vImportDlg_SequencesIniEdit, %sFile%
+			else if (sFileName = "Hotkeys.ini")
+				GUIControl,, g_vImportDlg_HotkeysIniEdit, %sFile%
+			else if (sFileName = "Interactive.ini")
+				GUIControl,, g_vImportDlg_InteractiveIniEdit, %sFile%
+		}
+
+		return sFile
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+}
+
+class CIntroDlg
+{
+	__New()
+	{
+		global
+
+		GUI, IntroDlg_:New, Resize MinSize hwndg_hIntroDlg
+		GUI, Color, 202020
+		GUI, Font, c5C5CF0 s17 wbold, Arial
+		GUI, Add, Text, x0 y0 w595 h400 Center vg_vPage1
+		GUI, Add, Text, x450 y0 w595 h400 Center vg_vPage2
+
+		GUI, Font, s8, Default
+		GUI, Add, Button, x%g_iMSDNStdBtnSpacing% y400 w%g_iMSDNStdBtnW% h%g_iMSDNStdBtnH% vg_vPrev gIntroDlg_Prev Center Disabled, &Previous
+		GUI, Add, Button, % "x" 590-(g_iMSDNStdBtnW*2)-g_iMSDNStdBtnSpacing " yp wp hp vg_vSkip gIntroDlg_Next Center", &Skip
+		GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp Center vg_vNext gIntroDlg_Next Disabled", &Next
+		GUI, Add, Button, xp yp wp hp Center vg_vExit gIntroDlg_GUIClose Hidden Disabled, E&xit
+
+		this.m_iPage := 0
+		this.m_vTutorialBook := class_EasyIni("", this.GetTutorialIni())
+		this.m_iTotalPages := this.m_vTutorialBook.MaxIndex()
+
+		this.Next()
+
+		return this
+
+		IntroDlg_Prev:
+		{
+			g_vDlgs.IntroDlg.Prev()
+			return
+		}
+
+		IntroDlg_Next:
+		{
+			g_vDlgs.IntroDlg.Next()
+			return
+		}
+
+		IntroDlg_GUISize:
+		{
+			Anchor2("IntroDlg_:g_vPage1", "xwyh", "0, 1, 0, 1")
+			Anchor2("IntroDlg_:g_vPage2", "xwyh", "1, 1, 0, 1")
+			Anchor2("IntroDlg_:g_vPrev", "xwyh", "0, 0, 1, 0")
+			Anchor2("IntroDlg_:g_vSkip", "xwyh", "1, 0, 1, 0")
+			Anchor2("IntroDlg_:g_vNext", "xwyh", "1, 0, 1, 0")
+			Anchor2("IntroDlg_:g_vExit", "xwyh", "1, 0, 1, 0")
+			return
+		}
+
+		IntroDlg_GUIEscape:
+		IntroDlg_GUIClose:
+		{
+			g_vDlgs.IntroDlg.GUIClose()
+			return
+		}
+	}
+
+	__Get(aName)
+	{
+		global
+
+		if (aName = "m_hDlg")
+			return g_hIntroDlg
+
+		return
+	}
+
+	ShowDlg(hOwner, ByRef rvLeap)
+	{
+		SuspendThreads("On")
+
+		this.m_hOwner := hOwner
+		this.m_rvLeap := rvLeap
+
+		; Intercept callback
+		this.m_hOldCallback := this.m_rvLeap.m_hMsgHandlerFunc
+		this.m_rvLeap.m_vProcessor.m_bGestureSuggestions := false
+		this.m_rvLeap.m_hMsgHandlerFunc := Func("IntroDlg_LeapMsgHandler")
+
+		GUI, IntroDlg_:Default
+		GUI, +Owner%hOwner%
+		WinSet, Disable,, ahk_id %hOwner%
+
+		GUI, Show, x-32768 w595 h430, Welcome to Windows Master
+		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+
+		return
+	}
+
+	PageProc()
+	{
+		bNeedsHKToAdvance := (this.m_vTutorialBook[this.m_iPage].Hotkey != A_Blank)
+		bNeedsGestureToAdvance := (this.m_vTutorialBook[this.m_iPage].Gesture != A_Blank)
+
+		; If we are requiring an action to advance, give the option to skip this page.
+		GUIControl, % (bNeedsHKToAdvance || bNeedsGestureToAdvance || this.m_iPage >= this.m_iTotalPages ? "Disable" : "Enable"), g_vNext
+		GUIControl, % (bNeedsHKToAdvance || bNeedsGestureToAdvance ? "Show" : "Hide"), g_vSkip
+		; Only allow Previous/Next when there is a previous or next page.
+		GUIControl, % (this.m_iPage > 1 ? "Enable" : "Disable"), g_vPrev
+
+		if (bNeedsHKToAdvance)
+		{
+			sHK := this.m_vTutorialBook[this.m_iPage].Hotkey
+			Hotkey, IfWinActive, % "ahk_id" this.m_hDlg
+				Hotkey, %sHK%, ImportDlg_HKProc
+
+			this.m_bWaitingOnHK := true
+		}
+		else if (bNeedsGestureToAdvance)
+		{
+			this.m_sNeededGesture := this.m_vTutorialBook[this.m_iPage].Gesture
+			this.m_bWaitingOnGesture := true
+		}
+
+		GUIControl,, g_vPrev, % "&Previous (" this.m_iPage - 1 ")"
+		if (this.m_iPage == this.m_iTotalPages)
+		{
+			GUIControl, Disable, g_vNext
+			GUIControl, Hide, g_vNext
+			GUIControl, Enable, g_vExit
+			GUIControl, Show, g_vExit
+		}
+		else GUIControl,, g_vNext, % "&Next (" this.m_iPage + 1 ")"
+
+		return
+	}
+
+	HKProc(sHK)
+	{
+		GUI, IntroDlg_:Default
+
+		if (this.m_bWaitingOnHK)
+		{
+			this.Next()
+			this.m_bWaitingOnHK := false
+		}
+		else Send ${Blind}%A_ThisHotkey% ; Forward this hotkey as best we can.
+
+		return
+
+		ImportDlg_HKProc:
+		{
+			global g_vDlgs ; when label is contained in function, you must declare globals.
+			g_vDlgs.IntroDlg.HKProc(A_ThisHotkey)
+			return
+		}
+	}
+
+	Prev()
+	{
+		if (this.m_iPage <= 1)
+			return
+
+		this.m_bWaitingOnGesture := false
+		this.m_sNeededGesture := ""
+
+		; Set page 2 to the previous page, and then stealthily move it to the left of page 1.
+		GUIControlGet, iPage1_, Pos, g_vPage1
+		this.SetPageText(this.m_vTutorialBook[this.m_iPage - 1].Text, 2)
+		GUIControl, Move, g_vPage2, % "X-" iPage1_W
+
+		this.TurnPage(false)
+		return
+	}
+
+	Next()
+	{
+		if (this.m_iPage > this.m_iTotalPages)
+			return
+
+		this.m_bWaitingOnGesture := false
+		this.m_sNeededGesture := ""
+
+		this.TurnPage(true)
+		return
+	}
+
+	TurnPage(bFwd)
+	{
+		GUIControlGet, iPage1_, Pos, g_vPage1
+		GUIControlGet, iPage2_, Pos, g_vPage2
+
+		iLoop := 100
+		iFactor := iPage1_W/iLoop
+		if (bFwd)
+			iFactor *= -1
+
+		Loop %iLoop%
+		{
+			GUIControl, Move, g_vPage1, % "X" iPage1_X+(iFactor*A_Index)
+			GUIControl, Move, g_vPage2, % "X" iPage2_X+(iFactor*A_Index)
+		}
+		GUIControl, Move, g_vPage2, X0 ; Ensure we are set exactly in the right spot.
+
+		; The previous page scrolled into view on Page2; Set Page1 to current page,
+		; overlap Page1 on Page2, move Page2 to the right of Page1,
+		; and then set the text on Page2.
+		if (bFwd)
+			this.m_iPage++ ; Increment page.
+		else this.m_iPage-- ; Decrement page.
+
+		this.SetPageText(this.m_vTutorialBook[this.m_iPage].Text, 1)
+		GUIControl, Move, g_vPage1, X0
+		GUIControl, Move, g_vPage2, % "X" iPage1_W
+		this.SetPageText(this.m_vTutorialBook[this.m_iPage + 1].Text, 2)
+
+		this.PageProc()
+		return
+	}
+
+	SetPageText(sPage, iPage)
+	{
+		StringReplace, sPage, sPage, ``n, `n, All
+		GUIControl,, g_vPage%iPage%, %sPage%
+		return
+	}
+
+	LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
+	{
+		GUI, IntroDlg_:Default
+		sGesture := st_glue(rasGestures, ", ")
+
+		if (rLeapData.Header.DataType = "Post")
+		{
+			; Give preference to Swipe Right since that navigates backward.
+			if (sGesture = "Swipe Right")
+				this.Prev()
+			else if (this.m_bWaitingOnGesture && (this.m_sNeededGesture = sGesture || this.m_sNeededGesture = "Any"))
+			{
+				this.m_bWaitingOnGesture := false
+				this.m_sNeededGesture := ""
+				this.Next()
+			}
+			else if (sGesture = "Swipe Left")
+			{
+				GUIControlGet, bEnabled, Enabled, g_vNext
+				if (bEnabled)
+					this.Next()
+			}
+		}
+
+		return
+	}
+
+	GetTutorialIni()
+	{
+		; Sections are page numbers
+		return "
+			(LTrim
+
+				[1]
+				Text=Thank you for purchasing Windows Master.``n``nPlease take a few minutes to get familiarized with the environment.
+				[2]
+				Text=Let's start with something basic.``n``nHotkeys are an important component in Windows Master.``n``nPerform the hotkey, ""Ctrl + Alt + C"" by holding down the ""Ctrl"" and ""Alt"" keys and then pressing the ""C"" key.
+				Hotkey=^!C
+				[3]
+				Text=Let's cover another basic item, namely gestures. These are just as important hotkeys, so let's get familiar with gestures.``n``nPlace your hand above the Leap Motion Controller and make both circular and swiping motions. As you do this, notice the text that is outputted at the top of your screen.``n``nThis text will persist until you retract your hand. Retract your hand now to confirm the gesture.`n`nYou sucessfully performed a gesture!
+				Gesture=Any
+				[4]
+				Text=Now try a simple gesture.``n``nPerform the gesture, ""Swipe Left"" by placing your hand above the Leap Motion Controller and then swiping your hand to the left. Remember that you must retract your hand to confirm the gesture.``n``nNote: if you are accidentally performing other gestures, remove your hand and try performing the gesture more slowly.
+				Gesture=Swipe Left
+				[5]
+				Text=Excellent! You can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chans.
+				[6]
+				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures over the Leap Motion Controller without retracting your hand. As you build the chain, it will be outputted on the top of the screen in a format such as , ""Swipe Left, Swipe Right."" End the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
+				Gesture=Swipe Left, Swipe Right
+				[7]
+				Text=You have completed the tutorial! You are well on your way to becoming a master of Windows.``n``nRemember: you can access this tutorial at any time from the Windows Master main menu.``n``nThe path is Help>Start Tutorial.
+
+			)"
+	}
+
+	GUIClose()
+	{
+		WinSet, Enable,, % "ahk_id" this.m_hOwner
+		GUI, IntroDlg_:Hide
+
+		; Restore callback.
+		this.m_rvLeap.m_hMsgHandlerFunc := this.m_hOldCallback
+		this.m_rvLeap.m_vProcessor.m_bGestureSuggestions := true
+
+		; Resume threads.
+		SuspendThreads("Off")
+
+		; Reset page
+		this.m_iPage := 0
+		this.Next()
+
+		; We're on page 1; show the next button is case it was hidden,
+		; and also hide and disable the exit button.
+		GUIControl, Show, g_vNext
+		GUIControl, Disable, g_vExit
+		GUIControl, Hide, g_vExit
+
+		return
+	}
+}
+
+IntroDlg_LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
+{
+	global g_vDlgs
+	return g_vDlgs.IntroDlg.LeapMsgHandler(sMsg, rLeapData, rasGestures, rsOutput)
 }

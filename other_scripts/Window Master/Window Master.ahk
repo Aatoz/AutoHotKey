@@ -7,7 +7,6 @@ Credits (See ReadMe.txt)
 For Me: Current LOC written by me (Including AutoLeap.exe): 10,098
 	TODO:
 		Virtual desktops -- http://www.autohotkey.com/board/topic/50154-virtual-desktops-extras-for-win7/
-		Detect and refresh monitor info whenever the display configuration changes.
 */
 
 #SingleInstance Force
@@ -38,17 +37,21 @@ FileInstall, images\Save.ico, images\Save.ico, 1
 FileInstall, images\Refresh.ico, images\Refresh.ico, 1
 FileInstall, images\Resize.ico, images\Resize.ico, 1
 FileInstall, images\Window.ico, images\Window.ico, 1
+FileInstall, images\Revert.ico, images\Revert.ico, 1
 FileInstall, images\Green.ico, images\Green.ico, 1
 FileInstall, images\Info.ico, images\Info.ico, 1
 FileInstall, images\Close.ico, images\Close.ico, 1
 FileInstall, images\Red.ico, images\Red.ico, 1
 FileInstall, images\Open.ico, images\Open.ico, 1
+FileInstall, images\Import.ico, images\Import.ico, 1
+FileInstall, images\Export.ico, images\Export.ico, 1
 FileInstall, images\Pause.ico, images\Pause.ico, 1
 FileInstall, images\Play.ico, images\Play.ico, 1
 FileInstall, images\Default Flyout Menu 1.jpg, images\Default Flyout Menu 1.jpg, 1
 FileInstall, images\Default Flyout Menu 2.jpg, images\Default Flyout Menu 2.jpg, 1
 FileInstall, images\Default Flyout Menu 3.jpg, images\Default Flyout Menu 3.jpg, 1
 FileInstall, images\Main.ico, images\Main.ico, 1
+FileInstall, images\Main_Disconnected.ico, images\Main_Disconnected.ico, 1
 FileInstall, images\Splash.png, images\Splash.png, 1
 ; License and other help files.
 FileInstall, version, version, 1
@@ -58,13 +61,14 @@ FileInstall, ReadMe.txt, ReadMe.txt, 1
 FileInstall, msvcr100.dll, msvcr100.dll, 1
 
 ; Now that the image has been installed, start the splash screen.
-SplashImage, images\Splash.png, B W832 H624 ZW832 ZH624
+Splash()
 
 ; Tray icon
 Menu, TRAY, Icon, images\Main.ico,, 1
 
 Menu, TRAY, NoStandard
 Menu, TRAY, MainWindow ; For compiled scripts
+Menu, Tray, Tip, Windows Master
 Menu, TRAY, Add, &Open, LaunchMainDlg
 Menu, TRAY, Icon, &Open, images\Open.ico,, 16
 Menu, TRAY, Default, &Open
@@ -87,8 +91,7 @@ SetStartsWithWindowsTrayIcon()
 Menu, TRAY, Add, E&xit, Window_Master_Exit
 Menu, TRAY, Icon, E&xit, AutoLeap\Exit.ico,, 16
 
-; Dismiss Splash screen.
-SplashImage, Off
+SplashOff()
 gosub LaunchMainDlg
 
 ;	Includes
@@ -97,7 +100,7 @@ gosub LaunchMainDlg
 #Include %A_ScriptDir%\CLeapMenu.ahk
 #Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
 
-return ; End Autoexecute
+return ; End autoexecute
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
@@ -117,8 +120,6 @@ InitEverything()
 	InitAllInis()
 	InitMonInfo()
 
-	VolumeOSD_Init()
-
 	; Initialize hotkeys. Do this before MakeMainDlg so that the hotkey assigned to launching the dialog will appear responsive
 	InitThreads()
 
@@ -126,6 +127,9 @@ InitEverything()
 
 	OnMessage(WM_DISPLAYCHANGE:=126, "Window_Master_OnDisplayChange")
 	OnMessage(WM_SETTINGCHANGE:=26, "Window_Master_OnSettingChange")
+
+	; NOTE: If you place this call an earlier, than initial creation fails in Win8, for some strange reason.
+	VolumeOSD_Init()
 
 	return
 }
@@ -175,7 +179,7 @@ InitGlobals()
 	; For launching upon startup.
 	g_sPathToShortcut := A_AppData "\Microsoft\Windows\Start Menu\Programs\Startup\" A_ScriptName ".lnk"
 
-	; Master object for Window Master dialogs.
+	; Master object for Windows Master dialogs.
 	g_vDlgs := new WM_Dlg()
 
 	; Leap
@@ -202,6 +206,7 @@ InitLeap()
 	if (InStr(sKey, "Leap Motion"))
 	{
 		global g_vLeap := new AutoLeap("LeapMsgHandler")
+		global g_bLeapIsTracking := true
 
 		; Merge Gestures.ini with our defaults.
 		g_vLeap.MergeGesturesIni(GetDefaultLeapGesturesIni())
@@ -215,6 +220,9 @@ InitLeap()
 
 			; In case ini data has been modified externally.
 			RemoveUnreferencedGestures()
+
+			Hotkey, IfWinActive
+				Hotkey, #Esc, WM_AbortGesture
 		}
 	}
 
@@ -232,7 +240,7 @@ InitAllInis()
 	global
 
 	; For custom hotkeys and sequences
-	g_SequencesIni := class_EasyIni(A_ScriptDir "\sequences.ini")
+	g_SequencesIni := class_EasyIni(A_ScriptDir "\Sequences.ini")
 	g_vDefaultSequencesIni := class_EasyIni("", GetDefaultSequencesIni())
 	; Note: Cannot merge sequences ini since secs are simply integers, and users may add and remove as they please.
 	if (!FileExist(g_SequencesIni.GetFileName()))
@@ -248,7 +256,7 @@ InitAllInis()
 	; Given the delicate relationship between labels and hotkeys, this requires some special handling.
 	local vDefaultHotkeysIni := class_EasyIni("", GetDefaultHotkeysIni())
 	g_vDefaultHotkeysIni := class_EasyIni("", GetDefaultHotkeysIni())
-	g_HotkeysIni := class_EasyIni(A_ScriptDir "\hotkeys.ini")
+	g_HotkeysIni := class_EasyIni(A_ScriptDir "\Hotkeys.ini")
 	; To allow removal of old settings and additions of new settings, merge vDefaultHotkeysIni and g_HotkeysIni.
 	; bRemoveNonMatching: If true, removes sections and keys that do not exist in both inis.
 	; bOverwriteMatching: If true, any key that exists in both objects will use the val from g_HotkeysIni.
@@ -261,22 +269,31 @@ InitAllInis()
 	; we will load this options into their appropriate ListView
 	g_HotkeysIni.Save()
 	; "Precision" hotkeys
-	;~ g_PrecisionIni := class_EasyIni(A_ScriptDir "\precision.ini")
+	;~ g_PrecisionIni := class_EasyIni(A_ScriptDir "\Precision.ini")
 
-	; Leap actions. Handling is quite similar to g_HotkeysIni.
-	local vDefaultLeapActionsIni := class_EasyIni("", GetDefaultLeapActionsIni())
-	g_LeapActionsIni := class_EasyIni(A_ScriptDir "\leap actions.ini")
-	g_vDefaultLeapActionsIni := class_EasyIni("", GetDefaultLeapActionsIni())
-	local vExceptionsForLeapActionsIni := class_EasyIni("", GetExceptionsForLeapActionsIni())
+	; Interactive actions handling is quite similar to g_HotkeysIni.
+	local vDefaultInteractiveIni := class_EasyIni("", GetDefaultInteractiveIni())
+	g_InteractiveIni := class_EasyIni(A_ScriptDir "\Interactive.ini")
+	g_vDefaultInteractiveIni := class_EasyIni("", GetDefaultInteractiveIni())
+	local vExceptionsForInteractiveIni := class_EasyIni("", GetExceptionsForInteractiveIni())
 	; Merge in similar fashion as g_HotkeysIni.
-	vDefaultLeapActionsIni.EasyIni_ReservedFor_m_sFile := g_LeapActionsIni.GetFileName()
-	vDefaultLeapActionsIni.Merge(g_LeapActionsIni, true, true, vExceptionsForLeapActionsIni)
-	g_LeapActionsIni := vDefaultLeapActionsIni
-	g_LeapActionsIni.Save() ; This effectively updates the local ini with new, internal settings from GetDefaultLeapActionsIni()
+	vDefaultInteractiveIni.EasyIni_ReservedFor_m_sFile := g_InteractiveIni.GetFileName()
+	vDefaultInteractiveIni.Merge(g_InteractiveIni, true, true, vExceptionsForInteractiveIni)
+	g_InteractiveIni := vDefaultInteractiveIni
+	g_InteractiveIni.Save() ; This effectively updates the local ini with new, internal settings from GetDefaultInteractiveIni()
 
-	;~ g_sInisForParsing := "g_SequencesIni|g_PrecisionIni|g_HotkeysIni|g_LeapActionsIni"
-	g_sInisForParsing := "g_SequencesIni|g_HotkeysIni|g_LeapActionsIni"
-	g_sDefaultInis := "g_vDefaultSequencesIni|g_vDefaultHotkeysIni|g_vDefaultLeapActionsIni"
+	;~ g_sInisForParsing := "g_SequencesIni|g_PrecisionIni|g_HotkeysIni|g_InteractiveIni"
+	g_sInisForParsing := "g_SequencesIni|g_HotkeysIni|g_InteractiveIni"
+	g_sDefaultInis := "g_vDefaultSequencesIni|g_vDefaultHotkeysIni|g_vDefaultInteractiveIni"
+
+	g_vProfilesIni := class_EasyIni("$Profiles.ini")
+
+	; If this is a first time user, set up the ini.
+	if (!g_vProfilesIni.HasKey(A_UserName))
+	{
+		g_vProfilesIni.AddSection(A_UserName, "FirstTime", true)
+		g_vProfilesIni.Save()
+	}
 
 	return
 }
@@ -548,8 +565,14 @@ LaunchMainDlg:
 		GUI Window_Master_: Show, w890 h494
 		g_bFirstLaunch := false
 
-		; TODO: For first launch ever, MsgBox which directs to help video + docs.
-		
+		if (g_vProfilesIni[A_UserName].FirstTime)
+		{
+			g_vDlgs.IntroDlg.ShowDlg(g_hWindowMaster, g_vLeap)
+			g_vProfilesIni[A_UserName].FirstTime := false
+
+			; This is an internal setting, so save it now.
+			g_vProfilesIni.Save()
+		}
 	}
 	else GUI Window_Master_: Show
 
@@ -562,16 +585,28 @@ MakeMainDlg()
 	global
 
 	g_bFirstLaunch := true
-	GUI Window_Master_: New, hwndg_hWindowMaster MinSize Resize, Window Master
+	GUI Window_Master_: New, hwndg_hWindowMaster MinSize Resize, Windows Master
 
-	Menu, WM_Menu_Import, Add, Import WinSplit &Settings`tCtrl + W, ConvertWinSplitXMLSettingsToInis
-	Menu, WM_ImportMenu, Add, I&mport, :WM_Menu_Import
-	Menu, WM_ImportMenu, Icon, I&mport, AutoLeap\Download.ico,, 16
+	Menu, WM_Menu_Import, Add, &Windows Master Settings`tCtrl + M, Window_Master_Import
+	Menu, WM_Menu_Import, Icon, &Windows Master Settings`tCtrl + M, images\Main.ico
+	Menu, WM_Menu_Import, Add, WinSplit &Settings`tCtrl + N, ConvertWinSplitXMLSettingsToInis
+	Menu, WM_ImportMenu, Add, &Import, :WM_Menu_Import
+	Menu, WM_ImportMenu, Icon, &Import, images\Import.ico,, 16
+	Menu, WM_ImportMenu, Add, &Export, WM_Menu_Export
+	Menu, WM_ImportMenu, Icon, &Export, images\Export.ico,, 16
 	Menu, WM_ImportMenu, Add, E&xit, Window_Master_GUIClose
 	Menu, WM_ImportMenu, Icon, E&xit, AutoLeap\Exit.ico,, 16
 
 	Menu, WM_Menu_Settings, Add, &Revert These Settings to Defaults`tCtrl + R, Window_Master_RevertSettingsInTab
 	Menu, WM_Menu_Settings, Icon, &Revert These Settings to Defaults`tCtrl + R, images\Revert.ico,, 16
+	Menu, WM_Menu_Settings, Add, &Revert Gestures to Defaults`tCtrl + G, Window_Master_RevertGesturesToDefaults
+	Menu, WM_Menu_Settings, Icon, &Revert Gestures to Defaults`tCtrl + G, images\Revert.ico,, 16
+
+	if (g_bIsDev)
+	{
+		Menu, WM_Menu_Settings, Add, &Quick Menu`tCtrl + Q, QuickMenu_EditSettings
+		Menu, WM_Menu_Settings, Icon, &Quick Menu`tCtrl + Q, images\Menu Settings.ico,, 16
+	}
 
 	if (g_bHasLeap)
 	{
@@ -579,16 +614,12 @@ MakeMainDlg()
 		Menu, WM_Menu_Settings, Icon,% "&" g_vLeap.m_sLeapMC " Settings`tCtrl + L", AutoLeap\Leap.ico,, 16
 	}
 
-	if (g_bIsDev)
-	{
-		Menu, WM_Menu_Settings, Add, &Quick Menu`tCtrl + M, QuickMenu_EditSettings
-		Menu, WM_Menu_Settings, Icon, &Quick Menu`tCtrl + M, images\Menu Settings.ico,, 16
-	}
-
-	Menu, WM_Menu_Help, Add, &Using Window Master`tF1, Window_Master_Help
-	Menu, WM_Menu_Help, Icon, &Using Window Master`tF1, images\Info.ico,, 16
+	Menu, WM_Menu_Help, Add, &Using Windows Master`tF1, Window_Master_Help
+	Menu, WM_Menu_Help, Icon, &Using Windows Master`tF1, images\Info.ico,, 16
 	Menu, WM_Menu_Help, Add, &About, Window_Master_About
 	Menu, WM_Menu_Help, Icon, &About, AutoLeap\Info.ico,, 16
+	Menu, WM_Menu_Help, Add, Start T&utorial`tCtrl + U, Window_Master_Tutorial
+	Menu, WM_Menu_Help, Icon, Start T&utorial`tCtrl + U, AutoLeap\Info.ico,, 16
 
 	Menu, WM_MainMenu, Add, &File, :WM_ImportMenu
 	Menu, WM_MainMenu, Add, Se&ttings, :WM_Menu_Settings
@@ -645,7 +676,7 @@ MakeMainDlg()
 	if (g_bHasLeap)
 		IL_Add(hIL, "AutoLeap\Leap.ico", 1)
 
-	g_vWMMainTab := new GuiTabEx(hWMTab)
+	g_vWMMainTab := new GUITabEx(hWMTab)
 	g_vWMMainTab.SetPadding(20, 3)
 	g_vWMMainTab.SetImageList(HIL)
 	Loop %iNumIcons%
@@ -692,7 +723,7 @@ AddAllControls()
 	ILButton(g_hAddHKForSequence, "images\Add.ico", 32, 32, 4)
 	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vvDelHK hwndg_hDeleteHK gDeleteHK
 	ILButton(g_hDeleteHK, "images\Delete.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gDefaultLVItem
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp vg_vDefaultHK hwndg_hDefaultHK gRevertItemInLV
 	ILButton(g_hDefaultHK, "images\Revert.ico", 32, 32, 4)
 
 	iTmpX += iTab1LVW+g_iMSDNStdBtnSpacing
@@ -703,7 +734,7 @@ AddAllControls()
 	ILButton(g_hAddSeq, "images\Add.ico", 32, 32, 4)
 	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDelSeq vvDelSeq gDeleteSeq
 	ILButton(g_hDelSeq, "images\Delete.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDefaultSeq vg_vDefaultSeq gDefaultLVItem
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hDefaultSeq vg_vDefaultSeq gRevertItemInLV
 	ILButton(g_hDefaultSeq, "images\Revert.ico", 32, 32, 4)
 
 	InitSequenceControls()
@@ -743,7 +774,7 @@ AddAllControls()
 
 	GUI, Add, Button, xp yp+357 w%g_iMyStdImgBtnRect% h%g_iMyStdImgBtnRect% hwndg_hGenericLVEditBtn vvGenericLVEdit gGenericLVModify Hidden
 	ILButton(g_hGenericLVEditBtn, "images\Edit.ico", 32, 32, 4)
-	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gDefaultLVItem Hidden
+	GUI, Add, Button, xp+%iStdXSpacing% yp wp hp hwndg_hGenericLVDefaultBtn vg_vGenericLVDefaultBtn gRevertItemInLV Hidden
 	ILButton(g_hGenericLVDefaultBtn, "images\Revert.ico", 32, 32, 4)
 
 	GUI, Font, s12 c83B8G7
@@ -1092,15 +1123,15 @@ GenericLVModify:
 {
 	LV_SetDefault("Window_Master_", "vGenericLV")
 
-	if (GetCurIniForSave() = "g_HotkeysIni" || GetCurIniForSave() = "g_LeapActionsIni")
+	if (GetCurIniForSave() = "g_HotkeysIni" || GetCurIniForSave() = "g_InteractiveIni")
 	{
 		sHK := LV_GetSelText(2)
 
 		if (LeapTabIsActive())
 		{
 			sAppendToTitle := LV_GetSelText()
-			sGestureID := g_LeapActionsIni[LV_GetSelText()].GestureName
-			g_vDlgs.ShowHKDlg_ForLeap(g_hWindowMaster, sHK, sGestureID, sAppendToTitle)
+			sGestureID := g_InteractiveIni[LV_GetSelText()].GestureName
+			g_vDlgs.ShowHKDlg_ForInteractive(g_hWindowMaster, sHK, sGestureID, sAppendToTitle)
 		}
 		else
 		{
@@ -1138,7 +1169,7 @@ GenericLVProc:
 	sHelpDesc := %sIni%[LV_GetSelText()].HelpDesc
 	GUIControl,, vGenericLVHelpTxt, %sHelpDesc%
 
-	if (A_GuiEvent = "DoubleClick" || A_EventInfo == 113) ; 113 = F2
+	if (A_GUIEvent = "DoubleClick" || A_EventInfo == 113) ; 113 = F2
 	{
 		gosub GenericLVModify
 		return
@@ -1218,15 +1249,15 @@ GenericLV_ModifyHK(sHK, sGestureID="", bMustHaveHotkey=true)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: GenericLV_ModifyLeap
+	Function: GenericLV_ModifyInteractive
 		Purpose: To modify items in the GenericLV under the Leap tab.
 	Parameters
 		sHK: Actually can be blank, but paramters are not reversed due to the generic (and rightly so) code in class HKDlg.
 		sGestureID
 */
-GenericLV_ModifyLeap(sHK, sGestureID)
+GenericLV_ModifyInteractive(sHK, sGestureID)
 {
-	global g_LeapActionsIni, g_bShouldSave
+	global g_InteractiveIni, g_bShouldSave
 	LV_SetDefault("Window_Master_", "vGenericLV")
 
 	sec := LV_GetSelText()
@@ -1239,12 +1270,12 @@ GenericLV_ModifyLeap(sHK, sGestureID)
 			return false
 		}
 
-		g_LeapActionsIni[sec].Hotkey := sHK
+		g_InteractiveIni[sec].Hotkey := sHK
 	}
-	else g_LeapActionsIni[sec].Hotkey := "" ; Blank-out the hotkey.
+	else g_InteractiveIni[sec].Hotkey := "" ; Blank-out the hotkey.
 
 	; Gesture
-	if (!SetGestureIDInIni(g_LeapActionsIni, sec, sGestureID, sError))
+	if (!SetGestureIDInIni(g_InteractiveIni, sec, sGestureID, sError))
 	{
 		Msgbox(sError, 2)
 		return false
@@ -1267,7 +1298,7 @@ GenericLV_ModifyLeap(sHK, sGestureID)
 */
 GenericLV_Default()
 {
-	global g_LeapActionsIni, g_vDefaultLeapActionsIni, g_HotkeysIni, g_vDefaultHotkeysIni, g_bShouldSave
+	global g_InteractiveIni, g_vDefaultInteractiveIni, g_HotkeysIni, g_vDefaultHotkeysIni, g_bShouldSave
 
 	LV_SetDefault("Window_Master_", "vGenericLV")
 	iRow := LV_GetSel()
@@ -1277,13 +1308,13 @@ GenericLV_Default()
 
 	if (LeapTabIsActive())
 	{
-		g_LeapActionsIni[sec] := ObjClone(g_vDefaultLeapActionsIni[sec])
-		LV_Modify(iRow, "", sec, g_vDefaultLeapActionsIni[sec].Hotkey, g_vDefaultLeapActionsIni[sec].GestureName)
+		g_InteractiveIni[sec] := ObjClone(g_vDefaultInteractiveIni[sec])
+		LV_Modify(iRow, GetCheckState(g_InteractiveIni[sec].Activate), sec, g_InteractiveIni[sec].Hotkey, g_InteractiveIni[sec].GestureName)
 	}
 	else
 	{
 		g_HotkeysIni[sec] := ObjClone(g_vDefaultHotkeysIni[sec])
-		LV_Modify(iRow, "", sec, g_vDefaultHotkeysIni[sec].Hotkey, g_vDefaultHotkeysIni[sec].GestureName)
+		LV_Modify(iRow, GetCheckState(g_HotkeysIni[sec].Activate), sec, g_HotkeysIni[sec].Hotkey, g_HotkeysIni[sec].GestureName)
 	}
 
 	g_bShouldSave := true
@@ -1305,7 +1336,7 @@ GenericLV_ValidateHK(sHK, ByRef rsError)
 	rsError := ""
 
 	LV_SetDefault("Window_Master_", "vGenericLV")
-	return core_ValidateHK(sHK, 2, true, "Generic", rsError)
+	return core_ValidateHK(sHK, 2, true, rsError)
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1424,7 +1455,7 @@ LoadPrecisionOpts()
 */
 LoadLeapOpts()
 {
-	global g_LeapActionsIni
+	global g_InteractiveIni
 
 	GenericLV_ClearAll()
 	LV_ModifyCol(1, "", "Action")
@@ -1432,7 +1463,7 @@ LoadLeapOpts()
 	LV_InsertCol(3, "", "Gesture")
 	SizeLV("vGenericLV")
 
-	for sec, aData in g_LeapActionsIni
+	for sec, aData in g_InteractiveIni
 	{
 		if (InStr(sec, "Internal_"))
 			continue
@@ -1600,15 +1631,15 @@ DeleteSeq:
 	DeleteSequence()
 	return
 }
-DefaultLVItem:
+RevertItemInLV:
 {
-	if (A_GuiControl = "g_vDefaultHK")
-	{
-		DefaultHK()
-	}
-	else if (A_GuiControl = "g_vDefaultSeq")
+	if (A_GUIControl = "g_vDefaultSeq")
 	{
 		DefaultSequence()
+	}
+	else if (A_GUIControl = "g_vDefaultHK")
+	{
+		DefaultHK()
 	}
 	else ; g_vDefaultGeneric
 	{
@@ -1622,7 +1653,7 @@ Window_Master_GUISize:
 	; This fixes a strang resizing bug, likely somewhere in my own code instead of in Anchor2(),
 	; where the GUI height is 0 and the width is 890. This happens upon initialization,
 	; so all anchoring going forward is screwed up using those values.
-	if (A_GuiWidth < 890 && A_GuiHeight < 494)
+	if (A_GUIWidth < 890 && A_GUIHeight < 494)
 		return
 
 	gosub Sequence ; This places the sequence mini window accordingly
@@ -1686,10 +1717,10 @@ Window_Master_GUIClose:
 {
 	; If the user, Canceled, Escaped, Alt+F4'd, etc.
 	if (g_bShouldSave
-		&& (A_GuiControl = "&Cancel"
-		|| A_GuiControl == A_Blank))
+		&& (A_GUIControl = "&Cancel"
+		|| A_GUIControl == A_Blank))
 	{
-		MsgBox, 8195, Close Window Master, Save your settings before closing?
+		MsgBox, 8228, Close Windows Master, Save your settings before closing?
 
 		IfMsgBox Yes
 		g_bShouldSave := true
@@ -1755,6 +1786,9 @@ Window_Master_CloseProc:
 		InitThreads()
 
 		g_bShouldSave := false
+
+		; Profiles will not be changed often, but they will be changed.
+		g_vProfilesIni.Save()
 	}
 	else
 	{
@@ -1932,14 +1966,48 @@ GetSequenceValsForEditDlg(ByRef riX, ByRef riY, ByRef riW, ByRef riH, vSeq="")
 	return
 }
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Label: To launch the Window Master help file.
-		Purpose:
+	Function: Window_Master_Import
+		Purpose: To import existing Windows Master settings
+	Parameters
+		
+*/
+Window_Master_Import:
+{
+	g_vDlgs.ImportDlg.ShowDlg(g_hWindowMaster)
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: WM_Menu_Export
+		Purpose: See function
+	Parameters
+		
+*/
+WM_Menu_Export:
+{
+	WM_Menu_Export()
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Label: Window_Master_Help
+		Purpose: To launch the Windows Master help file.
 */
 Window_Master_Help:
 {
-	Run, http://aatoz.github.io/Windows_Master/About.html
+	MsgBox, 8240,, This links to an external website`; web content is not rated or monitored.
+
+	IfMsgBox OK
+		Run, http://aatoz.github.io/Windows_Master/About.html
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1957,6 +2025,19 @@ Window_Master_About:
 	LeapDlgs.ShowInfoDlg(sFile, g_hWindowMaster, 850)
 	sFile :=
 
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Window_Master_Tutorial
+		Purpose: To start the Windows Master tutorial!!!
+*/
+Window_Master_Tutorial:
+{
+	g_vDlgs.IntroDlg.ShowDlg(g_hWindowMaster, g_vLeap)
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2053,7 +2134,7 @@ XMLImportDlg_SelectFile(sFileName)
 	if (FileExist(A_ProgramFiles "\WinSplit Revolution"))
 		sFolder := A_ProgramFiles "\WinSplit Revolution"
 
-	FileSelectFile, sFile,, %sFolder%, Navigate to %sFileName% (located in your WinSplit installation directory), *.xml
+	FileSelectFile, sFile, 1, %sFolder%, Navigate to %sFileName% (located in your WinSplit installation directory), *.xml
 	if (sFile)
 	{
 		if (sFileName = "Hotkeys.xml")
@@ -2070,7 +2151,7 @@ XMLImportDlg_SelectFile(sFileName)
 /*
 	Author: Verdlin
 	Function: ConvertWinSplitXMLSettingsToInis
-		Purpose: Import Win-Splits Hotkeys.xml and Layout.xml, and metamorphose these settings into Window Master ini settings
+		Purpose: Import Win-Splits Hotkeys.xml and Layout.xml, and metamorphose these settings into Windows Master ini settings
 	Parameters
 		sHotkeysXML: Path to Hotkeys.xml
 		sLayoutXML: Path to Layout.xml
@@ -2326,7 +2407,7 @@ MergeSequencesInis(vOther, bOverwriteExisting)
 				{
 					aHotkeysTranslated.Insert(sTranslatedHK)
 					sGestureToKeep := aData.Gesture ; Leap Motion is not supported in Win-Split, so we can be safe keeping the gesture for this sequences.
-					g_SequencesIni[sec] := aOtherData ; TODO: Verify that this really does modify g_SequencesIni
+					g_SequencesIni[sec] := aOtherData
 					; Not using error handling because I cannot conceive an error happening here;
 					; also, it would be difficult to recover from any error.
 					g_SequencesIni.AddKey(sec, "GestureName", sGestureToKeep)
@@ -2368,6 +2449,122 @@ IsInLinearArray(a, search, ByRef riNdx="")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function: Windows_Master_ImportSettings
+		Purpose:
+	Parameters
+		
+*/
+Windows_Master_ImportSettings(sSequencesIni, sHotkeysIni, sInteractiveIni, ByRef rsError)
+{
+	global g_SequencesIni, g_HotkeysIni, g_InteractiveIni, g_bShouldSave
+
+	rsError := ""
+
+	if (sSequencesIni)
+	{
+		FileRead, sIni, %sSequencesIni%
+		vSequencesIni := class_EasyIni(g_SequencesIni.GetFileName(), sIni)
+	}
+	if (sHotkeysIni)
+	{
+		FileRead, sIni, %sHotkeysIni%
+		vHotkeysIni := class_EasyIni(g_HotkeysIni.GetFileName(), sIni)
+		sIniParse .= "g_HotkeysIni|"
+	}
+	if (sInteractiveIni)
+	{
+		FileRead, sIni, %sInteractiveIni%
+		vInteractiveIni := class_EasyIni(g_InteractiveIni.GetFileName(), sIni)
+		sIniParse .= "g_InteractiveIni|"
+	}
+	sIniParse := RTrim(sIniParse, "|")
+
+	; Warn about non-existing settings.
+	aErrors := []
+	Loop, Parse, sIniParse, |
+	{
+		vOrigIni := %A_LoopField%
+		sImportedIni := "v" . SubStr(A_LoopField, InStr(A_LoopField, "_")+1)
+		vImportedIni := %sImportedIni%
+
+		; Cannot delete keys while iterating through object, so retrieve them up-front.
+		secs := vImportedIni.GetSections()
+		Loop, Parse, secs, `n
+		{
+			sec := A_LoopField
+
+			if (!vOrigIni.HasKey(sec))
+			{
+				aErrors.Insert("Unknown action:`t" sec)
+				vImportedIni.DeleteSection(sec)
+				continue
+			}
+
+			keys := vImportedIni.GetKeys(sec)
+			Loop, Parse, keys, `n
+			{
+				k := A_LoopField
+
+				if (!vOrigIni[sec].HasKey(k))
+				{
+					aErrors.Insert("Unknown key:`t" k)
+					vImportedIni.DeleteKey(sec, k)
+					continue
+				}
+			}
+		}
+	}
+
+	if (sSequencesIni)
+		g_SequencesIni := g_SequencesIni.Copy(vSequencesIni)
+	if (sHotkeysIni)
+		g_HotkeysIni := g_HotkeysIni.Copy(vHotkeysIni)
+	if (sInteractiveIni)
+		g_InteractiveIni := g_InteractiveIni.Copy(vInteractiveIni)
+
+	rsError := st_glue(aErrors)
+	gosub Window_Master_TabProc
+
+	g_bShouldSave := true
+	return (rsError == A_Blank)
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: WM_Menu_Export
+		Purpose: To export active Windows Master settings
+	Parameters
+		
+*/
+WM_Menu_Export()
+{
+	global
+
+	local sFolder, sFileName, sFullFilePath
+	FileSelectFolder, sFolder, *%A_WorkingDir%, 3, Select output folder for exporting files
+
+	if (sFolder)
+	{
+		Loop, Parse, g_sInisForParsing, |
+		{
+			sFileName := %A_LoopField%.GetOnlyIniFileName()
+			sFullFilePath := sFolder "\" sFileName
+
+			; If selected folder is drive name, then we'll have double forward slashes.
+			StringReplace, sFullFilePath, sFullFilePath, \\, \, All
+			%A_LoopField%.Save(sFullFilePath, true)
+		}
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: Window_Master_RevertSettingsInTab
 		Purpose:
 	Parameters
@@ -2383,19 +2580,19 @@ Window_Master_RevertSettingsInTab()
 {
 	global
 
-	iPrevSel := LV_GetSel()
+	local iPrevSel := LV_GetSel()
 
 	if (SequencingTabIsActive())
-		g_SequencesIni := ObjClone(g_vDefaultSequencesIni)
+		g_SequencesIni.Copy(g_vDefaultSequencesIni)
 	else
 	{
 		LV_SetDefault("Window_Master_", "vGenericLV")
-		local sec, aSecs := []
+		local sec
 		Loop % LV_GetCount()
 		{
 			LV_GetText(sec, A_Index)
 			if (LeapTabIsActive())
-				g_LeapActionsIni[sec] := ObjClone(g_vDefaultLeapActionsIni[sec])
+				g_InteractiveIni[sec] := ObjClone(g_vDefaultInteractiveIni[sec])
 			else g_HotkeysIni[sec] := ObjClone(g_vDefaultHotkeysIni[sec])
 		}
 	}
@@ -2580,7 +2777,7 @@ ModifyPrecisionItem(sNewPlacement, sNewHK, sGestureID="", bMustHaveHotkey=true)
 ValidatePrecisionItem(sHK, bModifyExisting, ByRef rsError="")
 {
 	LV_SetDefault("Window_Master_", "vGenericLV")
-	return core_ValidateHK(sHK, 2, bModifyExisting, "Precision", rsError)
+	return core_ValidateHK(sHK, 2, bModifyExisting, rsError)
 }
 
 AddPrecisionPlacement:
@@ -2731,7 +2928,7 @@ ValidateHK(sHK, bModifyExisting, ByRef rsError="")
 		iHKCol := 2
 	}
 
-	return core_ValidateHK(sHK, iHKCol, bModifyExisting, "Sequencing", rsError)
+	return core_ValidateHK(sHK, iHKCol, bModifyExisting, rsError)
 }
 
 DeleteHK(iHK="")
@@ -2770,13 +2967,12 @@ DefaultHK(iHK="")
 
 	if (iHK == A_Blank)
 		iHK := LV_GetSel()
-	LV_GetText(sHK, iHK)
 
 	; Use default from ini.
 	if (g_vDefaultSequencesIni.HasKey(iHK))
 	{
-		ModifyHKForSequence(g_vDefaultSequencesIni[iHK].Hotkey, g_vDefaultSequencesIni[iHK].GestureName)
 		g_SequencesIni[iHK] := ObjClone(g_vDefaultSequencesIni[iHK])
+		LV_Modify(iHK, GetCheckState(g_SequencesIni[iHK].Activate))
 		LoadSequencesForHK(g_SequencesIni[iHK].Hotkey)
 	}
 
@@ -2792,14 +2988,23 @@ Logic for Left/Right/Either hotkeys outlined below
 
       Hotkey  | Either | Left  |  Right
       ______________________
-      Either    | Yes     | No   |   No
-      Left        | No       | Yes |   Yes
-      Right     | No       | Yes |   Yes
+      Either    | Yes    | No  |   No
+      Left       | No     | Yes |   Yes
+      Right     | No    | Yes  |   Yes
       ______________________
+
+	Author: Verdlin
+	Function: core_ValidateHK
+		Purpose: Cotainer for core logic for validating hotkeys throughout the system.
+	Parameters
+		sHK: Single hotkey to validate
+		iHotkeyCol: Column num of Hotkey in ListView
+		rsOptError="": If validation fails, this var is assigned an explanation.
+
 */
-core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
+core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, ByRef rsOptError="")
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_asTabs
+	global g_SequencesIni, g_HotkeysIni, g_InteractiveIni, g_PrecisionIni
 
 	rsOptError := ""
 
@@ -2821,15 +3026,12 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
 	if (sHK = "FALSE")
 		return false
 
-	sGUI := "HLDlg"
-	if (sFromLV = "Precision")
-		sGUI := "PrecisionDlg"
-	sParse := "g_SequencesIni|g_PrecisionIni"
+	sParse := "g_SequencesIni|g_InteractiveIni|g_PrecisionIni"
 
 	if (SequencingTabIsActive())
 	{
 		sSkipIni := "g_SequencesIni"
-		sParse := "g_PrecisionIni"
+		sParse := "g_InteractiveIni|g_PrecisionIni"
 	}
 	else if (ResizingTabIsActive())
 		sSkipType := "Resizing"
@@ -2838,7 +3040,7 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
 	else if (PrecisionTabIsActive())
 	{
 		sSkipIni := "g_PrecisionIni"
-		sParse := "g_SequencesIni"
+		sParse := "g_SequencesIni|g_InteractiveIni"
 	}
 	else if (OtherActionsTabIsActive())
 		sSkipType := "Settings"
@@ -2894,7 +3096,6 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
 		if (aData.Type = sSkipType)
 			continue
 
-
 		if (sHK = aData.Hotkey)
 		{
 			rsOptError := Validate_Error_Msg({sHK:sHK, sAction:sec})
@@ -2906,21 +3107,22 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
 
 	Loop, Parse, sParse, |
 	{
-		if (A_LoopField = "g_SequencesIni")
-			sAction := "Sequence Hotkey #"
-		else if (A_LoopField = "g_PrecisionIni")
-			sAction := "Precise Placement Hotkey #"
-
 		for sec, aData in %A_LoopField%
 		{
+			if (A_LoopField = "g_SequencesIni")
+				sAction := "Sequence Hotkey #" A_Index
+			else if (A_LoopField = "g_PrecisionIni")
+				sAction := "Precise Placement Hotkey #" A_Index
+			else sAction := sec
+
 			if (sHK = aData.Hotkey)
 			{
-				rsOptError := Validate_Error_Msg({sHK:sHK, sAction:sAction A_Index})
+				rsOptError := Validate_Error_Msg({sHK:sHK, sAction:sAction})
 				return false
 			}
 
 			if (sTranslatedHKToValidate = TranslateHKForHotkeyCmd(aData.Hotkey))
-				aHotkeysToValidate.Insert({sHK:aData.Hotkey, sAction:sAction A_Index})
+				aHotkeysToValidate.Insert({sHK:aData.Hotkey, sAction:sAction})
 		}
 	}
 
@@ -2958,7 +3160,7 @@ core_ValidateHK(sHK, iHotkeyCol, bModifyExisting, sFromLV, ByRef rsOptError="")
 */
 core_ValidateGesture(sGestureID, bFromEdit, ByRef rsError)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_InteractiveIni, g_sInisForParsing
 	rsError:=
 
 	if (sGestureID == A_Blank)
@@ -2982,7 +3184,7 @@ core_ValidateGesture(sGestureID, bFromEdit, ByRef rsError)
 		}
 		else if (LeapTabIsActive())
 		{
-			sSkipIni := "g_LeapActionsIni"
+			sSkipIni := "g_InteractiveIni"
 			sSecToSkip := LV_GetSelText()
 		}
 		else
@@ -3005,6 +3207,8 @@ core_ValidateGesture(sGestureID, bFromEdit, ByRef rsError)
 					sErrorPart := "Sequence Hotkey #" sec
 				else if (A_LoopField = "g_PrecisionIni")
 					sErrorPart := "Precision Hotkey #" sec
+				else if (A_LoopField = "g_InteractiveIni")
+					sErrorPart := "Interactive Hotkey #" sec
 				else
 					sErrorPart := sec
 
@@ -3097,7 +3301,7 @@ Validate_Error_Msg(vHKInfo)
 StartHotkeyThread()
 {
 	; Creates a thread handler for hotkeys/labels.
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_vDLL, g_bIsDev
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_InteractiveIni, g_vDLL, g_bIsDev
 
 	if (g_SequencesIni.HasKey(1))
 		sInis := "g_SequencesIni"
@@ -3242,7 +3446,7 @@ StartHotkeyThread()
 	}
 
 	avLabelInfo := {}
-	for sec, aData in g_LeapActionsIni
+	for sec, aData in g_InteractiveIni
 	{
 		; Store every hotkey in an array. When building the labels, if more than one action exists for this hotkey, create accordingly.
 		if (aData.Activate = "false" || aData.Hotkey == A_Blank || InStr(sec, "Internal_"))
@@ -3269,7 +3473,7 @@ StartHotkeyThread()
 		else avLabelInfo.Insert(sec, [vLabelInfo])
 	}
 
-	for sec, aData in g_LeapActionsIni
+	for sec, aData in g_InteractiveIni
 	{
 		if (aData.Activate = "false" || aData.Hotkey == A_Blank)
 			continue
@@ -3360,7 +3564,7 @@ StartHotkeyThread()
 */
 LV_CheckProc(iErrorLevelFromLV)
 {
-	if (A_GuiEvent == "I" && (GetKeyState("Space", "P") || GetKeyState("LButton", "P")))
+	if (A_GUIEvent == "I" && (GetKeyState("Space", "P") || GetKeyState("LButton", "P")))
 	{
 		if (iErrorLevelFromLV == "C")
 			EnableDisableKeyInIni(true, A_EventInfo)
@@ -3404,7 +3608,7 @@ GetCurIniForSave()
 	else if (PrecisionTabIsActive())
 		return "g_PrecisionIni"
 	else if (LeapTabIsActive())
-		return "g_LeapActionsIni"
+		return "g_InteractiveIni"
 	else return "" ; Error. Perhaps this should be handled?
 }
 
@@ -3523,10 +3727,16 @@ LeapTabIsActive()
 ;;;;;;;;;;;;;;
 LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_InteractiveIni, g_sInisForParsing
 		, g_vLeap, g_vLeapMsgProcessor, g_vFlyoutMH, g_vLeapMH
-	static s_iPalm1ID := rLeapData.Hand1.ID, s_iPalm2ID := rLeapData.Hand2.ID
-	SetFormat, FloatFast, 0.6 ; For timestamps
+	static s_iPalm1ID := rLeapData.Hand1.ID, s_iPalm2ID := rLeapData.Hand2.ID, s_bTrayNeedsUpdating
+	SetFormat, FloatFast, 0.6 ; For timestamps.
+
+	if (sMsg = "Connect" || sMsg = "Disconnect")
+	{
+		OnConnectDisconnect(sMsg)
+		return
+	}
 
 	g_vLeapMsgProcessor.m_bHand1HasReset := s_iPalm1ID != rLeapData.Hand1.ID
 	g_vLeapMsgProcessor.m_bHand2HasReset := s_iPalm2ID != rLeapData.Hand2.ID
@@ -3579,7 +3789,7 @@ LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 		; If more functions like this are added, then another callback is in order.
 		if (g_vLeapMsgProcessor.m_sTriggerAction = "Adjust Volume")
 			VolumeOSD_Hide()
-
+ 
 		ResetLeapMsgProcessor()
 	}
 	else if (sMsg = "Forward" && g_vLeapMsgProcessor.m_bUseTriggerGesture)
@@ -3660,13 +3870,13 @@ OnDataPost(ByRef rsGesture, ByRef rsOutput)
 			else if (A_LoopField = "g_HotkeysIni")
 			{
 				if (aData.RouteToLeapWhenAvailable = "true")
-					SetLeapMsgCallback(sCallable, g_LeapActionsIni["Internal_" sec], rsOutput)
+					SetLeapMsgCallback(sCallable, g_InteractiveIni["Internal_" sec], rsOutput)
 
 				if (IsLabel(sCallable))
 					gosub %sCallable%
 				else rsOutput := "Error: Gesture not found"
 			}
-			else if (A_LoopField = "g_LeapActionsIni")
+			else if (A_LoopField = "g_InteractiveIni")
 			{
 				SetLeapMsgCallback(sCallable, aData, rsOutput)
 			}
@@ -3713,7 +3923,7 @@ ResetLeapMsgProcessor()
 		Purpose: When a chain of gestures is mapped to a Leap_* function, we must set up the appropriate vars here.
 	Parameters
 		sFunc: Partial function name derived from sec
-		sec: Applicable sec within g_LeapActionsIni
+		sec: Applicable sec within g_InteractiveIni
 		aData: Keys/vals data
 		sTriggerAction: Identifer assigned to g_vLeapMsgProcessor.m_sTriggerAction
 */
@@ -3723,6 +3933,15 @@ SetLeapMsgCallback(sFunc, aData, sTriggerAction)
 
 	if (g_vLeapMsgProcessor.m_hTriggerGestureFunc := Func("Leap_" sFunc))
 	{
+		; This hard-coding is ugly, but avoiding this would require big changes in design.
+		; Since I want this in the Interactive tab, that means it has to be mapped to a Leap_* function.
+		; But you can't toggle tracking ON with a gesture, so hotkeys have to be explicitly handled.
+		if (sTriggerAction = "Toggle Tracking")
+		{
+			g_vLeapMsgProcessor.m_hTriggerGestureFunc.()
+			return
+		}
+
 		g_vLeapMsgProcessor.m_bUseTriggerGesture := true
 		g_vLeapMsgProcessor.m_bCallbackNeedsGestures := (aData.UsesGestures = "true")
 		g_vLeapMsgProcessor.m_bCallbackWillStop := (aData.CallbackWillStop = "true")
@@ -3748,48 +3967,16 @@ SetLeapMsgCallback(sFunc, aData, sTriggerAction)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-Window_Master_ShowControlCenterDlg:
-{
-	ShowControlCenterDlg(g_hWindowMaster)
-	return
-}
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-Window_Master_PlayPauseLeap:
-{
-	if (A_ThisMenuItem = "Resume &Tracking")
-	{
-		g_vLeap.SetTrackState(true)
-		Menu, TRAY, Rename, Resume &Tracking, Pause &Tracking
-		Menu, TRAY, Icon, Pause &Tracking, images\Pause.ico,, 16
-	}
-	else ; pause tracking.
-	{
-		g_vLeap.SetTrackState(false)
-		Menu, TRAY, Rename, Pause &Tracking, Resume &Tracking
-		Menu, TRAY, Icon, Resume &Tracking, images\Play.ico,, 16
-	}
-
-	return
-}
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
 	Function: Leap_ActionFromHotkey
-		Purpose: To trigger leap actions, such as Move Window, from a hotkey.
+		Purpose: To trigger interactive actions, such as Move Window, from a hotkey.
 	Parameters
 		sAction
 */
 Leap_ActionFromHotkey(sAction)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_LeapActionsIni, g_sInisForParsing, g_vLeap, g_vLeapMH
+	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_InteractiveIni, g_sInisForParsing, g_vLeap, g_vLeapMsgProcessor, g_vLeapMH
 
 	Loop, Parse, g_sInisForParsing, |
 	{
@@ -3811,12 +3998,14 @@ Leap_ActionFromHotkey(sAction)
 	{
 		; When we redirect to LeapActionIni, we should be guaranteed that there is an identical section name prefixed with "Internal_"
 		if (bRouteToLeap)
-			aData := g_LeapActionsIni["Internal_" sAction]
+			aData := g_InteractiveIni["Internal_" sAction]
 
 		sCallable := CallableFromSec(sAction)
 		SetLeapMsgCallback(sCallable, aData, sAction)
-		; Post the action to the OSD.
-		g_vLeap.OSD_PostMsg(sAction)
+
+		; See comment in SetLeapMsgCallback()
+		if (sAction != "Toggle Tracking")
+			g_vLeap.OSD_PostMsg(sAction) ; Post the message to the OSD.
 
 		; Note: Don't activate quick menu from here. It causes crashes.
 		; Always hiding circle here because there's been issues with the circle not being hidden after the flyout is gone.
@@ -3826,6 +4015,102 @@ Leap_ActionFromHotkey(sAction)
 
 	return
 }
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: OnConnectDisconnect
+		Purpose: To explicitly handle connections and disconnections.
+	Parameters
+		sMsg: Connect or Disconnect.
+*/
+OnConnectDisconnect(sMsg)
+{
+	global g_vLeap
+
+	if (sMsg = "Connect")
+	{
+		Menu, Tray, Tip, Windows Master
+		Menu, TRAY, Icon, images\Main.ico,, 1
+	}
+	else if (sMsg = "Disconnect")
+	{
+		Menu, Tray, Tip, % g_vLeap.m_sLeapMC " is disconnected"
+		Menu, TRAY, Icon, images\Main_Disconnected.ico,, 1
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+WM_AbortGesture:
+{
+	Critical
+
+	; If there's no gesture being trigged, there's nothing to stop.
+	if (g_vLeapMsgProcessor.m_hTriggerGestureFunc)
+	{
+		g_vLeapMsgProcessor.m_bActionHasStarted := true
+		g_vLeapMsgProcessor.m_bCallbackCanStop := true
+		g_vLeapMsgProcessor.m_bCallerHasFinished := true
+
+		; If anything is in view, LeapMsgHandler will get called and cancel the function;
+		; if not, we need to force the cancellation with a fake call.
+		Sleep 250
+		if (g_vLeapMsgProcessor.m_hTriggerGestureFunc)
+			LeapMsgHandler("Post", "", "", "")
+	}
+
+	return
+}
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+Window_Master_ShowControlCenterDlg:
+{
+	ShowControlCenterDlg(g_hWindowMaster)
+	return
+}
+;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+Window_Master_PlayPauseLeap:
+{
+	Window_Master_PlayPauseLeap(A_ThisMenuItem = "Resume &Tracking")
+	return
+}
+
+Window_Master_PlayPauseLeap(bPlay)
+{
+	global g_vLeap, g_bLeapIsTracking
+
+	if (bPlay)
+	{
+		g_bLeapIsTracking := true
+		Menu, TRAY, Rename, Resume &Tracking, Pause &Tracking
+		Menu, TRAY, Icon, Pause &Tracking, images\Pause.ico,, 16
+		g_vLeap.OSD_PostMsg(g_vLeap.m_sLeapMC " tracking has resumed")
+	}
+	else ; pause tracking.
+	{
+		g_bLeapIsTracking := false
+		Menu, TRAY, Rename, Pause &Tracking, Resume &Tracking
+		Menu, TRAY, Icon, Resume &Tracking, images\Play.ico,, 16
+		g_vLeap.OSD_PostMsg(g_vLeap.m_sLeapMC " tracking has been paused")
+	}
+
+	g_vLeap.SetTrackState(g_bLeapIsTracking)
+
+	return
+}
+;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4014,7 +4299,7 @@ Leap_PinchWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	iPixelsToMove := (iProgressDiff*s_iProgressFactor_c)+iRadiusScaled
 	; New dimensions.
 	iX	:=	Round(bPinchIn ? iCurX+(iPixelsToMove/2): iCurX-(iPixelsToMove/2))
-	iY	:=	Round(bPinchIn ? iCurY+(iPixelsToMove/2): iCurY-(iPixelsToMove/2))
+	iY		:=	Round(bPinchIn ? iCurY+(iPixelsToMove/2): iCurY-(iPixelsToMove/2))
 	iW	:=	Round(bPinchIn ? iCurW-iPixelsToMove		: iCurW+iPixelsToMove)
 	iH	:=	Round(bPinchIn ? iCurH-iPixelsToMove		: iCurH+iPixelsToMove)
 
@@ -4104,10 +4389,25 @@ Leap_PinchWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 */
 Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 {
-	global g_vLeap, g_vLeapMsgProcessor
-	static WM_HSCROLL:=276, WM_VSCROLL:=277
+	global g_vLeap
+	static s_bFingersWereOutOfTouchZone
+		, WM_HSCROLL:=276, WM_VSCROLL:=277
 		, SB_LINELEFT:=0, SB_LINERIGHT:=1, SB_LINEUP:=0, SB_LINEDOWN:=1
 		, SB_PAGELEFT:=2, SB_PAGERIGHT:=3, SB_PAGEUP:=2, SB_PAGEDOWN:=3
+
+	; Prevent scrolling when no fingers are less than halfway within the virtual touch zone.
+	bFingersOutOfTouchZone := true
+	while (bFingersOutOfTouchZone && rLeapData.HasKey("Finger" A_Index))
+		bFingersOutOfTouchZone := (rLeapData["Finger" A_Index].TouchDistance > 0.40)
+
+	if (bFingersOutOfTouchZone)
+	{
+		s_bFingersWereOutOfTouchZone := true
+		return
+	}
+
+	bHasReset := s_bFingersWereOutOfTouchZone
+	s_bFingersWereOutOfTouchZone := false
 
 	;~ if (hWnd != "A")
 		;~ Msgbox
@@ -4115,70 +4415,72 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	;~ WinGetTitle, sTitle, ahk_id %hWnd%
 	;~ ToolTip hWnd:`t%hWnd%`nTitle:`t%sTitle%
 
-	sLeapSec := "Finger1"
-	sLeapKeyPart := "Delta"
-	if (!rLeapData.HasKey(sLeapSec))
-	{
-		sLeapSec := "Hand1"
-		sLeapKeyPart := "Trans"
-	}
+	iVelocityX := abs(rLeapData.Hand1.VelocityX)
+	iVelocityY := abs(rLeapData.Hand1.VelocityY)
 
-	iVelocityX := abs(rLeapData[sLeapSec].VelocityX)
-	iVelocityY := abs(rLeapData[sLeapSec].VelocityY)
-	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 45)
-	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 45)
+	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 120)
+	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 120)
 
 	; Get palm X and Y movement.
-	iXDelta := rLeapData[sLeapSec, sLeapKeyPart "X"]
-	iYDelta  :=rLeapData[sLeapSec, sLeapKeyPart "Y"]
+	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
 
 	; Here's the deal: If the finger(s) started low and re-entered high, we would glitch upward.
-	; TODO: Handle hand coming in and out of view
-	if (bHasReset || g_vLeapMsgProcessor.m_bHand1HasReset)
+	if (bHasReset)
 		return
 
-	bScrollRight := (iXDelta < 0)
-	bScrollDown := (iYDelta < 0)
+	bScrollLeft := (iPalmXDelta > 0)
+	bScrollRight := !bScrollLeft
+	bScrollDown := (iPalmYDelta > 0)
 
-	if (iVelocityX > 750)
+	if (iVelocityX > 800)
 	{
 		iScrollXs := 1
 		SB_LR := (bScrollRight ? SB_PAGERIGHT : SB_PAGELEFT)
 	}
 	else
 	{
-		iScrollXs := abs(iXDelta)*0.25
+		iScrollXs := abs((iPalmXDelta*iVelocityXFactor))*0.1
+		if (iScrollXs < 1 && iScrollXs > 0.05)
+			iScrollXs := 1
 		SB_LR := (bScrollRight ? SB_LINERIGHT : SB_LINELEFT)
 	}
-	if (iVelocityY > 750)
+	if (iVelocityY > 800)
 	{
 		iScrollYs := 1
 		SB_UD := (bScrollDown ? SB_PAGEDOWN : SB_PAGEUP)
 	}
 	else
 	{
-		iScrollYs := abs(iYDelta)*0.25
+		iScrollYs := abs((iPalmYDelta*iVelocityYFactor))*0.1
+		if (iScrollYs < 1 && iScrollYs > 0.05)
+			iScrollYs := 1
 		SB_UD := (bScrollDown ? SB_LINEDOWN : SB_LINEUP)
 	}
 
-	; No need to overdo scrolling and slow down frames.
-	if (iScrollXs > 20)
-		iScrollXs := 5
-	if (iScrollYs > 20)
-		iScrollYs := 5
-
 	if (ChromeIsActive())
 	{
-		; Chrome scrolls a bit faster than other applications.
-		iScrollXs *= 0.75
-		iScrollYs *= 0.75
+		; Chrome overscrolls waaay too much, and they are too stubborn about it to fix it.
+		; I haven't found *any* sweet spot for scrolling in chrome, but cutting it 1/4
+		; produces justifiable results.
+
+		sXDir := "Left"
+		if (bScrollRight)
+			sXDir := "Right"
+		Send {Blind}{%sXDir% %iScrollXs%} ; {Blind} is simply good practice.
+
+		sYDir := "Up"
+		if (bScrollDown)
+			sYDir := "Down"
+		Send {Blind}{%sYDir% %iScrollYs%}
+
+		return
 	}
 
-	ControlGetFocus, hActiveControl, A
+	ControlGetFocus, ActiveControl, A
 	Loop %iScrollXs%
-		SendMessage, WM_HSCROLL, %SB_LR%, 0, %hActiveControl%, A
+		SendMessage, WM_HSCROLL, %SB_LR%, 0, %ActiveControl%, A
 	Loop %iScrollYs%
-		SendMessage, WM_VSCROLL, %SB_UD%, 0, %hActiveControl%, A
+		SendMessage, WM_VSCROLL, %SB_UD%, 0, %ActiveControl%, A
 
 	return
 }
@@ -4392,9 +4694,28 @@ Leap_QuickMenu(ByRef rLeapData, ByRef rasGestures)
 		g_vLeapMH.MenuProc(rLeapData)
 	else
 	{
-		g_vLeapMH.EndMenuProc()
+		g_vLeapMH.EndMenuProc(true)
 		g_vLeapMsgProcessor.m_bCallerHasFinished := true
 	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Leap_ToggleTracking
+		Purpose: To play/pause LMC tracking.
+	Parameters
+*/
+Leap_ToggleTracking()
+{
+	global g_bLeapIsTracking
+
+	; Toggle.
+	Window_Master_PlayPauseLeap(!g_bLeapIsTracking)
+	ResetLeapMsgProcessor()
 
 	return
 }
@@ -4426,6 +4747,39 @@ ShowControlCenterDlg(hOwner=0, sGestureToSelect="", sGUI="", sCtrl="")
 		GUIControl,, %sCtrl%, % "||" g_vLeap.m_vGesturesIni.GetSections("|", "C") ; Update DDL with new gesture(s)
 		GUIControl, ChooseString, %sCtrl%, % (sSelect == A_Blank ? sGestureToSelect : sSelect)
 	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Window_Master_RevertGesturesToDefaults
+		Purpose: To revert gestures to defaults.
+	Parameters
+		
+*/
+Window_Master_RevertGesturesToDefaults:
+{
+	RevertGesturesToDefaults()
+	return
+}
+
+RevertGesturesToDefaults()
+{
+	global g_vLeap
+
+	MsgBox, 4132, Revert Gestures to Defaults?, Are you sure you want to revert all of your gestures? This action cannot be undone`, and you may have to re-map certain gestures to actions.
+
+	IfMsgBox No
+		return
+
+	FileDelete, AutoLeap\Gestures.ini
+	FileAppend, % GetDefaultLeapGesturesIni(), AutoLeap\Gestures.ini
+
+	g_vLeap.Reload()
+	Msgbox("Gestures have been reverted to default settings.")
 
 	return
 }
@@ -5675,11 +6029,14 @@ ShowResizableError(hWnd)
 	Parameters
 		
 */
-Msgbox(sMsg, iStdMsg=1)
+Msgbox(sMsg, iErrorMsg=1)
 {
 	static aStdMsg := ["", "An internal error occured:`n`n"]
 
-	Msgbox 8192,, % aStdMsg[iStdMsg] sMsg
+	if (iErrorMsg > 1)
+		Msgbox 8208,, % aStdMsg[iErrorMsg] sMsg
+	else Msgbox 8256,, %sMsg%
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -5777,25 +6134,7 @@ Volume OSD
 VolumeOSD_Adj(EVolumeType, iHowMuch)
 {
 	static EVolumeType_Up := 1, EVolumeType_Down := 2, EVolumeType_Mute := 3
-
-	;~ ; Windows 8 provides it's own volume progress bar.
-	;~ if (A_OSVersion = "WIN_8")
-	;~ {
-		;~ if (EVolumeType == EVolumeType_Up)
-			;~ sSendStr := "{Volume_Up}"
-		;~ else if (EVolumeType == EVolumeType_Down)
-			;~ sSendStr := "{Volume_Down}"
-		;~ else if (EVolumeType == EVolumeType_Mute)
-		;~ {
-			;~ Send {Volume_Mute}
-			;~ return
-		;~ }
-
-		;~ Loop %iHowMuch%
-			;~ Send %sSendStr%
-
-		;~ return
-	;~ }
+	global g_sVolumeOSD_ProgOpts
 
 	if (EVolumeType == EVolumeType_Up)
 		SoundSet +%iHowMuch%
@@ -5859,7 +6198,7 @@ IsResizable(hwnd="A")
 */
 ChromeIsActive()
 {
-	return WinExist("ahk_class Chrome_XPFrame") || WinExist("ahk_class Chrome_WidgetWin_1")
+	return WinActive("ahk_class Chrome_XPFrame") || WinActive("ahk_class Chrome_WidgetWin_1")
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -5871,8 +6210,8 @@ ChromeIsActive()
 	Parameters
 		
 */
-GuiControlGet(Subcommand = "", ControlID = "", Param4 = "") {
-	GuiControlGet, v, %Subcommand%, %ControlID%, %Param4%
+GUIControlGet(Subcommand = "", ControlID = "", Param4 = "") {
+	GUIControlGet, v, %Subcommand%, %ControlID%, %Param4%
 	Return, v
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -5909,7 +6248,7 @@ GetLeapMenuSettingsIni()
 ;;;;;;;;;;;;;;
 GetLeapMenuConfigIni()
 {
-	global g_bHasLeap, g_LeapActionsIni, g_vLeap
+	global g_bHasLeap, g_InteractiveIni, g_vLeap
 
 	sSharedMenu := "
 		(LTrim
@@ -5973,7 +6312,7 @@ GetLeapMenuConfigIni()
 			sLeapMenuID := "Interactive"
 			vTmpMenu.MainMenu[iCurMainMenuNum++ ". " sLeapMenuID " >"] := sLeapMenuID
 			iCurLeapMenuNum := 1
-			for sec in g_LeapActionsIni
+			for sec in g_InteractiveIni
 			{
 				; Skip internal sections.
 				if (SubStr(sec, 1, 9) = "Internal_")
@@ -6442,7 +6781,7 @@ GetExceptionsForHotkeysIni()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-GetDefaultLeapActionsIni()
+GetDefaultInteractiveIni()
 {
 	return "
 		(LTrim
@@ -6502,6 +6841,16 @@ GetDefaultLeapActionsIni()
 			Hotkey=LWin + LAlt + Z
 			HelpDesc=Zooms in/out of window relative to circular motion. Circle right to zoom in and left to zoom out. For best results, use one or two fingers.
 
+			[Toggle Tracking]
+			Activate=true
+			GestureName=Stop Tracking
+			UsesPinch=false
+			UsesGestures=false
+			CallbackWillStop=true
+			OnlyUseLatestGesture=0
+			Hotkey=LWin + LAlt + X
+			HelpDesc=Toggles playing/pausing tracking. Useful when needing to use other applications which require use of the Leap Motion Controller.
+
 			[Internal_Quick Menu]
 			Activate=false
 			GestureName=
@@ -6516,11 +6865,11 @@ GetDefaultLeapActionsIni()
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-GetExceptionsForLeapActionsIni()
+GetExceptionsForInteractiveIni()
 {
-	global g_LeapActionsIni
+	global g_InteractiveIni
 
-	for sec in g_LeapActionsIni
+	for sec in g_InteractiveIni
 		sExceptionsIni .= "[" sec "]`nUsesPinch`nUsesGestures`nCallbackWillStop`nOnlyUseLatestGesture`nHelpDesc`n"
 
 	return sExceptionsIni
@@ -6598,6 +6947,8 @@ GetDefaultLeapGesturesIni()
 			Gesture=Swipe Up, Swipe Left
 			[Snap to Top Right]
 			Gesture=Swipe Up, Swipe Right
+			[Stop Tracking]
+			Gesture=Circle Left, Circle Left, Swipe Backward
 			[Toggle Mute Volume]
 			Gesture=Circle Left, Circle Left
 			[Toggle Window Border]
@@ -6980,6 +7331,93 @@ GetVKsIni()
 	)"
 }
 ;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Splash
+		Purpose: To do an aesthetic splash image with transparent corners.
+	Parameters
+		
+*/
+Splash()
+{
+	; Start gdi+
+	pToken := Gdip_Startup()
+
+	if (!A_IsCompiled && !pToken)
+	{
+		Msgbox("Could not start gdip. Check to see if gdip.ahk is in " A_AhkDir() "\lib")
+		return
+	}
+
+	; Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) that is always on top (+AlwaysOnTop), has no taskbar entry or caption
+	GUI, WM_Splash_: -Caption +E0x80000 LastFound OwnDialogs Owner AlwaysOnTop hwndhSplash
+	GUI, WM_Splash_: Show, NA
+
+	; Get a bitmap from the image
+	pBitmap := Gdip_CreateBitmapFromFile("images\Splash.png")
+
+	; Check to ensure we actually got a bitmap from the file, in case the file was corrupt or some other error occured
+	If (!pBitmap && !A_IsCompiled)
+	{
+		MsgBox("File loading error: Could not load the splash image")
+		return
+	}
+
+	; Get the width and height of the splash.
+	Width := Gdip_GetImageWidth(pBitmap)
+	Height := Gdip_GetImageHeight(pBitmap)
+
+	; Create a gdi bitmap with width and height of what we are going to draw into it. This is the entire drawing area for everything
+	hbm := CreateDIBSection(Width, Height)
+
+	; Get a device context compatible with the screen
+	hdc := CreateCompatibleDC()
+
+	; Select the bitmap into the device context
+	obm := SelectObject(hdc, hbm)
+
+	; Get a pointer to the graphics of the bitmap, for use with drawing functions
+	G := Gdip_GraphicsFromHDC(hdc)
+
+	; We do not need SmoothingMode as we did in previous examples for drawing an image
+	; Instead we must set InterpolationMode. This specifies how a file will be resized (the quality of the resize)
+	; Interpolation mode has been set to HighQualityBicubic = 7
+	Gdip_SetInterpolationMode(G, 7)
+
+	; DrawImage will draw the bitmap we took from the file into the graphics of the bitmap we created
+	; We are wanting to draw the entire image, but at half its size
+	; Coordinates are therefore taken from (0,0) of the source bitmap and also into the destination bitmap
+	; The source height and width are specified, and also the destination width and height (half the original)
+	; Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
+	; d is for destination and s is for source. We will not talk about the matrix yet (this is for changing colours when drawing)
+
+	Gdip_DrawImage(G, pBitmap, 0, 0, Width, Height, 0, 0, Width, Height)
+	; Update the specified window we have created (hSplash) with a handle to our bitmap (hdc)
+	UpdateLayeredWindow(hSplash, hdc, 0, 0, Width, Height)
+	CenterWndOnOwner(hSplash)
+
+	; Select the object back into the hdc
+	SelectObject(hdc, obm)
+	; Now the bitmap may be deleted
+	DeleteObject(hbm)
+	; Also the device context related to the bitmap may be deleted
+	DeleteDC(hdc)
+	; The graphics may now be deleted
+	Gdip_DeleteGraphics(G)
+	; The bitmap we made from the image may be deleted
+	Gdip_DisposeImage(pBitmap)
+
+	return
+}
+
+SplashOff()
+{
+	GUI, WM_Splash_: Destroy
+	return
+}
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
