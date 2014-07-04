@@ -22,12 +22,15 @@ res\icons\I Like Buttons\Info.ico
 res\icons\I Like Buttons\Off.ico
 res\icons\I Like Buttons\Red.ico
 res\icons\I Like Buttons\Win2.ico
+res\icons\Orb\Down.ico
+res\icons\Orb\Up.ico
 res\icons\Primo\Pause.ico
 res\icons\Primo\Play.ico
 res\icons\Windows Master\Default Flyout Menu 1.jpg
 res\icons\Windows Master\Default Flyout Menu 2.jpg
 res\icons\Windows Master\Default Flyout Menu 3.jpg
 res\icons\Windows Master\Main.ico
+res\icons\Windows Master\Main_Disconnected.ico
 res\icons\Windows Master\Splash with rounded edges.png
 )"
 
@@ -73,6 +76,7 @@ Loop, Parse, sFilesToInclude, `n
 		StringReplace, sFileName, sFileName, Resize2, Resize
 		StringReplace, sFileName, sFileName, Win2, Open
 		StringReplace, sFileName, sFileName, Down, Import
+		StringReplace, sFileName, sFileName, Up, Export
 		StringReplace, sFileName, sFileName, Splash with rounded edges, Splash
 
 		sFileInstalls .= "FileInstall, images\" sFileName ", images\" sFileName ", 1`n"
@@ -128,3 +132,35 @@ FileError()
 	Msgbox 8192,, Error: Include file %A_WorkingDir%\%A_LoopField% does not exist.
 	ExitApp
 }
+
+/* 
+sInfo := "
+(
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEOS 0x4
+FILETYPE 0x1
+{
+BLOCK "StringFileInfo"
+{
+	BLOCK "040904B0"
+	{
+		VALUE "FileDescription", "Windows Master"
+		VALUE "FileVersion", "1.0"
+		VALUE "InternalName", "AutoHotkey_H"
+		VALUE "LegalCopyright", "Copyright (C) 2014"
+		VALUE "OriginalFilename", "Windows Master_LM.exe"
+		VALUE "ProductName", "Windows Master"
+		VALUE "ProductVersion", "1.0"
+	}
+}
+
+BLOCK "VarFileInfo"
+{
+	VALUE "Translation", 0x0409 0x04B0
+}
+}
+)
+Msgbox % "Here is the string info for ResHacker`n`n"
+ */
