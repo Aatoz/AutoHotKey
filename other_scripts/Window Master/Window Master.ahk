@@ -169,7 +169,7 @@ InitGlobals()
 	g_iMyStdImgBtnRect := 40
 
 	g_bShouldSave := false ; for main dlg.
-	g_bIsDev := FileExist("$dev")
+	g_bIsDev := FileExist("$Dev")
 
 	g_sClassesNotToUse := "Shell_TrayWnd,Shell_SecondaryTrayWnd,EdgeUiInputTopWndClass,WorkerW,Progman"
 
@@ -3532,11 +3532,11 @@ StartHotkeyThread()
 		)" . sLabelDefs
 	}
 
-	if (g_bIsDev) ; For debugging
-	{
-		FileDelete, test.ahk
-		FileAppend, %sScript%, test.ahk
-	}
+	;~ if (g_bIsDev) ; For debugging
+	;~ {
+		;~ FileDelete, test.ahk
+		;~ FileAppend, %sScript%, test.ahk
+	;~ }
 
 	if (sScript)
 	{
