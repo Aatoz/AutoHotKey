@@ -43,8 +43,17 @@ class CFlyout
 		; 2.sCallback is the function name of a callback for CFlyout_OnMessage. sCallback must be a function that takes two parameters: a CFlyout object and a msg.
 	OnMessage(msgs, sCallback="")
 	{
+		static WM_LBUTTONDOWN:=513
+
 		Loop, Parse, msgs, `,
+		{
 			OnMessage(A_LoopField, "CFlyout_OnMessage")
+			if (%A_LoopField% == WM_LBUTTONDOWN)
+				this.m_bHandleClick := false
+		}
+
+		if (this.m_bHandleClick)
+			OnMessage(WM_LBUTTONDOWN, "CFlyout_OnMessage")
 
 		this.m_sCallbackFunc := sCallback
 		return
@@ -1056,6 +1065,7 @@ class CFlyout
 
 		; OnMessage callback
 		m_sCallbackFunc := ; Function name for optional OnMessage callbacks
+		m_bHandleClick := true ; Internally handle clicks by moving selection.
 }
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1075,7 +1085,7 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 			vFlyout := Object(CFlyout.FromHwnd[hWnd - A_Index])
 	}
 
-	if (msg == WM_LBUTTONDOWN)
+	if (msg == WM_LBUTTONDOWN && this.m_bHandleClick)
 	{
 		; The reason for return is twofold. Not only should you disallow interaction with a read-only "control,"
 		; but also the options that are set because of read-only cause WinGetPos to retrieve the parent (or if there is no parent, then the script's main hwnd) window coordinates
