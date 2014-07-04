@@ -57,13 +57,13 @@ class AutoLeap
 		RegRead, sKey, HKCR, airspace\shell\open\command
 		if (!InStr(sKey, "\Leap Motion"))
 		{
-			Msgbox, 4096,, Error! Leap Motion software is required to run this script.
+			Msgbox, 8208,, Error: Leap Motion software is required to run this script.
 			return false
 		}
 		; Ensure that AutoLeap.exe is present.
 		if (!FIleExist(this.m_sLeapWorkingDir "\" this.m_sNameOfExe))
 		{
-			Msgbox, 4096,, % "Error: " this.m_sNameOfExe " is not present in " this.m_sLeapWorkingDir "`nIt is required to run this program."
+			Msgbox, 8208,, % "Error: " this.m_sNameOfExe " is not present in " this.m_sLeapWorkingDir "`nIt is required to run this program."
 			return false
 		}
 
@@ -213,6 +213,8 @@ class AutoLeap
 		FileInstall, AutoLeap\Save As.ico, AutoLeap\Save As.ico, 1
 		FileInstall, AutoLeap\Info.ico, AutoLeap\Info.ico, 1
 		FileInstall, AutoLeap\Config.ico, AutoLeap\Config.ico, 1
+		FileInstall, AutoLeap\Download.ico, AutoLeap\Download.ico, 1
+		FileInstall, AutoLeap\Rotate 3D.ico, AutoLeap\Rotate 3D.ico, 1
 		FileInstall, AutoLeap\Red.ico, AutoLeap\Red.ico, 1
 		FileInstall, AutoLeap\Add.ico, AutoLeap\Add.ico, 1
 		FileInstall, AutoLeap\Delete.ico, AutoLeap\Delete.ico, 1
@@ -229,6 +231,7 @@ class AutoLeap
 		FileInstall, AutoLeap\Leap_64.dll, AutoLeap\Leap_64.dll, 1
 		FileInstall, AutoLeap\msvcr120.dll, AutoLeap\msvcr120.dll, 1
 		FileInstall, AutoLeap\msvcr120.dll, AutoLeap\msvcr120.dll, 1
+
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -280,18 +283,18 @@ class AutoLeap
 	Information as of: 11/25/2013
 	Source: https://developer.leapmotion.com/documentation/Languages/CSharpandUnity/API/class_leap_1_1_config.html
 
-	Key																		Type		Val			Unit
+	Key															Type		Val			Unit
 	----------------------------------------------------------------------------------------------
-	Gesture.Circle.MinRadius								float		5.0			mm
-	Gesture.Circle.MinArc									float		1.5*pi		radians
-	Gesture.Swipe.MinLength								float		150			mm
-	Gesture.Swipe.MinVelocity							float		1000		mm/s
-	Gesture.KeyTap.MinDownVelocity				float		50			mm/s
-	Gesture.KeyTap.HistorySeconds				float		0.1			s
-	Gesture.KeyTap.MinDistance						float		3.0			mm
-	Gesture.ScreenTap.MinForwardVelocity	float		50			mm/s
-	Gesture.ScreenTap.HistorySeconds			float		0.1			s
-	Gesture.ScreenTap.MinDistance				float		5.0			mm
+	Gesture.Circle.MinRadius						float		5.0		mm
+	Gesture.Circle.MinArc								float		1.5*pi	radians
+	Gesture.Swipe.MinLength						float		150		mm
+	Gesture.Swipe.MinVelocity						float		1000	mm/s
+	Gesture.KeyTap.MinDownVelocity			float		50		mm/s
+	Gesture.KeyTap.HistorySeconds				float		0.1		s
+	Gesture.KeyTap.MinDistance					float		3.0		mm
+	Gesture.ScreenTap.MinForwardVelocity	float		50		mm/s
+	Gesture.ScreenTap.HistorySeconds		float		0.1		s
+	Gesture.ScreenTap.MinDistance				float		5.0		mm
 	----------------------------------------------------------------------------------------------
 
 	*/
@@ -302,12 +305,12 @@ class AutoLeap
 				[Sliders]
 				Circle.MinRadius=9
 				; Note: Circle.MinArc is multipled by pi.
-				Circle.MinArc=1.80
-				Swipe.MinLength=170
-				Swipe.MinVelocity=220
+				Circle.MinArc=1.8
+				Swipe.MinLength=150
+				Swipe.MinVelocity=270
 				KeyTap.MinDownVelocity=440
-				KeyTap.HistorySeconds=0.02
-				KeyTap.MinDistance=20
+				KeyTap.HistorySeconds=1.50
+				KeyTap.MinDistance=60
 				ScreenTap.MinForwardVelocity=140
 				ScreenTap.HistorySeconds=0.75
 				ScreenTap.MinDistance=55
@@ -447,11 +450,22 @@ class AutoLeap
 
 		; Handle Connected, Disconnected events as per Leap Motion's app requirements.
 		if (vLeapData.Header.HasKey("Initialized") && this.m_bIsFirstRun)
+		{
 			this.OSD_PostMsg("Ready to receive " this.m_sLeapMC " input")
+			return
+		}
 		else if (vLeapData.Header.HasKey("Connected") && !this.m_bReloaded)
+		{
 			this.OSD_PostMsg(this.m_sLeapMC " is connected")
+			this.m_hMsgHandlerFunc.("Connect", "", "", "")
+			return
+		}
 		else if (vLeapData.Header.HasKey("Disconnected"))
+		{
 			this.OSD_PostMsg(this.m_sLeapMC " was disconnected")
+			this.m_hMsgHandlerFunc.("Disconnect", "", "", "")
+			return
+		}
 
 		; If any other header keys are added, process them above here.
 		; [End Header]
@@ -477,7 +491,7 @@ class AutoLeap
 						; Copy gesture over to this.m_vProcessor.m_avGestureData.
 						if (!this.m_vProcessor.m_avGestureData.AddSection(A_LoopField "_" this.m_iGestureSecCnt, "", "", sError))
 						{
-							Msgbox 8192,, An internal error occured:`n`n%sError%
+							Msgbox 8208,, An internal error occured:`n`n%sError%
 							return ; no break because these errors could just keep recurring.
 						}
 
@@ -486,7 +500,7 @@ class AutoLeap
 						{
 							if (!this.m_vProcessor.m_avGestureData.AddKey(A_LoopField "_" this.m_iGestureSecCnt, key, val, sError))
 							{
-								Msgbox 8192,, An internal error occured:`n`n%sError%
+								Msgbox 8208,, An internal error occured:`n`n%sError%
 								return
 							}
 						}
@@ -1416,7 +1430,7 @@ class LeapDlgs
 		{
 			if (IsFunc("LeapDlgs." A_ThisLabel))
 				_Dlgs()[A_ThisLabel]()
-			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+			else Msgbox, 8208,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
 
 			return
 		}
@@ -1458,7 +1472,7 @@ class LeapDlgs
 
 		this.m_vGesturesIni := this.m_vGesturesIni.Reload() ; Need to be certain that ini is up-to-date!
 		; Note: ObjClone was incorrectly copying the address instead of the memory.
-		this.m_vOriginalGesturesIni := class_EasyIni(this.m_vGesturesIni.GetFileName())
+		this.m_vOriginalGesturesIni := EasyIni.Copy(this.m_vGesturesIni, false)
 		this.m_bControlCenterDlg_IsSaved := true
 
 		if (hOwner)
@@ -1646,7 +1660,7 @@ class LeapDlgs
 			Critical
 			if (IsFunc("LeapDlgs." A_ThisLabel))
 				_Dlgs()[A_ThisLabel]()
-			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+			else Msgbox, 8208,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
 
 			return
 		}
@@ -1659,7 +1673,7 @@ class LeapDlgs
 		{
 			if (IsFunc("LeapDlgs." A_ThisLabel))
 				_Dlgs()[A_ThisLabel]()
-			else Msgbox, 8192,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
+			else Msgbox, 8208,, % "An internal error occured within the dialog procedure`n`nThis function does not exist: " A_ThisLabel
 
 			return
 		}
@@ -1927,13 +1941,13 @@ class LeapDlgs
 	*/
 	GesturesConfigDlg_Import()
 	{
-		FileSelectFile, sFile,, % this.m_vGesturesConfigIni.GetFileName(), Select ini to import, *ini
+		FileSelectFile, sFile, 1, % this.m_vGesturesConfigIni.GetFileName(), Select ini to import, *ini
 
 		if (sFile)
 		{
-			FileCopy, %sFile%, % this.m_vGesturesConfigIni.GetFileName(), 1
-			this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload()
-			; We aren't saved beacuse we just overwrote the original ini!
+			this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Copy(sFile)
+
+			; We aren't saved beacuse we just overwrote the original ini.
 			; This gives a user a chance to revert the ini back to it's previous state.
 			this.m_bGesturesConfigDlg_IsSaved := false
 
@@ -1959,13 +1973,13 @@ class LeapDlgs
 		; If the user, Canceled, Escaped, Alt+F4'd, etc.
 		if (!this.m_bGesturesConfigDlg_IsSaved && (A_GuiControl = "&Cancel" || A_GuiControl == A_Blank))
 		{
-			MsgBox, 8195, % "Close Gesture Settings", Save your settings before closing?
+			MsgBox, 8228, % "Close Gesture Settings", Save your settings before closing?
 
 			IfMsgBox Cancel
 				return
 			IfMsgBox No ; undo all changes.
 			{
-				this.m_vGesturesConfigIni := ObjClone(this.m_vOriginalGesturesConfigIni) ; We don't want to save settings, so this use the old settings.
+				this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Copy(this.m_vOriginalGesturesConfigIni) ; We don't want to save settings, so this use the old settings.
 				this.m_vGesturesConfigIni.Save() ; Save, but don't alert the user because that will be confusing.
 			}
 			else IfMsgBox Yes
@@ -2007,7 +2021,7 @@ class LeapDlgs
 
 		this.m_vGesturesConfigIni := this.m_vGesturesConfigIni.Reload() ; Need to be certain that ini is up-to-date!
 		; Note: ObjClone was incorrectly copying the address instead of the memory.
-		this.m_vOriginalGesturesConfigIni := class_EasyIni(this.m_vGesturesConfigIni.GetFileName())
+		this.m_vOriginalGesturesConfigIni := EasyIni.Copy(this.m_vGesturesConfigIni, false)
 
 		if (hOwner)
 		{
@@ -2239,7 +2253,7 @@ class LeapDlgs
 			if (!this.ValidateGesture(sGestureID, sGesture, false, sError))
 			{
 				; Validate, but allow the adding no matter what.
-				Msgbox, 8192,, %sError%
+				Msgbox, 8208,, %sError%
 			}
 		}
 
@@ -2377,9 +2391,17 @@ class LeapDlgs
 		sGestureID := this.GetGestureID()
 		GUIControlGet, sGestureChain,, g_vControlCenterDlg_GestureChainEdit
 
+		if (sGestureChain == A_Blank)
+			return
+
 		; Remove final item from chain.
-		sGestureChain := SubStr(sGestureChain, 1, InStr(sGestureChain, ",", false, -1)-1) ; Search RTL.
+		iPosOfComma := InStr(sGestureChain, ",", false, -1) - 1
+		if (iPosOfComma > 0) ; If there is a single gesture, then there won't be a comma.
+			sGestureChain := SubStr(sGestureChain, 1, iPosOfComma) ; Search RTL.
+		else sGestureChain := ""
+
 		GUIControl,, g_vControlCenterDlg_GestureChainEdit, %sGestureChain%
+
 		; Make changes in ini.
 		this.m_vGesturesIni[sGestureID].Gesture := sGestureChain
 		this.m_bControlCenterDlg_IsSaved := false
@@ -2426,7 +2448,7 @@ class LeapDlgs
 				this._ShowSaveMsg()
 			else
 			{
-				Msgbox, 8192,, %sError%
+				Msgbox, 8208,, %sError%
 				return
 			}
 		}
@@ -2447,7 +2469,7 @@ class LeapDlgs
 			this._ShowSaveMsg()
 		else if (sError != "Internal:IsRecording")
 		{
-			Msgbox, 8192,, %sError%
+			Msgbox, 8208,, %sError%
 			return false
 		}
 
@@ -2465,7 +2487,7 @@ class LeapDlgs
 		if (!this.ValidateAndSaveAllGestures(sError))
 		{
 			if (sError != "Internal:IsRecording")
-				Msgbox, 8192,, %sError%
+				Msgbox, 8208,, %sError%
 			return
 		}
 
@@ -2489,13 +2511,13 @@ class LeapDlgs
 	*/
 	ControlCenterDlg_Import()
 	{
-		FileSelectFile, sFile,, % this.m_vGesturesIni.GetFileName(), Select ini to import, *ini
+		FileSelectFile, sFile, 1, % this.m_vGesturesIni.GetFileName(), Select ini to import, *ini
 
 		if (sFile)
 		{
-			FileCopy, %sFile%, % this.m_vGesturesIni.GetFileName(), 1
-			this.m_vGesturesIni := this.m_vGesturesIni.Reload()
-			; We aren't saved beacuse we just overwrote the original ini!
+			this.m_vGesturesIni := this.m_vGesturesIni.Copy(sFile)
+
+			; We aren't saved beacuse we just overwrote the original ini.
 			; This gives a user a chance to revert the ini back to it's previous state.
 			this.m_bControlCenterDlg_IsSaved := false
 
@@ -2512,7 +2534,7 @@ class LeapDlgs
 	{
 		if (this.m_bIsRecording)
 		{
-			MsgBox, 8196, % "Close " this.m_sLeapMC " Control Center", Are you sure that you want to stop recording?
+			MsgBox, 8228, % "Close Control Center", Are you sure that you want to stop recording?
 			IfMsgBox No
 				return
 
@@ -2522,13 +2544,13 @@ class LeapDlgs
 		; If the user, Canceled, Escaped, Alt+F4'd, etc.
 		if (!this.m_bControlCenterDlg_IsSaved && (A_GuiControl = "&Cancel" || A_GuiControl == A_Blank))
 		{
-			MsgBox, 8195, % "Close " this.m_sLeapMC " Control Center", Save your settings before closing?
+			MsgBox, 8228, % "Close Control Center", Save your settings before closing?
 
 			IfMsgBox Cancel
 				return
 			IfMsgBox No ; undo all changes.
 			{
-				this.m_vGesturesIni := ObjClone(this.m_vOriginalGesturesIni) ; We don't want to save settings, so this use the old settings.
+				this.m_vGesturesIni := this.m_vGesturesIni.Copy(this.m_vOriginalGesturesIni) ; We don't want to save settings, so this use the old settings.
 				this.m_vGesturesIni.Save()
 			}
 			else IfMsgBox Yes
@@ -2696,7 +2718,7 @@ class LeapDlgs
 
 		if (!this.ValidateGesture(sGestureID, sGesture, true, sError))
 		{
-			Msgbox, 8192,, %sError%
+			Msgbox, 8208,, %sError%
 			return false
 		}
 
@@ -2833,7 +2855,7 @@ class LeapDlgs
 	;;;;;;;;;;;;;;
 	_ShowRecordError()
 	{
-		Msgbox, 8192,, You cannot perform this action while you are recording a gesture.
+		Msgbox, 8208,, You cannot perform this action while you are recording a gesture.
 		return
 	}
 	;;;;;;;;;;;;;;
@@ -2852,7 +2874,7 @@ class LeapDlgs
 		bSaveControlCenterIni := (WinActive("ahk_id" this.m_hControlCenterDlg))
 		bSaveGesturesConfigIni := (WinActive("ahk_id" this.m_hGesturesConfigDlg))
 
-		Msgbox, 8192,, % "Your settings have been saved" sOptMsg
+		Msgbox, 8256,, % "Your settings have been saved" sOptMsg
 
 		if (bSaveControlCenterIni)
 			this.m_bControlCenterDlg_IsSaved := true
@@ -2861,7 +2883,7 @@ class LeapDlgs
 		else
 		{
 			if (!A_IsCompiled)
-				Msgbox, 8192,, Assert!`nSomehow neither expected dialogs are active.`nSettings will not be saved.
+				Msgbox, 8208,, Assert!`nSomehow neither expected dialogs are active.`nSettings will not be saved.
 		}
 
 		return
