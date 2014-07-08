@@ -28,7 +28,6 @@ res\icons\Primo\Pause.ico
 res\icons\Primo\Play.ico
 res\icons\Windows Master\Default Flyout Menu 1.jpg
 res\icons\Windows Master\Default Flyout Menu 2.jpg
-res\icons\Windows Master\Default Flyout Menu 3.jpg
 res\icons\Windows Master\Main.ico
 res\icons\Windows Master\Main_Disconnected.ico
 res\icons\Windows Master\Splash with rounded edges.png
@@ -137,9 +136,10 @@ FileError()
 sInfo := "
 (
 
+
 1 VERSIONINFO
-FILEVERSION 1,0,10,0
-PRODUCTVERSION 1,0,10,0
+FILEVERSION 1,0,20,0
+PRODUCTVERSION 1,0,20,0
 FILEOS 0x4
 FILETYPE 0x1
 {
@@ -148,12 +148,12 @@ BLOCK "StringFileInfo"
 	BLOCK "040904B0"
 	{
 		VALUE "FileDescription", "Windows Master"
-		VALUE "FileVersion", "1.0.10.00"
+		VALUE "FileVersion", "1.0.20.00"
 		VALUE "InternalName", "Windows Master"
 		VALUE "LegalCopyright", "Copyright (C) 2014"
 		VALUE "OriginalFilename", "WindowsMaster_LM.exe"
 		VALUE "ProductName", "Windows Master"
-		VALUE "ProductVersion", "1.0.10.00"
+		VALUE "ProductVersion", "1.0.20.00"
 	}
 }
 
@@ -162,7 +162,6 @@ BLOCK "VarFileInfo"
 	VALUE "Translation", 0x0409 0x04B0
 }
 }
-
 
 )
 Msgbox % "Here is the string info for ResHacker`n`n"

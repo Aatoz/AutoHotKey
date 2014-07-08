@@ -23,7 +23,7 @@ If 0 ; When compiled, AhkDllThread.ahk assumes AutoHotkey[Mini].dll is installed
 
 ; Images are brought over with make.ahk.
 ; Also FileInstalls are created dynamically from make.ahk.
-; v1.01
+; v1.02
 FileInstall, images\Default Wnd.png, images\Default Wnd.png, 1
 FileInstall, images\Monitor Frame.png, images\Monitor Frame.png, 1
 FileInstall, images\Sequence.ico, images\Sequence.ico, 1
@@ -49,7 +49,6 @@ FileInstall, images\Pause.ico, images\Pause.ico, 1
 FileInstall, images\Play.ico, images\Play.ico, 1
 FileInstall, images\Default Flyout Menu 1.jpg, images\Default Flyout Menu 1.jpg, 1
 FileInstall, images\Default Flyout Menu 2.jpg, images\Default Flyout Menu 2.jpg, 1
-FileInstall, images\Default Flyout Menu 3.jpg, images\Default Flyout Menu 3.jpg, 1
 FileInstall, images\Main.ico, images\Main.ico, 1
 FileInstall, images\Main_Disconnected.ico, images\Main_Disconnected.ico, 1
 FileInstall, images\Splash.png, images\Splash.png, 1

@@ -2274,10 +2274,10 @@ class CIntroDlg
 				[5]
 				Text=Excellent!``n``nYou can navigate through this tutorial using left and right swipes.``n``nNext we'll talk about gesture chains.
 				[6]
-				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures without retracting your hand from the view of the Leap Motion Controller.``n``nAs you build the chain, it will be outputted on the top of the screen in a format such as , ""Swipe Left, Swipe Right."" Finish the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
+				Text=The term ""gesture chain"" simply means a combination of two or more gestures, such as ""Swipe Left"" and ""Swipe Right""``n``nBuild a chain by performing multiple gestures without retracting your hand from the view of the Leap Motion Controller.``n``nAs you build the chain, it will be outputted on the top of the screen in a format like, ""Swipe Left, Swipe Right."" Finish the chain by retracting your hand.``n``nTry making the gesture chain, ""Swipe Left, Swipe Right""
 				Gesture=Swipe Left, Swipe Right
 				[7]
-				Text=One more thing: Windows Master has a feature called, ""Interactive actions."" These are actions where you interact with the Leap Motion Controller.``n``nThe actions are activated with a hotkey or gesture; once active, an action will stay active all you bring all of your fingers together so they are touching (By making a fist, for example). When you hold that post for one second, the action will stop.``n``nTry holding a fist for one second right now.
+				Text=One more thing: Windows Master has a feature called, ""interactive actions."" These are actions where you interact with the Leap Motion Controller.``n``nThe actions are activated with a hotkey or gesture; once active, an action will stay active all you bring all of your fingers together so they are touching (By making a fist, for example). When you hold that pose for one second, the action will stop.``n``nTry holding a fist for one second right now.
 				Gesture=Fist
 				[8]
 				Text=You have completed the tutorial! You are well on your way to becoming a master of Windows.``n``nRemember: you can access this tutorial at any time from the Windows Master main menu.``n``nThe path is Help>Start Tutorial.
