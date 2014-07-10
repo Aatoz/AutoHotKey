@@ -779,7 +779,9 @@ class AutoLeap
 				rect.bottom += rect2.bottom-this.m_iOneLineOfText
 			}
 		}
-		else if (rect.bottom > this.m_iOneLineOfText)
+
+		; If the text is wrapped and it's not from suggestions, ensure we are using the maximum width because this is aesthetic.
+		if (!sSuggestions && rect.bottom > this.m_iOneLineOfText)
 			rect.right := this.m_iMaxWidth
 
 		GUIControl, Hide, g_vAutoLeapOSD_PostDataOutput

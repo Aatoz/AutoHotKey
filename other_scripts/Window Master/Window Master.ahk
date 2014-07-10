@@ -6171,15 +6171,17 @@ Author(s):
 */
 IsResizable(hwnd="A")
 {
-	static s_sExceptions := "Chrome_XPFrame,Chrome_WidgetWin_1,MozillaUIWindowClass,MozillaWindowClass,QPasteClass,Notepad++,SciTEWindow"
-	static s_sDesktops := "wndclass_desked_gsk,SHELLDLL_DefView1"
+	static s_aExceptions_c := ["Chrome_XPFrame", "Chrome_WidgetWin_1", "MozillaUIWindowClass", "MozillaWindowClass"
+		,"QPasteClass,Notepad++", "SciTEWindow", "wndclass_desked_gsk"]
+	static s_aDesktops_c := ["SHELLDLL_DefView1","WorkerW"]
+
 	MakeValidHwnd(hWnd)
 
-	WinGetClass, Class, ahk_id %hwnd%
-	if Class in s_sDesktops
-		return false
-	if Class in s_sExceptions
+	WinGetClass, sClass, ahk_id %hwnd%
+	if (IsInLinearArray(s_aExceptions_c, sClass))
 		return true
+	if (IsInLinearArray(s_aDesktops_c, sClass))
+		return false
 
 	WinGet, CurStyle, Style, ahk_id %hwnd%
 	return (CurStyle & 0x40000) ; WS_SIZEBOX
@@ -6198,16 +6200,12 @@ IsResizable(hwnd="A")
 */
 IsDesktop(hWnd)
 {
-	static s_aDesktops_c := ["wndclass_desked_gsk","WorkerW"]
+	static s_aDesktops_c := ["SHELLDLL_DefView1","WorkerW"]
 
 	MakeValidHwnd(hWnd)
-	WinGetClass, class, ahk_id %hwnd%
+	WinGetClass, sClass, ahk_id %hwnd%
 
-	for i, v in s_aDesktops_c
-		if (v = class)
-			return true
-
-	return false
+	return IsInLinearArray(s_aDesktops_c, sClass)
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
