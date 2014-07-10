@@ -138,8 +138,8 @@ sInfo := "
 
 
 1 VERSIONINFO
-FILEVERSION 1,0,20,0
-PRODUCTVERSION 1,0,20,0
+FILEVERSION 1,0,30,0
+PRODUCTVERSION 1,0,30,0
 FILEOS 0x4
 FILETYPE 0x1
 {
@@ -148,12 +148,12 @@ BLOCK "StringFileInfo"
 	BLOCK "040904B0"
 	{
 		VALUE "FileDescription", "Windows Master"
-		VALUE "FileVersion", "1.0.20.00"
+		VALUE "FileVersion", "1.0.30.00"
 		VALUE "InternalName", "Windows Master"
 		VALUE "LegalCopyright", "Copyright (C) 2014"
 		VALUE "OriginalFilename", "WindowsMaster_LM.exe"
 		VALUE "ProductName", "Windows Master"
-		VALUE "ProductVersion", "1.0.20.00"
+		VALUE "ProductVersion", "1.0.30.00"
 	}
 }
 
