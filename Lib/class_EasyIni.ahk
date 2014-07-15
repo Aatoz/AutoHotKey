@@ -304,7 +304,7 @@ class EasyIni
 			sIniString := SourceIni.ToVar()
 		else FileRead, sIniString, %SourceIni%
 
-		; Effectively make this function static by allow calls via EasyIni.Copy.
+		; Effectively make this function static by allowing calls via EasyIni.Copy.
 		if (IsObject(this))
 		{
 			if (bCopyFileName)
