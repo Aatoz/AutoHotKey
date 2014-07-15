@@ -2592,7 +2592,13 @@ Windows_Master_RevertSettingsInTab()
 	local iPrevSel := LV_GetSel()
 
 	if (SequencingTabIsActive())
-		g_SequencesIni.Copy(g_vDefaultSequencesIni)
+	{
+		; Note: There is a weird issue where g_SequencesIni.Copy(g_vDefaultSequencesIni) changes do not take.
+		; The default ini is small, so we are just doing a simple copy here.
+		g_SequencesIni.Remove()
+		for sec, aData in g_vDefaultSequencesIni
+			g_SequencesIni[sec] := ObjClone(aData)
+	}
 	else
 	{
 		LV_SetDefault("Windows_Master_", "vGenericLV")
