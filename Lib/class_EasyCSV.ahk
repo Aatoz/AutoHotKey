@@ -212,11 +212,21 @@ class EasyCSV
 		Parameters
 			iRow
 			sDelim=","
+			bForSave=false: When saving, we need to surround each cell with quotations to escape commas and the like
 	*/
-	GetRow(iRow, sDelim=",")
+	GetRow(iRow, sDelim=",", bForSave=false)
 	{
 		for iCol, aRowData in this
-			sRow .= (sRow == A_Blank ? "" : sDelim) . aRowData[iRow]
+		{
+			sRow .= (sRow == A_Blank ? "" : sDelim)
+			if (bForSave)
+			{
+				sRowData := aRowData[iRow]
+				StringReplace, sRowData, sRowData, `", `"`", All
+				sRow .= """" sRowData """"
+			}
+			else sRow .= aRowData[iRow]
+		}
 
 		return sRow
 	}
@@ -428,7 +438,7 @@ class EasyCSV
 		Loop %iRows%
 		{
 			iRow := (this.GetHasHeader() ? A_Index - 1 : A_Index)
-			sRow := this.GetRow(iRow)
+			sRow := this.GetRow(iRow, ",", true)
 
 			if (bIsFirstLine)
 				FileAppend, %sRow%, %sFile%
