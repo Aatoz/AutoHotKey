@@ -389,6 +389,9 @@ class AutoLeap
 	{
 		global
 
+		; With any delay, the OSD sliding looks horrible.
+		SetWinDelay, -1
+
 		this.m_bDismiss := false ; Used in OSD_DismissAfterNMS.
 		this.m_iMaxWidth := A_ScreenWidth ; used for clarity, and also ease of changeability.
 
@@ -1487,8 +1490,7 @@ class LeapDlgs
 		this.LoadGestureIDs(sSelect)
 
 		GUI, Show, x-32768 AutoSize
-		if (g_hControlCenterDlgOwner)
-			this.CenterWndOnOwner(this.m_hControlCenterDlg, g_hControlCenterDlgOwner)
+		this.CenterWndOnOwner(this.m_hControlCenterDlg, g_hControlCenterDlgOwner)
 
 		; Wait for dialog to be dismissed
 		this.m_bSubmit := false ; See ControlCenterDlg_OKBtn.

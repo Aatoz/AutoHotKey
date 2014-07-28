@@ -6252,7 +6252,7 @@ GUIControlGet(Subcommand = "", ControlID = "", Param4 = "") {
 ;;;;;;;;;;;;;;
 GetLeapMenuSettingsIni()
 {
-	Random, iPic, 1, 3
+	Random, iPic, 1, 2
 	return "
 		(LTrim
 			[Flyout]
@@ -6926,8 +6926,6 @@ GetDefaultLeapGesturesIni()
 			Gesture=KeyTap, Swipe Down
 			[Close Window]
 			Gesture=Circle Right, Swipe Down
-			[Switch Window]
-			Gesture=Circle Right, Swipe Right
 			[Enter Key]
 			Gesture=KeyTap
 			[Escape Key]
