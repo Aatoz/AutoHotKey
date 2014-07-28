@@ -3,13 +3,13 @@
 
 /*
 
-This type of INI file would be generated either from your GUI, or the CLeapModule GUI
-It should be noted that CLeapModule GUI *only* Add/Modifies Sections and the Gesture key within each section
+This type of INI file would be generated either from your GUI, or the AutoLeap GUI
+It should be noted that AutoLeap GUI *only* Add/Modifies Sections and the Gesture key within each section
 This means that, with however you choose to interface your scripts with this API,
 	it is safe for you to actually modify Gestures.ini in conjunction with your script
 	(just as long as you don't mess with the section names or the Gesture keys).
 That is why, in Gestures.ini, there is actually an Action key in each section.
-	The Action key would presumably come from some exterior GUI that inserst
+	The Action key would presumably come from some exterior GUI that inserts
 	the Action keys into the ini based on one specific gesture.
 The method in this script interprets each Action value as a function,
 	and it dynamically calls that function in LeapSample_MsgHandler.
@@ -53,9 +53,15 @@ Gesture=Keytap
 Action=OnKeytap
 ), Gestures.ini
 
-; The CLeapModule object takes ownership of Leap functions, and leap messages are forwarded to LeapSample_MsgHandler
-g_vLeap := new CLeapModule("Gestures.ini", Func("LeapSample_MsgHandler"))
-g_vLeap.ShowSettingsDlg() ; So you can see how the GUI module looks
+; The AutoLeap object takes ownership of Leap functions, and leap messages are forwarded to LeapSample_MsgHandler
+g_vLeap := new AutoLeap("LeapSample_MsgHandler", "Gestures.ini")
+
+Msgbox Welcome! This script has mapped some basic gestures to window functions. For example, a swipe to the left will take the current window and snap it to the left corner of this monitor.`n`nFollowing this message, those gesture will appear in the Gestures Control Center. Take a few moments to get familiarized with the gestures and then exit the dialog -- don't worry you'll receive further instructions after you exit the dialog.
+
+g_vLeap.ShowControlCenterDlg() ; So you can see how the GUI module looks
+
+Msgbox Great! Now go ahead and perform these gestures and watch as the magic of the Leap Motion Controller becomes a reality!
+
 return
 
 #^R::Reload
@@ -63,21 +69,21 @@ return
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 1. sMsg will be "Record" or "Post"
-2. asGestures is an array of gestures -- one gesture per element
+2. rasGestures is an array of gestures -- one gesture per element
 3. rsOutput is a string that, if set, will be displayed on the OSD for one second
 
 * When sMsg = "Record" this means that gestures are still being daisy-chained together.
 * When sMsg = "Post" this means that gestures recording has stopped.
 		This happens when no fingers/tools are detected by the Leap API
 */
-LeapSample_MsgHandler(sMsg, asGestures, ByRef rsOutput)
+LeapSample_MsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
 	global g_vLeap
 	rsOutput :=
 
 	if (sMsg = "Post")
 	{
-		sGestures := st_glue(asGestures, ",")
+		sGestures := st_glue(rasGestures, ",")
 		for sGestureName, aData in g_vLeap.m_vGesturesIni
 		{
 			if (sGestures = aData.Gesture)
@@ -184,4 +190,4 @@ SnapWnd(sDir)
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#Include AutoLeap\CLeapModule.ahk
+#Include AutoLeap\AutoLeap.ahk
