@@ -190,4 +190,75 @@ SnapWnd(sDir)
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: MoveWindow
+		Purpose: To move a window in real-time based upon a single-hand's palm position
+	Parameters
+		rLeapData
+		rasGestures
+		hWnd="A"
+*/
+MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
+{
+	global g_vLeap
+
+	; Tracking gets iffy at these points, and currently the interaction box class does not help with this problem.
+	; TODO: Use Data confidence factor in v2.0
+	if (rLeapData.Hand1.PalmX > 290 || || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
+		return
+
+	; Take into account the velocity.
+	iVelocityX := abs(rLeapData.Hand1.VelocityX)
+	iVelocityY := abs(rLeapData.Hand1.VelocityY)
+
+	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 75)
+	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 75)
+
+/*
+	Take into account the monitor the window is on
+		1. When the window width is greater than 50% of the monitor's width, move the window's X less; otherwise, move it more.
+		2. When the window height is greater than 50% of the monitor's height, move the window's Y less; otherwise, move it more.
+*/
+	GetWndPct(iWPct, iHPct, hWnd)
+
+	iMonXFactor := (100-iWPct)/100
+	iMonYFactor := (100-iHPct)/100
+
+	if (iWPct < 49.99)
+		iMonXFactor += 1
+	if (iHPct < 49.99)
+		iMonYFactor += 1
+
+	; Get palm X and Y movement.
+	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
+	iPalmXDelta *= -1 ; Movement should be reversed, in this particular case.
+	iPalmXDelta := rLeapData.Hand1.PalmDeltaX
+	iPalmXDelta := rLeapData.Hand1.PalmDeltaY
+
+	WinGetPos, iCurX, iCurY,,, ahk_id %hWnd%
+
+	; Strip out noise from humanity's generable inability to stabilize their palms.
+	if (abs(iPalmXDelta) > 0.35)
+		iNewX := iCurX + (iPalmXDelta*(iVelocityXFactor+iMonXFactor))
+	if (abs(iPalmYDelta) > 0.35)
+		iNewY := iCurY + (iPalmYDelta*(iVelocityYFactor+iMonYFactor))
+
+	WinMove, ahk_id %hWnd%,, iNewX, iNewY
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A")
+{
+	WinGetPos, iX, iY, iW, iH, ahk_id %hWnd%
+
+	riWPct := Round((iW * 100) / A_ScreenWidth, 2)
+	riHPct := Round((iH * 100) / A_ScreenHeight, 2)
+
+	return
+}
+
 #Include AutoLeap\AutoLeap.ahk
