@@ -6,7 +6,7 @@ SetWorkingDir, %A_ScriptDir%
 SendMode, Input
 
 g_vTooltipFlyout := new CFlyout(0, GetLatestSpecs(false), false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "Center") ; c0xFF0080
-g_vTooltipFlyout.OnMessage(WM_LBUTTONDOWN:=513 "," WM_LBUTTONDBLCLK:=515, "WSpy_OnMessage")
+g_vTooltipFlyout.OnMessage(WM_LBUTTONDBLCLK:=515, "WSpy_OnMessage")
 
 WinSetTitle, % "ahk_id" g_vTooltipFlyout.m_hFlyout,, Window Spy++ ; default title is "GUI_FlyoutN" (where N = the number of flyouts currently running in the script)
 
@@ -22,6 +22,7 @@ Hotkey, IfWinActive, % "ahk_id" g_vTooltipFlyout.m_hFlyout
 	Hotkey, Enter, OnEnter
 	Hotkey, NumpadEnter, OnEnter
 	Hotkey, Space, OnEnter
+	;~ Hotkey, ^C, CFlyout_CopySelected
 	Hotkey, !E, GUIEditSettings
 	Hotkey, ^R, Reload
 	Hotkey, Esc, ExitApp
