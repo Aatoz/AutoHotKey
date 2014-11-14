@@ -6,6 +6,7 @@ Credits (See ReadMe.txt)
 
 For Me: Current LOC written by me (Including AutoLeap.exe): 10,098
 	TODO:
+		Window undo idea: Basically keep a running array of hWnds with window coordinates. Win+Z backs up, Win+Y goes forward. Cool, huh?
 		Virtual desktops -- http://www.autohotkey.com/board/topic/50154-virtual-desktops-extras-for-win7/
 */
 
@@ -3369,6 +3370,7 @@ StartHotkeyThread()
 
 					" sLabel ":
 					{
+						LogHKWithStats(A_ThisHotkey)
 						Critical
 
 						" sExpr "
@@ -3433,6 +3435,7 @@ StartHotkeyThread()
 
 				" sLabel ":
 				{
+					LogHKWithStats(A_ThisHotkey)
 					Critical
 
 					" sExpr "
@@ -3497,6 +3500,7 @@ StartHotkeyThread()
 
 				" sLabel ":
 				{
+					LogHKWithStats(A_ThisHotkey)
 					Critical
 
 					" sExpr "
@@ -3531,6 +3535,26 @@ StartHotkeyThread()
 			Suspend(sOnOrOff)
 			{
 				Suspend, %sOnOrOff%
+				return
+			}
+
+			LogHKWithStats(sHK)
+			{
+				static s_sLogFile := ""Hotkey Statistics.csv""
+
+			if (sHK == A_Blank)
+			{
+				if (" g_bIsDev ")
+					g_exe.ahkFunction[""Msgbox"", ""Hotkey is blank in function:``t"" A_ThisFunc "")""]
+				return
+			}
+
+				StringReplace, sHK, sHK, $,, All
+
+				sLogStr := A_MM ""/"" A_DD ""/"" A_YYYY "","" A_Hour "":"" A_Min "":"" A_Sec "","" sHK
+				If (!FileExist(s_sLogFile))
+					FileAppend, Date``,Time``,Hotkey, %s_sLogFile%
+				FileAppend, ``n%sLogStr%, %s_sLogFile%
 				return
 			}
 
