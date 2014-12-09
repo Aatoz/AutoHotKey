@@ -1085,7 +1085,7 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 			vFlyout := Object(CFlyout.FromHwnd[hWnd - A_Index])
 	}
 
-	if (msg == WM_LBUTTONDOWN && vFlyout.m_bHandleClick)
+	if (msg == WM_LBUTTONDOWN && this.m_bHandleClick)
 	{
 		; The reason for return is twofold. Not only should you disallow interaction with a read-only "control,"
 		; but also the options that are set because of read-only cause WinGetPos to retrieve the parent (or if there is no parent, then the script's main hwnd) window coordinates
