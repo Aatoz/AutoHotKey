@@ -6,6 +6,7 @@ Credits (See ReadMe.txt)
 
 For Me: Current LOC written by me (Including AutoLeap.exe): 10,098
 	TODO:
+		Window swapping: Keystroke to activate. Click one window and then another, and they swap!
 		Window undo idea: Basically keep a running array of hWnds with window coordinates. Win+Z backs up, Win+Y goes forward. Cool, huh?
 		Virtual desktops -- http://www.autohotkey.com/board/topic/50154-virtual-desktops-extras-for-win7/
 */
@@ -3752,8 +3753,7 @@ InteractiveTabIsActive()
 ;;;;;;;;;;;;;;
 LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
-	global g_SequencesIni, g_PrecisionIni, g_HotkeysIni, g_InteractiveIni, g_sInisForParsing
-		, g_vLeap, g_vLeapMsgProcessor, g_vFlyoutMH, g_vLeapMH
+	global g_vLeap, g_vLeapMsgProcessor, g_vFlyoutMH, g_vLeapMH
 	static s_iPalm1ID := rLeapData.Hand1.ID, s_iPalm2ID := rLeapData.Hand2.ID, s_bTrayNeedsUpdating
 	SetFormat, FloatFast, 0.6 ; For timestamps.
 
