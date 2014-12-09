@@ -1,5 +1,6 @@
 #SingleInstance Force
 #Persistent
+SetWinDelay, -1
 
 /*
 
@@ -23,48 +24,52 @@ FileAppend,
 (
 [Snap to Left]
 Gesture=Swipe Left
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Right]
 Gesture=Swipe Right
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Center]
 Gesture=Circle Left
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Top Left]
 Gesture=Swipe Up, Swipe Left
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Top Right]
 Gesture=Swipe Up, Swipe Right
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Bottom Left]
 Gesture=Swipe Down, Swipe Left
-Action=SnapWnd
+Func=SnapWnd
 [Snap to Bottom Right]
 Gesture=Swipe Down, Swipe Right
-Action=SnapWnd
+Func=SnapWnd
 [Toggle Maximize]
 Gesture=Swipe Up
-Action=MaximizeWindow
+Func=MaximizeWindow
 [Minimize/Restore]
 Gesture=Swipe Down
-Action=MinimizeWindow
+Func=MinimizeWindow
 [Confirm]
 Gesture=Keytap
-Action=OnKeytap
+Func=OnKeyTap
+[Move Window]
+Gesture=Swipe Left, Swipe Right
+Func=MoveWindow
+InteractiveGesture=true
 ), Gestures.ini
 
 ; The AutoLeap object takes ownership of Leap functions, and leap messages are forwarded to LeapSample_MsgHandler
-g_vLeap := new AutoLeap("LeapSample_MsgHandler", "Gestures.ini")
+g_vLeap := new AutoLeap("LeapMsgHandler", "Gestures.ini")
+g_vLeapMsgProcessor := {}
 
-Msgbox Welcome! This script has mapped some basic gestures to window functions. For example, a swipe to the left will take the current window and snap it to the left corner of this monitor.`n`nFollowing this message, those gesture will appear in the Gestures Control Center. Take a few moments to get familiarized with the gestures and then exit the dialog -- don't worry you'll receive further instructions after you exit the dialog.
+Msgbox Welcome! This script has mapped some basic gestures to window functions. For example, a swipe to the left will take the current window and snap it to the left corner of this monitor.`n`nFollowing this message, those gestures will appear in the Gestures Control Center. Take a few moments to get familiarized with the gestures and then exit the dialog -- don't worry you'll receive further instructions after you exit the dialog.
 
 g_vLeap.ShowControlCenterDlg() ; So you can see how the GUI module looks
 
-Msgbox Great! Now go ahead and perform these gestures and watch as the magic of the Leap Motion Controller becomes a reality!
+Msgbox Great! Now perform these gestures and watch as the magic of the Leap Motion Controller becomes a reality!
 
 return
 
-#^R::Reload
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
@@ -76,34 +81,150 @@ return
 * When sMsg = "Post" this means that gestures recording has stopped.
 		This happens when no fingers/tools are detected by the Leap API
 */
-LeapSample_MsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;
+LeapMsgHandler(sMsg, ByRef rLeapData, ByRef rasGestures, ByRef rsOutput)
 {
-	global g_vLeap
-	rsOutput :=
+	global g_vLeap, g_vLeapMsgProcessor
+	static s_iPalm1ID := rLeapData.Hand1.ID, s_iPalm2ID := rLeapData.Hand2.ID
 
-	if (sMsg = "Post")
+	g_vLeapMsgProcessor.m_bHand1HasReset := s_iPalm1ID != rLeapData.Hand1.ID
+	g_vLeapMsgProcessor.m_bHand2HasReset := s_iPalm2ID != rLeapData.Hand2.ID
+	s_iPalm1ID := rLeapData.Hand1.ID
+	s_iPalm2ID := rLeapData.Hand2.ID
+
+	bIsDataPost := (sMsg = "Post")
+
+	; The below checks allows the hand(s) to go completely out of view without us ending the gesture.
+	if (g_vLeapMsgProcessor.m_bUseTriggerGesture)
 	{
-		sGestures := st_glue(rasGestures, ",")
-		for sGestureName, aData in g_vLeap.m_vGesturesIni
+		bIsMakingFist := g_vLeap.IsMakingFist(rLeapData)
+		if (!bIsMakingFist || g_vLeapMsgProcessor.m_bHand1HasReset)
 		{
-			if (sGestures = aData.Gesture)
-			{
-				if (hFunc := Func(aData.Action))
-					hFunc.(sGestures)
+			g_vLeapMsgProcessor.m_iFistStart := 0
+			g_vLeapMsgProcessor.m_iTimeWithFist := 0
+			TimeSinceLastCall(A_ThisFunc, 2)
+		}
 
-				; Gesture action will be briefly displayed on OSD
-				rsOutput := sGestureName
-				break
-			}
+		if (bIsMakingFist) ; If we have been making a fist for the past second, bail out.
+		{
+			g_vLeapMsgProcessor.m_iTimeWithFist += TimeSinceLastCall(A_ThisFunc)
+			g_vLeapMsgProcessor.m_bFistMadeDuringThreshold := g_vLeapMsgProcessor.m_iTimeWithFist > 1000
 		}
 	}
+	; End fist-checking.
+
+	; Leap_ functions stop getting called when making a fist for 1 or more seconds.
+	bActionHasStarted := g_vLeapMsgProcessor.m_bActionHasStarted
+	bCallbackCanStop := g_vLeapMsgProcessor.m_bCallbackCanStop
+	bCallbackWillStop := g_vLeapMsgProcessor.m_bCallbackWillStop
+
+	if (!bCallbackWillStop && bActionHasStarted && bCallbackCanStop
+		|| (bCallbackWillStop && g_vLeapMsgProcessor.m_bCallerHasFinished))
+	{
+		; Let the user know that and what we stopped tracking.
+		g_vLeap.OSD_PostMsg("Stop " g_vLeapMsgProcessor.m_sTriggerAction)
+
+		ResetLeapMsgProcessor()
+		
+}
+	else if (sMsg = "Forward" && g_vLeapMsgProcessor.m_bUseTriggerGesture)
+	{
+		g_vLeapMsgProcessor.m_hTriggerGestureFunc.(rLeapData, rasGestures)
+
+		; We have to start before we stop.
+		if (!g_vLeapMsgProcessor.m_bActionHasStarted)
+			g_vLeapMsgProcessor.m_bActionHasStarted := g_vLeapMsgProcessor.m_bCallbackCanStop
+
+		if (g_vLeap.IsMakingFist(rLeapData) && g_vLeapMsgProcessor.m_bFistMadeDuringThreshold)
+			g_vLeapMsgProcessor.m_bCallbackCanStop := true
+	}
+
+	sGesture := st_glue(rasGestures, ", ")
+	if (sGesture == "")
+		return
+
+	for sec, aData in g_vLeap.m_vGesturesIni
+	{
+		if (sGesture = aData.Gesture)
+		{
+			bGestureExists := true
+			break
+		}
+	}
+
+	if (!bGestureExists)
+		return
+
+	if (bIsDataPost)
+	{
+		if (aData.InteractiveGesture)
+			SetLeapMsgCallback(sec, aData)
+		else if (IsFunc(aData.Func))
+			Func(aData.Func).(rLeapData, rasGestures)
+
+		rsOutput := sec
+	}
+
+	return
 }
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: ResetLeapMsgProcessor
+		Purpose: To reset the Leap message processor.
+	Parameters
+		None
+*/
+ResetLeapMsgProcessor()
+{
+	global g_vLeap, g_vLeapMsgProcessor
+
+	for k, v in g_vLeapMsgProcessor
+		g_vLeapMsgProcessor[k] := 0 ; false for bools, and 0 for ints because you can't ++ A_Blank
+
+	g_vLeap.m_vProcessor.m_bIgnoreGestures := false ; Start showing gestures on the OSD again.
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: SetLeapMsgCallback
+		Purpose: When a chain of gestures is mapped to a Leap_* function, we must set up the appropriate vars here.
+	Parameters
+		sActionName: Identifer of action
+		aData: Keys/vals data
+*/
+SetLeapMsgCallback(sActionName, aData)
+{
+	global g_vLeap, g_vLeapMsgProcessor
+
+	if (g_vLeapMsgProcessor.m_hTriggerGestureFunc := Func(aData.Func))
+	{
+		g_vLeapMsgProcessor.m_bUseTriggerGesture := true
+		g_vLeapMsgProcessor.m_bCallbackWillStop := (aData.CallbackWillStop = "true")
+		g_vLeapMsgProcessor.m_bGestureUsesPinch := (aData.UsesPinch = "true")
+		g_vLeap.m_vProcessor.m_bIgnoreGestures := true ; Reduces noise and saves precious time in ProcessAutoLeapData.
+		g_vLeapMsgProcessor.m_sTriggerAction := sActionName
+
+		g_vLeapMsgProcessor.m_bFistMadeDuringThreshold := false
+		TimeSinceLastCall(2, true) ; Reset
+		g_vLeapMsgProcessor.m_iFistStart := 0
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-MaximizeWindow(a="")
+MaximizeWindow(ByRef rLeapData, ByRef rasGestures)
 {
 	hWnd := WinExist("A")
 
@@ -126,7 +247,7 @@ MaximizeWindow(a="")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-MinimizeWindow(a="")
+MinimizeWindow(ByRef rLeapData, ByRef rasGestures)
 {
 	; Use Win-Split Logic:
 	; 1. If the window is minimized, maximize it.
@@ -154,7 +275,7 @@ MinimizeWindow(a="")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-OnKeytap(a="")
+OnKeyTap(ByRef rLeapData, ByRef rasGestures)
 {
 	SendInput {Enter}
 	return
@@ -164,10 +285,12 @@ OnKeytap(a="")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;
-SnapWnd(sDir)
+SnapWnd(ByRef rLeapData, ByRef rasGestures)
 {
 	hWnd := WinExist("A")
 	WinGetPos, iWndX, iWndY, iWndW, iWndH, ahk_id %hWnd%
+
+	sDir := st_glue(rasGestures, ", ")
 
 	if (sDir = "Swipe Left")
 		iX := 0
@@ -204,6 +327,8 @@ MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 {
 	global g_vLeap
 
+	MakeValidHwnd(hWnd)
+
 	; Tracking gets iffy at these points, and currently the interaction box class does not help with this problem.
 	; TODO: Use Data confidence factor in v2.0
 	if (rLeapData.Hand1.PalmX > 290 || || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
@@ -234,16 +359,29 @@ MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	; Get palm X and Y movement.
 	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
 	iPalmXDelta *= -1 ; Movement should be reversed, in this particular case.
-	iPalmXDelta := rLeapData.Hand1.PalmDeltaX
-	iPalmXDelta := rLeapData.Hand1.PalmDeltaY
 
-	WinGetPos, iCurX, iCurY,,, ahk_id %hWnd%
+	WinGetPos, iCurX, iCurY, iW, iH, ahk_id %hWnd%
 
+	; TODO: When skeletal tracking becomes available, we may be able to enable this or something like it.
+	;~ bMoveAlongXOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger8"))
+	;~ bMoveAlongYOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger7") && !rLeapData.HasKey("Finger8"))
+
+	iNewX := iCurX
+	iNewY := iCurY
 	; Strip out noise from humanity's generable inability to stabilize their palms.
 	if (abs(iPalmXDelta) > 0.35)
 		iNewX := iCurX + (iPalmXDelta*(iVelocityXFactor+iMonXFactor))
 	if (abs(iPalmYDelta) > 0.35)
 		iNewY := iCurY + (iPalmYDelta*(iVelocityYFactor+iMonYFactor))
+
+	if (iNewX < 0)
+		iNewX := 0
+	if (iNewX + iW > A_ScreenWidth)
+		iNewX := A_ScreenWidth - iW
+	if (iNewY < 0)
+		iNewY := 0
+	if (iNewY + iH > A_ScreenHeight)
+		iNewY := A_ScreenHeight - iH
 
 	WinMove, ahk_id %hWnd%,, iNewX, iNewY
 
@@ -259,6 +397,36 @@ GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A")
 	riHPct := Round((iH * 100) / A_ScreenHeight, 2)
 
 	return
+}
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: MakeValidHwnd
+		Purpose: hWnd="A" is passed around in many functions. They all need to validate the hWnd when it is *not* valid.
+			That logic happens here.
+	Parameters
+		hWnd
+*/
+MakeValidHwnd(ByRef rhWnd)
+{
+	if (rhWnd = "A" || !rhWnd)
+		rhWnd := WinExist("A")
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+TimeSinceLastCall(id=1, reset=0)
+{
+	static arr:=array()
+	if (reset=1)
+	{
+		((id=0) ? arr:=[] : (arr[id, 0]:=arr[id, 1]:="", arr[id, 2]:=0))
+		return
+	}
+	arr[id, 2]:=!arr[id, 2]
+	arr[id, arr[id, 2]]:=A_TickCount
+	return abs(arr[id,1]-arr[id,0])
 }
 
 #Include AutoLeap\AutoLeap.ahk
