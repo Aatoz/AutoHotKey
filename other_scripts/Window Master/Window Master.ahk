@@ -4054,15 +4054,18 @@ OnConnectDisconnect(sMsg)
 {
 	global g_vLeap
 
+	; Note: This function sometimes causes an error on startup because the event fires before FileInstalls have finished.
 	if (sMsg = "Connect")
 	{
 		Menu, Tray, Tip, Windows Master
-		Menu, TRAY, Icon, images\Main.ico,, 1
+		IfExist, images\Main.ico
+			Menu, TRAY, Icon, images\Main.ico,, 1
 	}
 	else if (sMsg = "Disconnect")
 	{
 		Menu, Tray, Tip, % g_vLeap.m_sLeapMC " is disconnected"
-		Menu, TRAY, Icon, images\Main_Disconnected.ico,, 1
+		IfExist, images\Main_Disconnected.ico
+			Menu, TRAY, Icon, images\Main_Disconnected.ico,, 1
 	}
 
 	return
