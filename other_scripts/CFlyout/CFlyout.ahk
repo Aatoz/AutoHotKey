@@ -551,7 +551,7 @@ class CFlyout
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
 		; 14. sTextAlign = “Center”. Text alignment for CFlyout. Valid options are “Left”, “Right”, and “Center”.
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = 0, iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "")
+	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "")
 	{
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocBorderY, iLocBorderH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
@@ -586,6 +586,8 @@ class CFlyout
 			this.m_bReadOnly := bReadOnly
 		if (bShowInTaskbar != A_Blank)
 			this.m_bShowInTaskbar:= bShowInTaskbar
+		if (bAlwaysOnTop != A_Blank)
+			this.m_bAlwaysOnTop := bAlwaysOnTop
 		if (sFont)
 			this.m_sFont := sFont
 		if (sFontColor)
@@ -696,8 +698,9 @@ class CFlyout
 		; See http://www.autohotkey.com/board/topic/21449-how-to-prevent-the-parent-window-from-losing-focus/
 		sLocPreventFocus := this.m_bReadOnly ? "+0x40000000 -0x80000000" : ""
 		sLocShowInTaskbar := bShowInTaskbar ? "" : "+ToolWindow"
+		sLocAlwaysOnTop := this.m_bAlwaysOnTop ? "AlwaysOnTop" : ""
 
-		GUI, +LastFound +AlwaysOnTop -Caption %sLocPreventFocus% %sLocShowInTaskbar%
+		GUI, +LastFound -Caption %sLocAlwaysOnTop% %sLocPreventFocus% %sLocShowInTaskbar%
 
 		sLocNoActivate := bReadOnly ? "NoActivate" : ""
 
@@ -804,6 +807,8 @@ class CFlyout
 				this.m_bReadOnly := val
 			else if (key = "ShowInTaskbar")
 				this.m_bShowInTaskbar := val
+			else if (key = "AlwaysOnTop")
+				this.m_bAlwaysOnTop := val
 			else if (key = "TextAlign")
 				this.m_sTextAlign := val
 			else if (key = "Font")
@@ -812,7 +817,7 @@ class CFlyout
 				this.m_sFontColor := "c" val
 			else
 			{
-				rsError := "Error: Missing key/val pair for " key " ."
+				rsError := "Error: Missing key/val pair for " key "."
 				return false
 			}
 		}
@@ -1025,6 +1030,7 @@ class CFlyout
 		m_bDrawBelowAnchor :=
 		m_bReadOnly :=
 		m_bShowInTaskbar :=
+		m_bAlwaysOnTop :=
 
 		m_sBackground :=
 		m_sTextAlign :=
