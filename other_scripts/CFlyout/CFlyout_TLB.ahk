@@ -246,7 +246,6 @@ class CFlyout
 	RemoveItem(iItem)
 	{
 		Control, Delete, %iItem%,, % "ahk_id " this.m_hListBox
-		this.m_asItems[iItem].Remove
 		this.RedrawControls()
 		return
 	}
@@ -315,11 +314,12 @@ class CFlyout
 			GUI GUIFlyoutEdit: New, hwndhFlyoutEdit Resize MinSize, Flyout Settings
 		else GUI %sGUI%:Default
 
-		GUI, Add, ListView, xm y5 w450 h250 AltSubmit hwndhLV vvGUIFlyoutEditLV gGUIFlyoutEditLVProc, Option|Value
+		GUI, Add, ListView, xm y5 w450 r14 AltSubmit hwndhLV vvGUIFlyoutEditLV gGUIFlyoutEditLVProc, Option|Value
 		LV_Colors.OnMessage()
 		LV_Colors.Attach(hLV)
 
-		GUI, Add, Button, % "xp yp+" 250+iMSDNStdBtnSpacing " w450 h" iMSDNStdBtnH " vvGUIFlyoutEditSettings gGUIFlyoutEditSettings", &Edit
+		GUIControlGet, iLV_, Pos, vGUIFlyoutEditLV
+		GUI, Add, Button, % "xp yp+" iLV_H+iMSDNStdBtnSpacing " w450 h" iMSDNStdBtnH " vvGUIFlyoutEditSettings gGUIFlyoutEditSettings", &Edit
 
 		if (sGUI == A_Blank)
 		{
@@ -328,13 +328,15 @@ class CFlyout
 		}
 
 		local key, val, iColorRowNum
+		GUIControl, -Redraw, %hLV%
 		for key, val in this.m_vConfigIni.Flyout
 		{
-			LV_Add("", key, this.m_vConfigIni.Flyout[key])
-			if (key = "FontColor")
-				iColorRowNum := LV_GetCount()
+			LV_Add("", key, val)
+			if (key = "FontColor" || key = "HighlightColor")
+				LV_Colors.Cell(hLV, A_Index, 2, val)
 		}
 		LV_ModifyCol()
+		GUIControl, +Redraw, %hLV%
 
 		g_hOwner := sGUI == A_Blank ? hParent : hFlyoutEdit
 		if (g_hOwner)
@@ -349,10 +351,6 @@ class CFlyout
 			this.CenterWndOnOwner(hFlyoutEdit, g_hOwner)
 		}
 		else WinActivate, ahk_id %g_hOwner% ; Owner was de-activated through creation of g_vTmpFlyout
-
-		GUIControl, -Redraw, %hLV%
-		LV_Colors.Cell(hLV, iColorRowNum, 2, this.m_vConfigIni.Flyout.FontColor)
-		GUIControl, +Redraw, %hLV%
 
 		GUIControl, Focus, vGUIFlyoutEditLV
 		LV_Modify(1, "Select")
@@ -415,16 +413,15 @@ class CFlyout
 				gosub GUIFlyoutUpdateTmpFlyout
 				return
 			}
-			else if (sCurRowCol1 = "FontColor")
+			else if (sCurRowCol1 = "FontColor" || sCurRowCol1 = "HighlightColor")
 			{
-				sTmpColor := g_vConfigIni.Flyout.FontColor
+				sTmpColor := g_vConfigIni.Flyout[sCurRowCol1]
 				sColor := Dlg_Color(sTmpColor, hFlyoutEdit)
 				sVal := RGB(sColor)
-				g_vConfigIni.Flyout.FontColor := sVal
 
 				GUIControl, -Redraw, %hLV%
 				LV_Colors.Cell(hLV, LV_GetSel(), 2, sVal)
-				 GUIControl, +Redraw, %hLV%
+				GUIControl, +Redraw, %hLV%
 			}
 			else
 			{
@@ -435,7 +432,7 @@ class CFlyout
 			}
 
 			LV_Modify(LV_GetSel(), "", sCurRowCol1, sVal)
-			g_vConfigIni.Flyout[sCurRowCol1] :=  sVal
+			g_vConfigIni.Flyout[sCurRowCol1] := sVal
 
 			gosub GUIFlyoutUpdateTmpFlyout
 			return
@@ -457,7 +454,7 @@ class CFlyout
 
 		GUIFlyoutUpdateTmpFlyout:
 		{
-			g_vTmpFlyout:=
+			g_vTmpFlyout :=
 
 			aKeysValsCopy := {}
 			for key, val in g_vConfigIni.Flyout
@@ -467,7 +464,12 @@ class CFlyout
 				else aKeysValsCopy.Insert(key, val)
 			}
 
-			g_vTmpFlyout := new CFlyout(0, ["This is a preview", "1", "2", "3"], aKeysValsCopy.ReadOnly, aKeysValsCopy.ShowInTaskbar, aKeysValsCopy.X, aKeysValsCopy.Y, aKeysValsCopy.W, aKeysValsCopy.MaxRows, aKeysValsCopy.AnchorAt, true, aKeysValsCopy.Background, aKeysValsCopy.Font, "c" g_vConfigIni.Flyout.FontColor)
+			g_vTmpFlyout := new CFlyout(0, ["This is a preview", "1", "2", "3"]
+				, aKeysValsCopy.ReadOnly, aKeysValsCopy.ShowInTaskbar, aKeysValsCopy.X, aKeysValsCopy.Y, aKeysValsCopy.W
+				, aKeysValsCopy.MaxRows, aKeysValsCopy.AnchorAt, aKeysValsCopy.DrawBelowAnchor, aKeysValsCopy.Background
+				, aKeysValsCopy.Font, "c" aKeysValsCopy.FontColor, aKeysValsCopy.TextAlign, aKeysValsCopy.AlwaysOnTop
+				, true, aKeysValsCopy.ExitOnEsc, aKeysValsCopy.HighlightColor, aKeysValsCopy.HighlightTrans)
+
 			WinActivate, ahk_id %hFlyoutEdit%
 			return
 		}
@@ -543,7 +545,7 @@ class CFlyout
 		; 11. sBackground = 0. Background picture for Flyout. If 0 or an invalid file, then the background will be all Black.
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true)
+	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "")
 	{
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
@@ -586,6 +588,10 @@ class CFlyout
 			this.m_sFont := sFont
 		if (sFontColor)
 			this.m_sFontColor := sFontColor
+		if (sHighlightColor)
+			this.m_sHighlightColor := sHighlightColor
+		if (sHighlightTrans)
+			this.m_sHighlightTrans := sHighlightTrans
 
 		; Naming convention is GUI_FlyoutN. If, for example, 2 CFlyouts already exists, name this flyout GUI_Flyout3
 		Loop
@@ -621,7 +627,7 @@ class CFlyout
 		this.m_asItems := asTextToDisplay
 		GUI, Add, ListBox, % "x0 y0 r" (asTextToDisplay.MaxIndex() > iMaxRows ? iMaxRows : asTextToDisplay.MaxIndex()) " Choose1 vm_vLB HWNDg_hListBox", % this.GetCmdListForListBox()
 		this.m_hListBox := g_hListBox
-		this.m_vTLB := new TransparentListBox(g_hListBox, g_hPic, SubStr(this.m_sFontColor, 2), SubStr(this.m_sFontColor, 2), 0x6AEFF, 80) ; TODO: Custom colors
+		this.m_vTLB := new TransparentListBox(g_hListBox, g_hPic, SubStr(this.m_sFontColor, 2), SubStr(this.m_sFontColor, 2), this.m_sHighlightColor, this.m_sHighlightTrans)
 
 		this.m_hFont := Fnt_GetFont(this.m_hListBox)
 		this.GetWidthAndHeight(iLocW, iLocH)
@@ -806,6 +812,10 @@ class CFlyout
 				this.m_sFont := val
 			else if (key = "FontColor")
 				this.m_sFontColor := "c" val
+			else if (key = "HighlightColor")
+				this.m_sHighlightColor := val
+			else if (key = "HighlightTrans")
+				this.m_sHighlightTrans := val
 			else
 			{
 				rsError := "Error: Missing key/val pair for " key "."
@@ -915,6 +925,8 @@ class CFlyout
 				Background=Default.jpg
 				Font=Arial, s15
 				FontColor=White
+				HighlightColor=0x6AEFF
+				HighlightTrans=85
 				MaxRows=10
 				ReadOnly=0
 				ShowInTaskbar=0
@@ -979,6 +991,8 @@ class CFlyout
 		; Font Dlg
 		m_sFont :=
 		m_sFontColor :=
+		m_sHighlightColor :=
+		m_sHighlightTrans :=
 		; End Flyout_config.ini section.
 
 	; private:
