@@ -1,4 +1,0 @@
-; Signpost travelto permutations
-Bree:
-Rivendell:
-Bywater:
