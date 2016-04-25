@@ -39,7 +39,7 @@ DynaExpr_Eval(sExpr)
 
 	PID:=DynaRun(sScript)
 
-	Process,WaitClose,%PID%
+	Process, WaitClose, %PID%
 	FileRead sResult, %sTmpFile%
 
 	return sResult
@@ -62,7 +62,6 @@ DynaExpr_FuncCall(sFunc, ByRef rbRet=0)
 		; Extract parameters.
 		iPosOfFirstParm := InStr(sFunc, "(")+1,
 		sParms := SubStr(sFunc, iPosOfFirstParm, StrLen(sFunc)-iPosOfFirstParm)
-		StringReplace, sParms, sParms, ",, All
 
 		; Put parameters into an array (Best method I could find for passing any more than 1 variable was from this document):
 		; http://www.autohotkey.com/board/topic/84950-dynamic-function-calls-an-unknown-number-of-parameters/)
