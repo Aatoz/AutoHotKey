@@ -1367,7 +1367,7 @@ class SequenceDlg
 		Function: ShowDlg
 			Purpose: To display a dialog to edit sequences.
 		Parameters
-			hParent
+			hOwner
 			bFromEdit
 			iX="0.00"
 			iY="0.00"
