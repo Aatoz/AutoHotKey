@@ -16,7 +16,8 @@ SetWinDelay, -1
 SendMode, Input
 SetWorkingDir, %A_ScriptDir%
 
-DoFileInstalls()
+if (A_IsCompiled)
+	DoFileInstalls()
 
 Menu, TRAY, Icon, images\Logo.ico,, 1
 
