@@ -43,11 +43,23 @@ class CFlyout
 		; 2.sCallback is the function name of a callback for CFlyout_OnMessage. sCallback must be a function that takes two parameters: a CFlyout object and a msg.
 	OnMessage(msgs, sCallback="")
 	{
-		static WM_LBUTTONDOWN:=513
+		static WM_LBUTTONDOWN:=513, WM_KEYDOWN:=256
 
 		Loop, Parse, msgs, `,
 		{
-			OnMessage(A_LoopField, "CFlyout_OnMessage")
+			if (A_LoopField = "ArrowDown")
+			{
+				; TODO: VK_KeyDown?
+				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
+					Hotkey, Down, CFlyout_OnArrowDown
+			}
+			else if (A_LoopField = "ArrowUp")
+			{
+				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
+					Hotkey, Up, CFlyout_OnArrowUp
+			}
+			else OnMessage(A_LoopField, "CFlyout_OnMessage")
+
 			if (%A_LoopField% == WM_LBUTTONDOWN)
 				this.m_bHandleClick := false
 		}
@@ -551,7 +563,7 @@ class CFlyout
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
 		; 14. sTextAlign = “Center”. Text alignment for CFlyout. Valid options are “Left”, “Right”, and “Center”.
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "")
+	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true)
 	{
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocBorderY, iLocBorderH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
@@ -704,9 +716,9 @@ class CFlyout
 
 		sLocNoActivate := bReadOnly ? "NoActivate" : ""
 
-		if (asTextToDisplay.MaxIndex())
+		if (asTextToDisplay.MaxIndex() && bShowOnCreate) ; If we have text to display and should show it on creation, do it now.
 			GUI, Show, X%iLocX% Y%iLocY% W%iLocW% H%iLocH% %sLocNoActivate%
-		else
+		else ; create the GUI but keep it hidden.
 		{
 			GUI, Show, X-32768 Y%iLocY% W%iLocW% H%iLocH% %sLocNoActivate%
 			this.Hide()
@@ -725,6 +737,26 @@ class CFlyout
 				clipboard := sTmpSel
 
 			sTmpSel :=
+			return
+		}
+		;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;
+		CFlyout_OnArrowDown:
+		{
+			Object(CFlyout.FromHwnd[WinExist(A)]).Move(false)
+			return
+		}
+		;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;
+		CFlyout_OnArrowUp:
+		{
+			Object(CFlyout.FromHwnd[WinExist(A)]).Move(true)
 			return
 		}
 		;;;;;;;;;;;;;;
