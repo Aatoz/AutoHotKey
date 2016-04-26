@@ -776,6 +776,7 @@ class CFlyout
 		; Merge allows new sections/keys to be added without any compatibility issues
 		; Invalid keys/sections will be removed since bRemoveNonMatching (by default) is set to true
 		this.m_vConfigIni.Merge(vDefaultConfigIni)
+		this.m_vConfigIni.Save() ; So the old ini gets the new data.
 
 		for key, val in this.m_vConfigIni.Flyout
 		{
