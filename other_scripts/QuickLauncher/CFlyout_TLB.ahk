@@ -246,6 +246,7 @@ class CFlyout
 	RemoveItem(iItem)
 	{
 		Control, Delete, %iItem%,, % "ahk_id " this.m_hListBox
+		this.m_asItems.Remove(iItem)
 		this.RedrawControls()
 		return
 	}
@@ -268,8 +269,11 @@ class CFlyout
 			this.m_asItems := aStringList
 
 			; List box.
+			this.m_vTLB.SetRedraw(false)
 			GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents.
 			GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
+			this.m_vTLB.Update()
+			this.m_vTLB.SetRedraw(true)
 		}
 
 		if (this.m_bIsHidden)
