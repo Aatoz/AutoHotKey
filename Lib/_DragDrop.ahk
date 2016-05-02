@@ -39,15 +39,15 @@ class DragDrop
 		Function: __New(0
 			Purpose: Initialize DragDrop object
 		Parameters
-			hCallback: String of callback function. Callback function takes a COM object of selected items from the dragged explorer window.
+			sCallback: String of callback function. Callback function takes a COM object of selected items from the dragged explorer window.
 			hDropWnd: Target hWnd. IMPORTANT: Must be a window handle! Also used to attach class to hWnd.
 	*/
-	__New(hCallback, hDropWnd)
+	__New(sCallback, hDropWnd)
 	{
-		this.m_hCallback := Func(hCallback)
+		this.m_hCallback := Func(sCallback)
 		if (!IsFunc(this.m_hCallback))
 		{
-			Msgbox 8256,, Error: %hCallback% is not a valid function.
+			Msgbox 8256,, Error: %sCallback% is not a valid function.
 			return false
 		}
 
@@ -65,7 +65,7 @@ class DragDrop
 
 		; Register this instance in super class.
 		this.m_hDropWnd := hDropWnd
-		DragDrop.ForHwnd[hDropWnd] := &this ; for DD_WatchForDD
+		DragDrop.ForHwnd[hDropWnd] := &this ; for DD_MouseProc
 		return this
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
