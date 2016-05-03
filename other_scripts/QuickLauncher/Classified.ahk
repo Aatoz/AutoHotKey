@@ -1,2 +1,2 @@
-; Dummy
+; Dummy.
 return
