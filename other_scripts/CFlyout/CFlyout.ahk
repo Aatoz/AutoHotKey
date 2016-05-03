@@ -255,8 +255,8 @@ class CFlyout
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; Updates flyout with new items specified in aStringList; aStringList is assigned to m_asItems.
-	; If aStringList is 0, then the flyout is redrawn using the same m_asItems. 
-	; f aStringList is non-zero, then potential changes in the flyout include changes in Height,
+	; If aStringList is 0, then the flyout is redrawn using m_asItems which may or may not be unchanged. 
+	; If aStringList is non-zero, then potential changes in the flyout include changes in Height,
 	; and changes in X and Y positioning (depending on m_iAnchorAt, m_bDrawBelowAnchor and m_bFollowMouse).
 	UpdateFlyout(aStringList = 0)
 	{
@@ -264,18 +264,14 @@ class CFlyout
 
 		if (aStringList == 0)
 			aStringList := this.m_asItems
-		else
-		{
-			; Set up new cmd list for display.
-			this.m_asItems := aStringList
+		else this.m_asItems := aStringList ; Set up new cmd list for display.
 
-			; List box.
-			this.m_vTLB.SetRedraw(false)
-			GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents.
-			GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
-			this.m_vTLB.Update()
-			this.m_vTLB.SetRedraw(true)
-		}
+		; List box.
+		this.m_vTLB.SetRedraw(false) ; Redrawing will happen in RedrawControls()
+		GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents.
+		GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
+		;~ this.m_vTLB.Update()
+		;~ this.m_vTLB.SetRedraw(true)
 
 		if (this.m_bIsHidden)
 			this.Show()
@@ -550,7 +546,7 @@ class CFlyout
 		; 11. sBackground = 0. Background picture for Flyout. If 0 or an invalid file, then the background will be all Black.
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "")
+	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "", sSeparator = "")
 	{
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
@@ -597,6 +593,8 @@ class CFlyout
 			this.m_sHighlightColor := sHighlightColor
 		if (sHighlightTrans)
 			this.m_sHighlightTrans := sHighlightTrans
+		if (sSeparator)
+			this.m_sSeparator := sSeparator
 
 		; Naming convention is GUI_FlyoutN. If, for example, 2 CFlyouts already exists, name this flyout GUI_Flyout3
 		Loop
@@ -683,6 +681,9 @@ class CFlyout
 			this.Hide()
 			WinMove, % "ahk_id" this.m_hFlyout,, %iLocX%
 		}
+
+		; Perform time-consuming operations after display.
+		this.CalcSeparator()
 
 		return this
 
@@ -891,26 +892,81 @@ class CFlyout
 		sCmdListForListBox :=
 		Loop, % this.m_asItems.MaxIndex()
 		{
-			CurElement := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
+			sItem := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
 			if (A_Index == 1)
-				sCmdListForListBox := CurElement
-			else sCmdListForListBox = %sCmdListForListBox%|%CurElement%
+				sCmdListForListBox := sItem
+			else sCmdListForListBox := sCmdListForListBox "|" sItem
 		}
 		return sCmdListForListBox
 	}
 
-	; Currently unused. The idea is to fill a completely empty line a specified separator
-	; such as "-". Then flyout text, mainly in ReadOnly mode, could be made more readable being separated by “-”s.
-	; See DictLookup for an example of what I have in mind.
-	CalcAndSetSeparator()
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: CalcSeparator
+			Purpose: To calc separator and set m_sSeparatorLine
+		Parameters
+			
+	*/
+	CalcSeparator()
 	{
-		this.m_sSeparator :=
-		iMaxChars := Str_GetMaxCharsForFont("-", this.m_iW, this.m_hFont) ; TODO: User set the Separator
+		; This avoids infinite recursion in Str_GetMaxCharsForFont.
+		if (this.m_sSeparator = "")
+			this.m_sSeparator := "-"
 
-		Loop %iMaxChars%
-			this.m_sSeparator .= "-"
+		iMaxChars := Str_GetMaxCharsForFont(this.m_sSeparator, this.m_iW, this.m_hFont)
+
+		this.m_sSeparatorLine :=
+		Loop % iMaxChars
+			this.m_sSeparatorLine .= "-"
+
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddLine
+			Purpose: To add a separator line
+		Parameters
+			iAt: Where to insert the separator. Inserted at bottom, if blank.
+			bUpdate: Update flyout after adding line?
+	*/
+	AddLine(iAt="", bUpdate=false)
+	{
+		if (iAt)
+			this.m_asItems.InsertAt(iAt, this.m_sSeparatorLine)
+		else this.m_asItems.Insert(this.m_sSeparatorLine)
+
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddText
+			Purpose: To add text
+		Parameters
+			iAt: Where to insert the text. Inserted at bottom, if blank.
+			bUpdate: Update flyout after adding text?
+	*/
+	AddText(sText, iAt="", bUpdate=false)
+	{
+		if (iAt)
+			this.m_asItems.InsertAt(iAt, sText)
+		else this.m_asItems.Insert(sText)
+
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; Safety function to ensure that all GUI commands used by the class are directed towards the right GUI.
 	EnsureCorrectDefaultGUI()
@@ -1006,7 +1062,9 @@ class CFlyout
 
 		m_bFollowMouse := false ; Set to true when m_iX and m_iY are less than -32768
 		static m_iMouseOffset := 16 ; Static pixel offset used to separate mouse pointer from Flyout when m_bFollowMouse is true
-		m_sSeparator := ; Not yet interfaced. The idea is to fill a completely empty line a specified separator such as "-"
+
+		m_sSeparator := ; The idea is to fill a completely empty line a specified separator such as "-"
+		m_sSeparatorLine :=
 
 		m_iDrawnAtNdx := 0 ; 0-based. Used to keep tracking scrolling position. If iMaxRows is set to 10,
 			; and 11 elements are in asTextToDisplay, and the user has scrolled to the 11th element,
