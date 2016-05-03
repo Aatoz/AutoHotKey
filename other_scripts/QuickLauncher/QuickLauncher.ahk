@@ -58,17 +58,13 @@ InitEverything()
 	vTmpFlyoutConfig.Save()
 
 	; Create CFlyout but start with it hidden (last parameter hides it for us).
-	global g_iQLY, g_iTaskBarH
+	global g_hQL, g_iQLY, g_iTaskBarH
 	global g_vGUIFlyout := new CFlyout(g_hQL, 0, false, false, "", "", "", 10, A_ScreenHeight - g_iQLY - g_iTaskBarH, false, vTmpFlyoutConfig.Flyout.Background, 0, 0, "", "", false, false)
 	g_vGUIFlyout.OnMessage(WM_LBUTTONDOWN:=513
 		. "," WM_LBUTTONUP:=514
 		. "," WM_LBUTTONDBLCLK:=515
 		. "," WM_RBUTTONDOWN:=516
 		, "QL_OnCFlyoutClick")
-
-	; Parenting QL to flyout...
-	Hotkey, IfWinActive, % "ahk_id" g_vGUIFlyout.m_hFlyout
-		Hotkey, Esc, QuickLauncherGUIEscape
 
 	return
 }
@@ -268,6 +264,10 @@ Submit_Selected_From_Flyout:
 QL_RemoveSelectedCmd:
 {	; RRRR method
 	if (IsDisplayingHelpInfo())
+		return
+
+	; Prompt to delete.
+	if (!Msgbox_YesNo("Remove the following command: " g_vGUIFlyout.GetCurSel(), "Remove command"))
 		return
 
 	; Remember last selected item.
@@ -966,6 +966,12 @@ GetCmdsByHitCount(sCmdToMatch)
 	{
 		if (RegExMatch(sec, sExpr))
 		{
+			if (sCmdToMatch = sec)
+			{
+				sExactMatch := sec ; use the sec to match case-sensitivity.
+				continue
+			}
+
 			sNewSec := sec
 			StringReplace, sNewSec, sNewSec, &, &&, All ; Escape ampersands so they aren't underlined.
 
@@ -982,6 +988,10 @@ GetCmdsByHitCount(sCmdToMatch)
 		sCmd := SubStr(A_LoopField, InStr(A_LoopField, "_")+1)
 		aCmds.Insert(sCmd)
 	}
+
+	; Exact matches should be first.
+	if (sExactMatch)
+		aCmds.InsertAt(1, sExactMatch)
 
 	return aCmds
 }
