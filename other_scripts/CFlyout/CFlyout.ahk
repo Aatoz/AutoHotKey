@@ -1,9 +1,3 @@
-/*
-	TODO:
-		1. AddSeparator() -- needs a separator defined in Flyout_Config. It's a string, and we fill the entire width of the LB with this string
-			Calculate it using the FNT functions.
-*/
-
 class CFlyout
 {
 	/*
@@ -555,7 +549,7 @@ class CFlyout
 		CoordMode, Mouse ; Defaults to Screen
 
 		this.m_hParent := hParent
-		if (asTextToDisplay = 0)
+		if (asTextToDisplay = 0 || !asTextToDisplay.MaxIndex())
 			asTextToDisplay := [""]
 
 		; Load settings from Flyout_config.ini
@@ -692,7 +686,6 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_GUIEscape:
 		{
-			Msgbox escape..
 			Object(CFlyout.FromHwnd[WinExist("A")]).__Delete()
 			return
 		}
@@ -812,7 +805,7 @@ class CFlyout
 			else if (key = "ShowInTaskbar")
 				this.m_bShowInTaskbar := val
 			else if (key = "ExitOnEsc")
-				this.m_bExitOnEsc := (val == true)
+				this.m_bExitOnEsc := (val == true || val = "true")
 			else if (key = "AlwaysOnTop")
 				this.m_bAlwaysOnTop := val
 			else if (key = "Font")
@@ -823,11 +816,9 @@ class CFlyout
 				this.m_sHighlightColor := val
 			else if (key = "HighlightTrans")
 				this.m_sHighlightTrans := val
-			else
-			{
-				rsError := "Error: Missing key/val pair for " key "."
-				return false
-			}
+			; else Errors here cause a crash. It's weird, and I think it has to do with DynaExpr.
+			; but is erroring even a good idea? What if it's just a deprecated key?
+			; For now, let's just ignore it.
 		}
 
 		return true
