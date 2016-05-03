@@ -22,17 +22,8 @@ Loop %0% ; for each parameter
 
 	if (sCmd = "AddCmd")
 	{
-		vCmdInfo := {Func: "Run", Parms: sParms}
-		InputBox, sAddUserCmd, Add Command to Quick Launcher, Specify a shortcut for %sParms%
-		sAddUserCmd := Trim(sAddUserCmd) ; Spaces mess things up.
-
-		g_MasterIni := new EasyIni("Master")
-		if (sAddUserCmd && g_MasterIni.AddSection(sAddUserCmd, "", "", sError))
-		{
-			g_MasterIni[sAddUserCmd] := vCmdInfo
-			g_MasterIni.Save()
-		}
-		else Msgbox 8192,, %sError%
+		vCmd := {Func: "Run", Parms: sParms}
+		AddCmdProc(vCmd)
 	}
 }
 
@@ -42,3 +33,68 @@ if (g_hQuickLauncher)
 else Msgbox 8192,, Error:`n`nCould not find Quick Launcher window
 
 ExitApp
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: AddCmdProc
+		Purpose: To localize logic to add a command to the database
+	Parameters
+		vCmd
+*/
+AddCmdProc(vCmd)
+{
+	bContinue := true
+	while (!sAddUserCmd && bContinue)
+	{
+		if (A_Index > 1)
+		{
+			if (!Msgbox_YesNo("An invalid name was specified for this command. Do you want to try to specify a different name?`n"
+				. "`nCmd:`t"sAddUserCmd
+				. "`nPath:`t" vCmd.Parms
+				, "Cancel adding command?"))
+				break
+		}
+
+		InputBox, sAddUserCmd, Add Command to Quick Launcher, % "Specify a shortcut for " vCmd.Parms
+		if (ErrorLevel)
+		{
+			bContinue := false
+			sAddUserCmd :=
+		}
+		else sAddUserCmd := Trim(sAddUserCmd) ; Spaces mess things up.
+	}
+
+	if (sAddUserCmd) ; If a valid shortcut was specified
+	{
+		vMasterIni := class_EasyIni("Master")
+		if (vMasterIni.AddSection(sAddUserCmd, "", "", sError))
+		{
+			vMasterIni[sAddUserCmd] := vCmd
+			vMasterIni.Save()
+		}
+		else Msgbox 8192,, %sError%
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Msgbox_YesNo
+		Purpose:
+	Parameters
+		sMsg: Actual prompt (should be a question)
+		sTitle="": Dialog header (should *not* end with a question mark)
+*/
+Msgbox_YesNo(sMsg, sTitle="")
+{
+	MsgBox, 8228, %sTitle%, %sMsg%
+
+	IfMsgBox Yes
+		return true
+	return false
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
