@@ -355,7 +355,10 @@ AddCmdProc(vCmd)
 
 		InputBox, sAddUserCmd, Add Command to Quick Launcher, % "Specify a shortcut for " vCmd.Parms
 		if (ErrorLevel)
+		{
 			bContinue := false
+			sAddUserCmd :=
+		}
 		else sAddUserCmd := Trim(sAddUserCmd) ; Spaces mess things up.
 	}
 
