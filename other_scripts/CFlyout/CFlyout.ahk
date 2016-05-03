@@ -710,8 +710,9 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowDown:
 		{
-			Object(CFlyout.FromHwnd[WinExist("A")]).Move(false)
-			return
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+			vFlyout.Move(false)
+			return Func(vFlyout.m_sCallbackFunc).(vFlyout, VK_DOWN:=40)
 		}
 		;;;;;;;;;;;;;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -720,8 +721,9 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowUp:
 		{
-			Object(CFlyout.FromHwnd[WinExist("A")]).Move(true)
-			return
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+			vFlyout.Move(true)
+			return Func(vFlyout.m_sCallbackFunc).(vFlyout, VK_UP:=38)
 		}
 		;;;;;;;;;;;;;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1093,6 +1095,13 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 	GUIControlGet, hGUICtrl, hWnd, %A_GUIControl%
 	hFlyout := DllCall("GetParent", uint, hGUICtrl)
 	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
+
+	if (msg == WM_LBUTTONDOWN:=513)
+	{ 
+		CoordMode, Mouse, Relative
+		MouseGetPos,, iClickY
+		vFlyout.Click(iClickY)
+	}
 
 	if (IsFunc(vFlyout.m_sCallbackFunc))
 		bRet := Func(vFlyout.m_sCallbackFunc).(vFlyout, msg)
