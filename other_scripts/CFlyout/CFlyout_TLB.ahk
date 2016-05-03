@@ -1,6 +1,8 @@
-; TODO: Ideas
-	; 1. Transparent ListBox: http://www.autohotkey.com/board/topic/96401-transparent-listbox-help-porting-c-to-ahk/
-	; 2. Separate Text control for customizable header (such as displaying the date in time with prominent font and color in Window Spy.ahk)
+/*
+	TODO:
+		1. AddSeparator() -- needs a separator defined in Flyout_Config. It's a string, and we fill the entire width of the LB with this string
+			Calculate it using the FNT functions.
+*/
 
 class CFlyout
 {
@@ -610,7 +612,7 @@ class CFlyout
 		this.m_iFlyoutNum := iFlyoutNum
 		GUI, GUI_Flyout%iFlyoutNum%: New, +Hwndg_hFlyout, GUI_Flyout%iFlyoutNum%
 		this.m_hFlyout := g_hFlyout
-		CFlyout.FromHwnd[g_hFlyout] := &this ; for OnMessage handlers
+		CFlyout.FromHwnd[g_hFlyout] := &this ; for OnMessage handlers.
 
 		Hotkey, IfWinActive, ahk_id %g_hFlyout%
 		{
@@ -691,7 +693,7 @@ class CFlyout
 		CFlyout_GUIEscape:
 		{
 			Msgbox escape..
-			Object(CFlyout.FromHwnd[WinExist(A)]).__Delete()
+			Object(CFlyout.FromHwnd[WinExist("A")]).__Delete()
 			return
 		}
 		;;;;;;;;;;;;;;
@@ -715,7 +717,7 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowDown:
 		{
-			Object(CFlyout.FromHwnd[WinExist(A)]).Move(false)
+			Object(CFlyout.FromHwnd[WinExist("A")]).Move(false)
 			return
 		}
 		;;;;;;;;;;;;;;
@@ -725,7 +727,7 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowUp:
 		{
-			Object(CFlyout.FromHwnd[WinExist(A)]).Move(true)
+			Object(CFlyout.FromHwnd[WinExist("A")]).Move(true)
 			return
 		}
 		;;;;;;;;;;;;;;
@@ -1035,34 +1037,18 @@ class CFlyout
 ;;;;;;;;;;;;;; Class-specific functionality, such as WM_LBUTTONDOWN messages, are handled in this function.
 CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 {
-	global g_hFlyout
 	Critical
-	static s_iUseThisToAvoidWeirdBug := 100
-	static WM_LBUTTONDOWN:=513
 
-	;~ SetFormat, Float,, H
+	;~ static s_iUseThisToAvoidWeirdBug := 100
 
-	if (CFlyout.FromHwnd.HasKey(hWnd))
-		vFlyout := Object(CFlyout.FromHwnd[hWnd])
-	else
-	{
-		while (A_Index < s_iUseThisToAvoidWeirdBug && !IsObject(vFlyout))
-			vFlyout := Object(CFlyout.FromHwnd[hWnd - A_Index])
-	}
-	if (!IsObject(vFlyout))
-		vFlyout := Object(CFlyout.FromHwnd[g_hFlyout])
+	GUIControlGet, hGUICtrl, hWnd, %A_GuiControl%
+	hFlyout := DllCall("GetParent", uint, hGUICtrl)
+	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
 
-	; Click is handled natively now.
-	;~ if (msg == WM_LBUTTONDOWN && vFlyout.m_bHandleClick)
+	;~ if (!IsObject(vFlyout))
 	;~ {
-		;~ ; The reason for return is twofold. Not only should you disallow interaction with a read-only "control,"
-		;~ ; but also the options that are set because of read-only cause WinGetPos to retrieve the parent (or if there is no parent, then the script's main hwnd) window coordinates
-		;~ if (vFlyout.m_bReadOnly)
-			;~ return
-
-		;~ CoordMode, Mouse, Relative
-		;~ MouseGetPos,, iMouseY
-		;~ vFlyout.Click(iMouseY)
+		;~ while (A_Index < s_iUseThisToAvoidWeirdBug && !IsObject(vFlyout))
+			;~ vFlyout := Object(CFlyout.FromHwnd[hWnd - A_Index])
 	;~ }
 
 	if (IsFunc(vFlyout.m_sCallbackFunc))
@@ -1250,37 +1236,6 @@ return
 	;~ DllCall("RedrawWindow", "UInt", hCtrl, "UInt", 0, "UInt", 0, "UInt", 0x0101) ; RDW_UPDATENOW | RDW_INVALIDATE
 	;~ return
 ;~ }
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;; Sets the default GUI and ListView for use with GUI commands
-LV_SetDefault(sGUI, sLV)
-{
-	GUI, %sGUI%:Default
-	GUI, ListView, %sLV%
-	return
-}
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;; Wrapper to return the selected item number in a ListView
-LV_GetSel()
-{
-	return LV_GetNext(0, "Focused") == 0 ? 1 : LV_GetNext(0, "Focused")
-}
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;; Wrapper to return the selected item in a ListView as text
-LV_GetSelText(iCol=1)
-{
-	LV_GetText(sCurSel, LV_GetSel(), iCol)
-	StringReplace, sCurSel, sCurSel, `r, , All ; Sometimes, characters are retrieved with a carriage-return.
-	return sCurSel
-}
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
