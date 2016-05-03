@@ -76,6 +76,12 @@ GetTracksInPlaylist(vPlaylist="")
 	return
 }
 
+#+E::
+{
+	CFlyout.GUIEditSettings()
+	return
+}
+
 #+P::
 {
 	; CFlyout interface scratchpad
@@ -83,16 +89,17 @@ GetTracksInPlaylist(vPlaylist="")
 	aPlaylists.1 .= " (" aPlaylists.MaxIndex() ")"
 	aTracks := GetTracksInPlaylist()
 
-	g_vPlaylists := new CFlyout(0, aPlaylists, false, false, -1920, 0, 350, 15, -99999, false, 0, "Consolas, s12")
-	g_vPlaylists.OnMessage(WM_LBUTTONUP:=514 "," WM_LBUTTONDOWN:=513 ",ArrowUp,ArrowDown", "PlaylistFlyout_Proc")
+	g_vPlaylists := new CFlyout(0, aPlaylists, false, false, -1920, 0, 350, 15, -99999, false, "bleh", "Consolas, s12")
+	g_vPlaylists.OnMessage(WM_LBUTTONDOWN:=513 ",ArrowUp,ArrowDown", "PlaylistFlyout_Proc")
 	g_vPlaylists.MoveTo(2)
 
 	objLibrary := g_vITunes.Sources.Item(1)
 	vPlaylist := objLibrary.Playlists.Item(2)
 	vTrack := vPlaylist.Tracks().Item(1)
 
-	g_vTracks := new CFlyout(0, aTracks, false, false, -1920+g_vPlaylists.GetFlyoutW, 0, 350, 15, -99999, false, GetAlbumArt(vTrack.Artwork), "Consolas, s12")
-	g_vTracks.OnMessage(WM_LBUTTONUP:=514 "," WM_LBUTTONDOWN:=513 ",ArrowUp,ArrowDown", "TrackFlyout_Proc")
+	;~ g_vTracks := new CFlyout(0, aTracks, false, false, -1920+g_vPlaylists.GetFlyoutW, 0, 350, 15, -99999, false, GetAlbumArt(vTrack.Artwork), "Consolas, s12")
+	g_vTracks := new CFlyout(g_vPlaylists.m_hFlyout, aTracks, false, false, -1920+g_vPlaylists.GetFlyoutW, 0, 350, 15, -99999, false, "bleh", "Consolas, s12")
+	g_vTracks.OnMessage(WM_LBUTTONDOWN:=513 ",ArrowUp,ArrowDown", "TrackFlyout_Proc")
 
 	Hotkey, IfWinActive, % "ahk_id" g_vPlaylists.m_hFlyout
 		Hotkey, Left, Flyout_OnLeftArrow
@@ -181,7 +188,10 @@ Flyout_OnLeftArrow:
 		g_vTracks :=
 	}
 	else if (hActive = g_vTracks.m_hFlyout)
+	{
+		g_vTracks.Hide()
 		WinActivate, % "ahk_id" g_vPlaylists.m_hFlyout
+	}
 
 	return
 }
@@ -476,5 +486,4 @@ class iTunesOSD
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 }
 
-;#Include %A_ScriptDir%\CFlyout.ahk
 #Include %A_ScriptDir%\CFlyout.ahk
