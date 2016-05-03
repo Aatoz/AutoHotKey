@@ -1020,6 +1020,6 @@ QuickLauncherGUIEscape:
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-#Include %A_ScriptDir%\CFlyout_TLB.ahk
+#Include %A_ScriptDir%\CFlyout.ahk
 #Include %A_ScriptDir%\HelperFunctions.ahk
 #Include %A_ScriptDir%\Classified.ahk ; This is not under source control for security reasons. It includes custom things for me.
