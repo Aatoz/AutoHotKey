@@ -6,7 +6,7 @@ SetWorkingDir, %A_ScriptDir%
 SendMode, Input
 
 g_vSpy := new CFlyout(0, 0, false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "", true, "", "", "", "-") ; c0xFF0080
-g_vSpy.OnMessage(WM_LBUTTONDBLCLK:=515 "," WM_COPYDATA:=74, "WSpy_OnMessage")
+g_vSpy.OnMessage(WM_LBUTTONDBLCLK:=515 ",Copy", "WSpy_OnMessage")
 
 WinSetTitle, % "ahk_id" g_vSpy.m_hFlyout,, Window Spy++ ; b/c default title is "GUI_FlyoutN" (where N = the number of flyouts currently running in the script)
 
@@ -115,7 +115,7 @@ UpdateSpecs(bShowControlSpecs)
 
 	AlwaysOnTop := "No"
 	WinGet, ExStyle, ExStyle, ahk_id %hActiveWndUnderCursor%
-	if (ExStyle & 0x8)  ; 0x8 is WS_EX_TOPMOST.
+	if (ExStyle & WS_EX_TOPMOST:=8)
 		AlwaysOnTop := "Yes"
 
 	g_vSpy.Clear()
@@ -141,6 +141,7 @@ UpdateSpecs(bShowControlSpecs)
 	if (bShowControlSpecs)
 	{
 		g_vSpy.AddText("Hide Control Positions")
+		g_vSpy.AddLine()
 		ControlGetPos, iX, iY, iW, iH,, ahk_id %hWinCtrl%
 		g_vSpy.AddText("CtrlX: " iX)
 		g_vSpy.AddText("CtrlY: " iY)
@@ -169,13 +170,17 @@ WSpy_OnMessage(vFlyout, msg)
 		{
 			bShowControlPos := (vFlyout.m_asItems[18] = "Show Control Positions")
 			UpdateSpecs(bShowControlPos)
+			vFlyout.UpdateFlyout()
 			vFlyout.MoveTo(18)
 		}
 	}
-	else if (msg == WM_COPYDATA:=74)
+	else if (msg = "Copy")
 	{
-		Msgbox % st_concat("`n", "Copy this...", vFlyout.GetCurSel())
-		; TODO: Strip out the prefix
+		sCopy := vFlyout.GetCurSel()
+		if (iColonPos := InStr(sCopy, ":"))
+			sCopy := SubStr(sCopy, iColonPos+2)
+
+		clipboard := sCopy
 	}
 
 	return true
