@@ -5,7 +5,7 @@ class CFlyout
 	public:
 	----------------------------------------------------------------------------------------------------------------------------------
 	*/
-	; Shows the flyout
+	; Shows the flyout.
 	 Show()
 	{
 		this.EnsureCorrectDefaultGUI()
@@ -68,7 +68,7 @@ class CFlyout
 	; 2. Sets iH to what CalcHeight() returns.
 	GetWidthAndHeight(ByRef riW, ByRef riH)
 	{
-		; The two lines below ensure that these are out params (as opposed to in/out)
+		; The two lines below ensure that these are out params (as opposed to in/out).
 		riH := riW :=
 
 		while (A_Index <= this.m_iMaxRows)
@@ -78,12 +78,12 @@ class CFlyout
 			if (A_Index + this.m_iDrawnAtNdx > this.m_asItems.MaxIndex())
 				break
 
-			iTmpW := Str_MeasureText(sTmp == A_Blank ? "a" : sTmp, this.m_hFont).right
+			iTmpW := Str_MeasureText(sTmp == "" ? "a" : sTmp, this.m_hFont).right
 			if (iTmpW < this.m_iW && iTmpW > riW)
 				riW := iTmpW
 
 			; Transparent LB doesn't support 
-			;~ Str_Wrap(sTmp == A_Blank ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
+			;~ Str_Wrap(sTmp == "" ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
 			riH += this.m_vTLB.ItemHeight
 		}
 
@@ -94,11 +94,11 @@ class CFlyout
 			riH := this.m_vTLB.ItemHeight
 
 		riW += 9
-		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide
+		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide.
 			riW += 18
 		riH += 5
 
-		riW := this.m_iW ; TODO: logic for auto-sizing width from wrapper
+		riW := this.m_iW ; TODO: logic for auto-sizing width from wrapper.
 
 		return
 	}
@@ -113,25 +113,26 @@ class CFlyout
 			if (A_Index + this.m_iDrawnAtNdx > this.m_asItems.MaxIndex())
 				break
 
-			iTmpW := Str_MeasureText(sTmp == A_Blank ? "a" : sTmp, this.m_hFont).right
+			iTmpW := Str_MeasureText(sTmp == "" ? "a" : sTmp, this.m_hFont).right
 			if (iTmpW < this.m_iW && iTmpW > riW)
 				riW := iTmpW
 
-			; Transparent LB doesn't support 
-			;~ Str_Wrap(sTmp == A_Blank ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
+			; Transparent LB doesn't support.
+			;~ Str_Wrap(sTmp == "" ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH).
 			riH += this.m_vTLB.ItemHeight
 		}
 
 		if (riW == A_Blank)
 			iW := this.m_iW
 		if (riH == A_Blank)
-			;~ Str_Wrap("a", this.m_iW, this.m_hFont, true, riH)
+			;~ Str_Wrap("a", this.m_iW, this.m_hFont, true, riH).
 			riH := this.m_vTLB.ItemHeight
 
 		riW += 9
-		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide
+		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide.
 			riW += 18
 		riH += 5
+
 		return
 	}
 
@@ -160,20 +161,20 @@ class CFlyout
 		return iH
 	}
 
-	; Returns currently selected item in flyout
+	; Returns currently selected item in flyout.
 	GetCurSel()
 	{
 		ControlGet, sCurSel, Choice, ,, % "ahk_id" this.m_hListBox
 		return sCurSel
 	}
 
-	; Returns index of currently selected item in flyout
+	; Returns index of currently selected item in flyout.
 	GetCurSelNdx()
 	{
 		return this.m_vTLB.CurSel
 	}
 
-	; Finds the string and returns the index
+	; Finds the string and returns the index.
 	FindString(sString)
 	{
 		ControlGet, iString, FindString, %sString%,, % "ahk_id" this.m_hListBox
@@ -190,6 +191,7 @@ class CFlyout
 		else if (iSel < 0) ; Wrap to bottom
 			SendMessage, LB_SETCURSEL, % this.m_vTLB.ItemCount - 1, 0, , % "ahk_id" this.m_hListBox
 		else SendMessage, LB_SETCURSEL, % iSel, 0, , % "ahk_id" this.m_hListBox ; Move Up/Down
+
 		return
 	}
 
@@ -212,7 +214,7 @@ class CFlyout
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
-		Function:
+		Function: Click
 			Purpose:
 		Parameters
 			iClickY: Where to click
@@ -224,12 +226,21 @@ class CFlyout
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: Scroll
+			Purpose:
+		Parameters
+			bUp: Scroll up or down
+	*/
 	Scroll(bUp)
 	{
 		static WM_VSCROLL:=0x0115
 		PostMessage, WM_VSCROLL, % !bUp, 0,, % "ahk_id " this.m_hListBox
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
@@ -248,10 +259,17 @@ class CFlyout
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	; Updates flyout with new items specified in aStringList; aStringList is assigned to m_asItems.
-	; If aStringList is 0, then the flyout is redrawn using m_asItems which may or may not be unchanged. 
-	; If aStringList is non-zero, then potential changes in the flyout include changes in Height,
-	; and changes in X and Y positioning (depending on m_iAnchorAt, m_bDrawBelowAnchor and m_bFollowMouse).
+	; Updates flyout with new items specified in aStringList; aStringList is assigned to m_asItems	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: UpdateFlyout
+			Purpose: Update flyout with new items
+		Parameters
+			aStringList = 0
+				If aStringList is 0, then the flyout is redrawn using m_asItems which may or may not be unchanged.
+				If aStringList is non-zero, then potential changes in the flyout include changes in Height,
+				and changes in X and Y positioning (depending on m_iAnchorAt, m_bDrawBelowAnchor and m_bFollowMouse).
+	*/
 	UpdateFlyout(aStringList = 0)
 	{
 		this.EnsureCorrectDefaultGUI()
@@ -264,8 +282,6 @@ class CFlyout
 		this.m_vTLB.SetRedraw(false) ; Redrawing will happen in RedrawControls()
 		GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents.
 		GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
-		;~ this.m_vTLB.Update()
-		;~ this.m_vTLB.SetRedraw(true)
 
 		if (this.m_bIsHidden)
 			this.Show()
@@ -275,6 +291,7 @@ class CFlyout
 
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; GUI interface for editing Flyout_Config.ini. May be callable without initializing any CFlyout object like so, “CFlyout.GUIEditSettings()”
 		; 1. hParent is for parentage GUI. If nonzero, then the parent window will be deactivated until the GUI is closed.
@@ -305,7 +322,7 @@ class CFlyout
 		g_vConfigIni := class_EasyIni(A_WorkingDir "\Flyout_config.ini")
 		g_bReloadOnExit := bReloadOnExit
 
-		if (sGUI == A_Blank)
+		if (sGUI == "")
 			GUI GUIFlyoutEdit: New, hwndhFlyoutEdit Resize MinSize, Flyout Settings
 		else GUI %sGUI%:Default
 
@@ -316,7 +333,7 @@ class CFlyout
 		GUIControlGet, iLV_, Pos, vGUIFlyoutEditLV
 		GUI, Add, Button, % "xp yp+" iLV_H+iMSDNStdBtnSpacing " w450 h" iMSDNStdBtnH " vvGUIFlyoutEditSettings gGUIFlyoutEditSettings", &Edit
 
-		if (sGUI == A_Blank)
+		if (sGUI == "")
 		{
 			GUI, Add, Button, % "xp+" 450-(iMSDNStdBtnW*2)-iMSDNStdBtnSpacing " yp+" iMSDNStdBtnH+iMSDNStdBtnSpacing " w" iMSDNStdBtnW " hp vvGUIFlyoutEditGUIOK gGUIFlyoutEditGUIOK", &OK
 			GUI, Add, Button, % "xp+" iMSDNStdBtnW+iMSDNStdBtnSpacing " yp wp hp vvGUIFlyoutEditGUIClose gGUIFlyoutEditGUIClose", &Cancel
@@ -333,14 +350,14 @@ class CFlyout
 		LV_ModifyCol()
 		GUIControl, +Redraw, %hLV%
 
-		g_hOwner := sGUI == A_Blank ? hParent : hFlyoutEdit
+		g_hOwner := sGUI == "" ? hParent : hFlyoutEdit
 		if (g_hOwner)
 		{
 			GUI +Owner%g_hOwner%
 			WinSet, Disable,, ahk_id %g_hOwner%
 		}
 
-		if (sGUI == A_Blank)
+		if (sGUI == "")
 		{
 			GUI Show, x-32768 AutoSize
 			this.CenterWndOnOwner(hFlyoutEdit, g_hOwner)
@@ -352,7 +369,7 @@ class CFlyout
 		LV_Modify(1, "Focus")
 
 	; Wait for dialog to be dismissed
-	while (sGUI == A_Blank && WinExist("ahk_id" hFlyoutEdit))
+	while (sGUI == "" && WinExist("ahk_id" hFlyoutEdit))
 	{
 		if (g_hOwner && !WinExist("ahk_id" g_hOwner))
 			break ; If the owner was closed somehow, then this dialog should also be closed.
@@ -462,7 +479,7 @@ class CFlyout
 			g_vTmpFlyout := new CFlyout(0, ["This is a preview", "1", "2", "3"]
 				, aKeysValsCopy.ReadOnly, aKeysValsCopy.ShowInTaskbar, aKeysValsCopy.X, aKeysValsCopy.Y, aKeysValsCopy.W
 				, aKeysValsCopy.MaxRows, aKeysValsCopy.AnchorAt, aKeysValsCopy.DrawBelowAnchor, aKeysValsCopy.Background
-				, aKeysValsCopy.Font, "c" aKeysValsCopy.FontColor, aKeysValsCopy.TextAlign, aKeysValsCopy.AlwaysOnTop
+				, aKeysValsCopy.Font, "c" aKeysValsCopy.FontColor, aKeysValsCopy.AlwaysOnTop
 				, true, aKeysValsCopy.ExitOnEsc, aKeysValsCopy.HighlightColor, aKeysValsCopy.HighlightTrans)
 
 			WinActivate, ahk_id %hFlyoutEdit%
@@ -540,7 +557,7 @@ class CFlyout
 		; 11. sBackground = 0. Background picture for Flyout. If 0 or an invalid file, then the background will be all Black.
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "", sSeparator = "")
+	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "", sSeparator = "")
 	{
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
@@ -920,6 +937,24 @@ class CFlyout
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
+		Function: Clear
+			Purpose: Clear the flyout
+		Parameters
+			bUpdate: Update flyout after clearing?
+	*/
+	Clear(bUpdate = false)
+	{
+		this.m_asItems := []
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
 		Function: AddLine
 			Purpose: To add a separator line
 		Parameters
@@ -983,6 +1018,7 @@ class CFlyout
 				HighlightColor=0x6AEFF
 				HighlightTrans=85
 				MaxRows=10
+				AlwaysOnTop=0
 				ReadOnly=0
 				ShowInTaskbar=0
 				X=0
