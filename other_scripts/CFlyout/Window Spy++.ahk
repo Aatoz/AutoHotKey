@@ -5,16 +5,16 @@
 SetWorkingDir, %A_ScriptDir%
 SendMode, Input
 
-g_vTooltipFlyout := new CFlyout(0, GetLatestSpecs(false), false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "Center") ; c0xFF0080
-g_vTooltipFlyout.OnMessage(WM_LBUTTONDBLCLK:=515, "WSpy_OnMessage")
+g_vSpy := new CFlyout(0, 0, false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "", true, "", "", "", "-") ; c0xFF0080
+g_vSpy.OnMessage(WM_LBUTTONDBLCLK:=515 "," WM_COPYDATA:=74, "WSpy_OnMessage")
 
-WinSetTitle, % "ahk_id" g_vTooltipFlyout.m_hFlyout,, Window Spy++ ; default title is "GUI_FlyoutN" (where N = the number of flyouts currently running in the script)
+WinSetTitle, % "ahk_id" g_vSpy.m_hFlyout,, Window Spy++ ; b/c default title is "GUI_FlyoutN" (where N = the number of flyouts currently running in the script)
 
 Hotkey, IfWinActive
 	Hotkey, ^+~, Show_Hide
 	Hotkey, #+Tab, Play_Pause
 
-Hotkey, IfWinActive, % "ahk_id" g_vTooltipFlyout.m_hFlyout
+Hotkey, IfWinActive, % "ahk_id" g_vSpy.m_hFlyout
 	Hotkey, WheelUp, OnWheelUp
 	Hotkey, WheelDown, OnWheelDown
 	Hotkey, Up, OnWheelUp
@@ -22,7 +22,6 @@ Hotkey, IfWinActive, % "ahk_id" g_vTooltipFlyout.m_hFlyout
 	Hotkey, Enter, OnEnter
 	Hotkey, NumpadEnter, OnEnter
 	Hotkey, Space, OnEnter
-	;~ Hotkey, ^C, CFlyout_CopySelected
 	Hotkey, !E, GUIEditSettings
 	Hotkey, ^R, Reload
 	Hotkey, Esc, ExitApp
@@ -31,43 +30,50 @@ SetTimer, TooltipProc, 100
 
 TooltipProc:
 {
-	bShowControlPos := (g_vTooltipFlyout.m_asItems[18] = "Hide Control Positions")
-	aSpecs := GetLatestSpecs(bShowControlPos)
+	bShowControlPos := (g_vSpy.m_asItems[18] = "Hide Control Positions")
+	UpdateSpecs(bShowControlPos)
 
-	sActiveWndTitle := aSpecs[1]
-	sActiveClass := aSpecs[2]
-	hActiveWndUnderCursor := aSpecs[3]
+	sActiveWndTitle := g_vSpy.m_asItems[1]
+	sActiveClass := g_vSpy.m_asItems[2]
+	hActiveWndUnderCursor := g_vSpy.m_asItems[3]
 	; ----------------------------------------
-	hWinCtrlClass := aSpecs[5]
-	hWinCtrl := aSpecs[6]
+	hWinCtrlClass := g_vSpy.m_asItems[5]
+	hWinCtrl := g_vSpy.m_asItems[6]
 	; ----------------------------------------
-	bAlwaysOnTop := aSpecs[8]
-	bIsEnabled := aSpecs[9]
-	iMinMaxState := aSpecs[10]
-	iTransparent := aSpecs[11]
+	bAlwaysOnTop := g_vSpy.m_asItems[8]
+	bIsEnabled := g_vSpy.m_asItems[9]
+	iMinMaxState := g_vSpy.m_asItems[10]
+	iTransparent := g_vSpy.m_asItems[11]
 	; ----------------------------------------
-	iWndX := aSpecs[13]
-	iWndY := aSpecs[14]
-	iWndW := aSpecs[15]
-	iWndH := aSpecs[16]
+	iWndX := g_vSpy.m_asItems[13]
+	iWndY := g_vSpy.m_asItems[14]
+	iWndW :=g_vSpy.m_asItemsaSpecs[15]
+	iWndH := g_vSpy.m_asItems[16]
 	; ----------------------------------------
 	; "Show/Hide Control Positions"
 	if (bShowControlPos)
-		iSelectionOffset := 6
-	else iSelectionOffset := 0
+		iSelOffset := 6
+	else iSelOffset := 0
 	; ----------------------------------------
 
-	iMouseX := aSpecs[18 + iSelectionOffset]
-	iMouseY := aSpecs[19 + iSelectionOffset]
+	iMouseX := g_vSpy.m_asItems[18 + iSelOffset]
+	iMouseY := g_vSpy.m_asItems[19 + iSelOffset]
 	; ----------------------------------------
-	sCurrentDate := aSpecs[21 + iSelectionOffset]
+	sCurrentDate := g_vSpy.m_asItems[21 + iSelOffset]
 
-	if (SubStr(hActiveWndUnderCursor, 19) != g_vTooltipFlyout.m_hFlyout && (sPrevActiveWndTitle != sActiveWndTitle || hPrevActiveWndUnderCursor != hActiveWndUnderCursor || sPrevActiveClass != sActiveClass || hPrevWinCtrl != hWinCtrl || hPrevWinCtrlClass != hWinCtrlClass || iPrevTransparent != iTransparent || iPrevMinMaxState != iMinMaxState || iPrevWndX != iWndX || iPrevWndY != iWndY || iPrevWndW != iWndW || iPrevWndH != iWndH || iPrevMouseX != iMouseX || iPrevMouseY != iMouseY || bPrevAlwaysOnTop != bAlwaysOnTop || bPrevIsEnabled != bisEnabled || iPrevHour != A_Hour || iPrevMin != A_Min || sPrevCurrentDate != sCurrentDate))
+	if (SubStr(hActiveWndUnderCursor, 19) != g_vSpy.m_hFlyout
+		&& (sPrevActiveWndTitle != sActiveWndTitle
+		|| hPrevActiveWndUnderCursor != hActiveWndUnderCursor || sPrevActiveClass != sActiveClass
+		|| hPrevWinCtrl != hWinCtrl || hPrevWinCtrlClass != hWinCtrlClass || iPrevTransparent != iTransparent
+		|| iPrevMinMaxState != iMinMaxState || iPrevWndX != iWndX || iPrevWndY != iWndY
+		|| iPrevWndW != iWndW || iPrevWndH != iWndH || iPrevMouseX != iMouseX
+		|| iPrevMouseY != iMouseY || bPrevAlwaysOnTop != bAlwaysOnTop || bPrevIsEnabled != bisEnabled
+		|| iPrevHour != A_Hour || iPrevMin != A_Min || sPrevCurrentDate != sCurrentDate))
 		{
 			; An update, rightfully so, sets the selection back to 1. This is OK because how is CFlyout supposed to now you are updating it with the same contents?
-			iPrevSel := g_vTooltipFlyout.GetCurSelNdx() + 1
-			g_vTooltipFlyout.UpdateFlyout(aSpecs)
-			g_vTooltipFlyout.MoveTo(iPrevSel)
+			iPrevSel := g_vSpy.GetCurSelNdx() + 1
+			g_vSpy.UpdateFlyout()
+			g_vSpy.MoveTo(iPrevSel)
 		}
 
 	; Store previous values so that we don't force an update whenever it is is unnecessary.
@@ -89,12 +95,13 @@ TooltipProc:
 	iPrevHour := A_Hour
 	iPrevMin := A_Min
 	sPrevCurrentDate := sCurrentDate
+
 	return
 }
 
-GetLatestSpecs(bShowControlSpecs)
+UpdateSpecs(bShowControlSpecs)
 {
-	aSpecs := []
+	global g_vSpy
 
 	MouseGetPos, iMouseX, iMouseY, hActiveWndUnderCursor
 	WinGet, iTransparent, Transparent, ahk_id %hActiveWndUnderCursor%
@@ -111,55 +118,64 @@ GetLatestSpecs(bShowControlSpecs)
 	if (ExStyle & 0x8)  ; 0x8 is WS_EX_TOPMOST.
 		AlwaysOnTop := "Yes"
 
-	aSpecs.Insert("ActiveTitle: " sActiveTitle)
-	aSpecs.Insert("ActiveClass: ahk_class " sActiveClass)
-	aSpecs.Insert("ActiveWnd: ahk_id " hActiveWndUnderCursor)
-	aSpecs.Insert("-------------------------------")
-	aSpecs.Insert("WinCtrlClass: " (hWinCtrlClass ? "ahk_class " hWinCtrlClass : ""))
-	aSpecs.Insert("WinCtrl: " (hWinCtrl ? "ahk_id "hWinCtrl : ""))
-	aSpecs.Insert("-------------------------------")
-	aSpecs.Insert("Always on top?: " AlwaysOnTop)
-	aSpecs.Insert("Enabled?: " DllCall("IsWindowEnabled", uint, hActiveWndUnderCursor))
-	aSpecs.Insert("MinMaxState: " iMinMaxState)
-	aSpecs.Insert("Translucency: " iTransparent "")
-	aSpecs.Insert("-------------------------------")
-	aSpecs.Insert("WndX: " iWndX)
-	aSpecs.Insert("WndY: " iWndY)
-	aSpecs.Insert("WndW: " iWndW)
-	aSpecs.Insert("WndH: " iWndH)
-	aSpecs.Insert("-------------------------------")
+	g_vSpy.Clear()
+
+	g_vSpy.AddText("ActiveTitle: " sActiveTitle)
+	g_vSpy.AddText("ActiveClass: ahk_class " sActiveClass)
+	g_vSpy.AddText("ActiveWnd: ahk_id " hActiveWndUnderCursor)
+	g_vSpy.AddLine()
+	g_vSpy.AddText("WinCtrlClass: " (hWinCtrlClass ? "ahk_class " hWinCtrlClass : ""))
+	g_vSpy.AddText("WinCtrl: " (hWinCtrl ? "ahk_id "hWinCtrl : ""))
+	g_vSpy.AddLine()
+	g_vSpy.AddText("Always on top?: " AlwaysOnTop)
+	g_vSpy.AddText("Enabled?: " DllCall("IsWindowEnabled", uint, hActiveWndUnderCursor))
+	g_vSpy.AddText("MinMaxState: " iMinMaxState)
+	g_vSpy.AddText("Translucency: " iTransparent "")
+	g_vSpy.AddLine()
+	g_vSpy.AddText("WndX: " iWndX)
+	g_vSpy.AddText("WndY: " iWndY)
+	g_vSpy.AddText("WndW: " iWndW)
+	g_vSpy.AddText("WndH: " iWndH)
+	g_vSpy.AddLine()
+
 	if (bShowControlSpecs)
 	{
-		aSpecs.Insert("Hide Control Positions")
+		g_vSpy.AddText("Hide Control Positions")
 		ControlGetPos, iX, iY, iW, iH,, ahk_id %hWinCtrl%
-		aSpecs.Insert("CtrlX: " iX)
-		aSpecs.Insert("CtrlY: " iY)
-		aSpecs.Insert("CtrlW: " iW)
-		aSpecs.Insert("CtrlH: " iH)
+		g_vSpy.AddText("CtrlX: " iX)
+		g_vSpy.AddText("CtrlY: " iY)
+		g_vSpy.AddText("CtrlW: " iW)
+		g_vSpy.AddText("CtrlH: " iH)
 	}
-	else aSpecs.Insert("Show Control Positions")
-	aSpecs.Insert("-------------------------------")
-	aSpecs.Insert("MouseX: " iMouseX)
-	aSpecs.Insert("MouseY: " iMouseY)
-	aSpecs.Insert("-------------------------------")
-	aSpecs.Insert("Current Time: " A_Hour ":" A_Min)
-	aSpecs.Insert("Current Date: " sCurrentDate)
-	return aSpecs
+	else g_vSpy.AddText("Show Control Positions")
+
+	g_vSpy.AddLine()
+	g_vSpy.AddText("MouseX: " iMouseX)
+	g_vSpy.AddText("MouseY: " iMouseY)
+	g_vSpy.AddLine()
+	g_vSpy.AddText("Current Time: " A_Hour ":" A_Min)
+	g_vSpy.AddText("Current Date: " sCurrentDate)
+
+	return
 }
 
 WSpy_OnMessage(vFlyout, msg)
 {
-	static WM_LBUTTONDBLCLK:=515
+	static WM_LBUTTONDBLCLK:=515,WM_COPYDATA:=74
 
-	if (msg = WM_LBUTTONDBLCLK)
+	if (msg == WM_LBUTTONDBLCLK)
 	{
 		if (vFlyout.GetCurSelNdx() == 17)
 		{
 			bShowControlPos := (vFlyout.m_asItems[18] = "Show Control Positions")
-			aSpecs := GetLatestSpecs(bShowControlPos)
-			vFlyout.UpdateFlyout(aSpecs)
+			UpdateSpecs(bShowControlPos)
 			vFlyout.MoveTo(18)
 		}
+	}
+	else if (msg == WM_COPYDATA:=74)
+	{
+		Msgbox % st_concat("`n", "Copy this...", vFlyout.GetCurSel())
+		; TODO: Strip out the prefix
 	}
 
 	return true
@@ -167,55 +183,58 @@ WSpy_OnMessage(vFlyout, msg)
 
 OnWheelUp:
 {
-	g_vTooltipFlyout.Move(true)
+	g_vSpy.Move(true)
 	; TODO: Check on previous sel and move - 2
-	if (g_vTooltipFlyout.GetCurSel() = "-------------------------------")
-		g_vTooltipFlyout.Move(true)
+	if (g_vSpy.GetCurSel() == g_vSpy.m_sSeparatorLine)
+		g_vSpy.Move(true)
+
 	return
 }
 
 OnWheelDown:
 {
-	g_vTooltipFlyout.Move(false)
+	g_vSpy.Move(false)
 	; TODO: Check on next sel and move + 2
-	if (g_vTooltipFlyout.GetCurSel() = "-------------------------------")
-		g_vTooltipFlyout.Move(false)
+	if (g_vSpy.GetCurSel() == g_vSpy.m_sSeparatorLine)
+		g_vSpy.Move(false)
+
 	return
 }
 
 OnEnter:
 {
-	if (g_vTooltipFlyout.GetCurSelNdx() = 17)
+	if (g_vSpy.GetCurSelNdx() == 17)
 	{
-		bShowControlPos := (g_vTooltipFlyout.m_asItems[18] = "Show Control Positions")
-		aSpecs := GetLatestSpecs(bShowControlPos)
-		g_vTooltipFlyout.UpdateFlyout(aSpecs)
-		g_vTooltipFlyout.MoveTo(18)
+		bShowControlPos := (g_vSpy.m_asItems[18] = "Show Control Positions")
+		UpdateSpecs(bShowControlPos)
+		g_vSpy.MoveTo(18)
 	}
+
 	return
 }
 
 Show_Hide:
 {
-	if (g_vTooltipFlyout.m_bIsHidden)
+	if (g_vSpy.m_bIsHidden)
 	{
 		SetTimer, TooltipProc, 100
 		gosub TooltipProc
-		g_vTooltipFlyout.MoveTo(g_iPrevSel)
-		g_vTooltipFlyout.Show()
+		g_vSpy.MoveTo(g_iPrevSel)
+		g_vSpy.Show()
 	}
 	else
 	{
 		SetTimer, TooltipProc, Off
-		g_iPrevSel := g_vTooltipFlyout.GetCurSelNdx() + 1
-		g_vTooltipFlyout.Hide()
+		g_iPrevSel := g_vSpy.GetCurSelNdx() + 1
+		g_vSpy.Hide()
 	}
+
 	return
 }
 
 Play_Pause:
 {
-	if (g_vTooltipFlyout.m_bIsHidden)
+	if (g_vSpy.m_bIsHidden)
 	{
 		Send #+{Tab}
 		return
@@ -231,6 +250,7 @@ Play_Pause:
 		SetTimer, TooltipProc, Off
 		g_bPaused := true
 	}
+
 	return
 }
 
