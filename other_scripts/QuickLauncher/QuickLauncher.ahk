@@ -59,7 +59,7 @@ InitEverything()
 
 	; Create CFlyout but start with it hidden (last parameter hides it for us).
 	global g_hQL, g_iQLY, g_iTaskBarH
-	global g_vGUIFlyout := new CFlyout(g_hQL, 0, false, false, "", "", "", 10, A_ScreenHeight - g_iQLY - g_iTaskBarH, false, vTmpFlyoutConfig.Flyout.Background, 0, 0, "", "", false, false)
+	global g_vGUIFlyout := new CFlyout(g_hQL, 0, false, false, "", "", "", 10, A_ScreenHeight - g_iQLY - g_iTaskBarH, false, vTmpFlyoutConfig.Flyout.Background, 0, 0, "", false, false)
 	g_vGUIFlyout.OnMessage(WM_LBUTTONDOWN:=513
 		. "," WM_LBUTTONUP:=514
 		. "," WM_LBUTTONDBLCLK:=515
