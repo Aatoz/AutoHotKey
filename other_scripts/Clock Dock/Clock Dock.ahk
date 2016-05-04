@@ -5,9 +5,7 @@ SetWorkingDir, %A_ScriptDir%
 
 ; This is a cool clock OSD which uses CFlyout
 
-g_hDesktop := WinExist("ahk_class Progman")
-
-g_vClock := new CFlyout(g_hDesktop, [GetTime(), GetDay(), GetDate()], false, true)
+g_vClock := new CFlyout(WinExist("ahk_class Progman"), [GetTime(), GetDay(), GetDate()], false, true)
 
 Hotkey, IfWinActive, % "ahk_id" g_vClock.m_hFlyout
 	Hotkey, !r, Reload
