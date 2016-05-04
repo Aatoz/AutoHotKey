@@ -51,6 +51,11 @@ class CFlyout
 				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
 					Hotkey, Up, CFlyout_OnArrowUp
 			}
+			else if (A_LoopField = "Copy")
+			{
+				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
+					Hotkey, ^C, CFlyout_OnCopy
+			}
 			else OnMessage(A_LoopField, "CFlyout_OnMessage")
 
 			if (%A_LoopField% == WM_LBUTTONDOWN)
@@ -624,7 +629,6 @@ class CFlyout
 
 		Hotkey, IfWinActive, ahk_id %g_hFlyout%
 		{
-			Hotkey, ^C, CFlyout_CopySelected
 			if (this.m_bExitOnEsc)
 				Hotkey, Esc, CFlyout_GUIEscape
 		}
@@ -711,20 +715,6 @@ class CFlyout
 
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 		;;;;;;;;;;;;;;
-		CFlyout_CopySelected:
-		{
-			sTmpSel := Object(CFlyout.FromHwnd[g_hFlyout]).GetCurSel()
-			if (sTmpSel != A_Blank)
-				clipboard := sTmpSel
-
-			sTmpSel :=
-			return
-		}
-		;;;;;;;;;;;;;;
-		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-		;;;;;;;;;;;;;;
 		CFlyout_OnArrowDown:
 		{
 			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
@@ -741,6 +731,16 @@ class CFlyout
 			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
 			vFlyout.Move(true)
 			return Func(vFlyout.m_sCallbackFunc).(vFlyout, VK_UP:=38)
+		}
+		;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;
+		CFlyout_OnCopy:
+		{
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+			return Func(vFlyout.m_sCallbackFunc).(vFlyout, "Copy")
 		}
 		;;;;;;;;;;;;;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
