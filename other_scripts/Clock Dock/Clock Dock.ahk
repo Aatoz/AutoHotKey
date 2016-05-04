@@ -1,16 +1,63 @@
 #SingleInstance Force
 #Persistent
 
-; This is a cool clock OSD which uses CFlyout
+SetWorkingDir, %A_ScriptDir%
 
-; Idea, use AutoLeap Std OSD for notifications, but make it distinctly different from AutoLeap
+; This is a cool clock OSD which uses CFlyout
 
 g_hDesktop := WinExist("ahk_class Progman")
 
-g_vFlyout := new CFlyout(g_hDesktop, [A_MM "/" A_DD "/" A_YYYY, A_DDDD, A_Hour ":" A_Min ":" A_Sec], false, true)
+g_vClock := new CFlyout(g_hDesktop, [GetTime(), GetDay(), GetDate()], false, true)
 
-g_vFlyout.Show()
+Hotkey, IfWinActive, % "ahk_id" g_vClock.m_hFlyout
+	Hotkey, !r, Reload
+	Hotkey, !e, Edit
+	Hotkey, Esc, ExitApp
 
+g_vClock.Show()
+
+SetTimer, ClockProc, 3000 ; Only update every 3 seconds since we are only updating minutes, and I don't care if we are 2 seconds late.
 return
 
-#Include CFlyout.ahk
+ClockProc:
+{
+	if (GetTime() == g_vClock.m_asItems[1])
+		return ; No update necessary.
+
+	g_vClock.Clear()
+
+	g_vClock.AddText(GetTime())
+	g_vClock.AddText(GetDay())
+	g_vClock.AddText(GetDate(), "", true)
+
+	return
+}
+
+GetTime()
+{
+	return "   " . A_Hour ":" A_Min
+}
+
+GetDay()
+{
+	return "   " . A_DDDD
+}
+
+GetDate()
+{
+	return "   " . A_MM "/" A_DD "/" A_YYYY
+}
+
+Edit:
+{
+	CFlyout.GUIEditSettings(0, "", true)
+	return
+}
+
+Reload:
+	Reload
+
+ExitApp:
+	ExitApp
+
+#Include %A_ScriptDir%\CFlyout.ahk
