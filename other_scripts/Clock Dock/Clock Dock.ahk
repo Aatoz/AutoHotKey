@@ -19,14 +19,10 @@ return
 
 ClockProc:
 {
-	if (GetTime() == g_vClock.m_asItems[1])
-		return ; No update necessary.
+	;~ if (GetTime() == g_vClock.m_asItems[1])
+		;~ return ; No update necessary.
 
-	g_vClock.Clear()
-
-	g_vClock.AddText(GetTime())
-	g_vClock.AddText(GetDay())
-	g_vClock.AddText(GetDate(), "", true)
+	g_vClock.SetItem(GetTime(), 1)
 
 	return
 }
