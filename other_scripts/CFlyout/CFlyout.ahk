@@ -179,6 +179,29 @@ class CFlyout
 		return this.m_vTLB.CurSel
 	}
 
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: just Verdlin
+		Function: SetItem
+			Purpose: To change a single item
+		Parameters
+			sData: New string
+			iAt: Which string to replace
+	*/
+	SetItem(sData, iAt)
+	{
+		iAt -= 1
+
+		SendMessage, (LB_DELETESTRING:=0x182), iAt, 0,, % "ahk_id" this.m_hListBox
+		SendMessage, (LB_INSERTSTRING:=0x181), iAt ,&sData,, % "ahk_id" this.m_hListBox
+		this.m_asItems[iAt+1] := sData
+		this.m_vTLB.Update()
+		; TODO: Add TLB method which ONLY redraws for that specific item AND ONLY if it is in view!
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 	; Finds the string and returns the index.
 	FindString(sString)
 	{
@@ -1132,7 +1155,7 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 	hFlyout := DllCall("GetParent", uint, hGUICtrl)
 	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
 
-	if (msg == WM_LBUTTONDOWN:=513)
+	if (this.m_bHandleClick && msg == WM_LBUTTONDOWN:=513)
 	{ 
 		CoordMode, Mouse, Relative
 		MouseGetPos,, iClickY
