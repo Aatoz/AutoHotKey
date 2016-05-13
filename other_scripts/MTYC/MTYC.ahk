@@ -61,6 +61,10 @@ return
 */
 Init()
 {
+	global g_iMSDNStdBtnW := 75
+	global g_iMSDNStdBtnH := 23
+	global g_iMSDNStdBtnSpacing := 6
+
 	global g_vExcelApp
 	global g_vConfigInfo := class_EasyIni("config.ini")
 	UpdateSplashProgress(1) ; 1. Loaded ini
@@ -88,7 +92,7 @@ Init()
 	g_vExcelApp := ComObjCreate("Excel.Application")
 	g_vExcelApp.Workbooks.Open(sPath)
 	g_vExcelApp.Visible := g_vConfigInfo.config.DebugRun
-	UpdateSplashProgress(2) ; 2. Opened workbook.
+	UpdateSplashProgress(2, "Backing up spreadsheet") ; 2. Opened workbook. Next task = parm 2.
 
 	global g_vMTYC_WB := g_vExcelApp.Workbooks(1)
 
@@ -104,7 +108,7 @@ Init()
 
 	; Create a backup before editing.
 	BackupWorkbook(g_vMTYC_WB)
-	UpdateSplashProgress(3) ; 3. Backed up workbook.
+	UpdateSplashProgress(3, "Setting up internal database map") ; 3. Backed up workbook.
 
 	MapSheetsToObjects()
 
@@ -131,9 +135,8 @@ InitLogEntryGUI()
 {
 	global
 
-	static s_iMSDNStdBtnW := 75
-	static s_iMSDNStdBtnH := 23+5 ; icon height is 24
-	static s_iMSDNStdBtnSpacing := 6
+	static s_iMSDNStdBtnH := 0 ; have to init before setting from global apparently.
+	s_iMSDNStdBtnH := g_iMSDNStdBtnH+5 ; icon height is 24
 
 	; Loop over all columns in this spd, creating data entry controls dynamically.
 	; We are going to assume the columns are the same between ALL employee spds.
@@ -154,7 +157,7 @@ InitLogEntryGUI()
 	GUIControlGet, g_iSheetDDL_, Pos, g_vSheetDDL ; Apparently if these variables are local then they stay blank...
 
 	; X is determined after we finish looping.
-	GUI, Add, Button, % "xm y" g_iSheetDDL_Y+g_iSheetDDL_H+(s_iMSDNStdBtnSpacing*2) " w" s_iMSDNStdBtnW-3 " h" s_iMSDNStdBtnH " Left vg_vSheetEntryOKBtn hwndg_hSheetEntryOKBtn gLogEntry_OnSheetEntry", &Next
+	GUI, Add, Button, % "xm y" g_iSheetDDL_Y+g_iSheetDDL_H+(g_iMSDNStdBtnSpacing*2) " w" g_iMSDNStdBtnW-3 " h" s_iMSDNStdBtnH " Left vg_vSheetEntryOKBtn hwndg_hSheetEntryOKBtn gLogEntry_OnSheetEntry", &Next
 	ILButton(g_hSheetEntryOKBtn, "images\Next.ico", 24, 24, 1)
 	GUI, Add, Button, % "xp yp wp hp Right vg_vSheetCancelBtn hwndg_hSheetCancelBtn gLogEntry_GUIEscape", &Cancel
 	ILButton(g_hSheetCancelBtn, "images\Prev.ico", 24, 24, 0)
@@ -164,8 +167,8 @@ InitLogEntryGUI()
 		g_iSheetDDL_W := 160
 	local iWidestCtrl := g_iSheetDDL_W, iLogEntry := 0
 	; Create a data entry interface for each data entry object.
-	SetupSplashProgress("Creating user interface", vDataEntrySpd.UsedRange.Columns)
-	for k in vDataEntrySpd.UsedRange.Columns ; go through all used columns on row 1
+	SetupSplashProgress("Creating user interface", vDataEntrySpd.UsedRange.Columns.Count)
+	for k in vDataEntrySpd.UsedRange.Columns ; go through all used columns on row 1.
 	{
 		IncSplashProgress()
 		iCol := A_Index
@@ -197,7 +200,7 @@ InitLogEntryGUI()
 		}
 		if (sDataType = "Time")
 		{
-			sDefault := "h:mm tt" ; for DateTime, this specifies whether to use Date or Time.
+			sDefault := "H:m" ; for DateTime, this specifies whether to use Date or Time.
 			sTimeSpinner := "1"
 		}
 
@@ -205,7 +208,7 @@ InitLogEntryGUI()
 		GUIControlGet, iLogEntry%iLogEntry%_, Pos, g_vLogEntry%iLogEntry%
 
 		; X is determined after we've finished looping.
-		GUI, Add, Button, % "y" iLogEntry%iLogEntry%_Y+iLogEntry%iLogEntry%_H+(s_iMSDNStdBtnSpacing*2) " w" s_iMSDNStdBtnW " h" s_iMSDNStdBtnH " Hidden Left gLogEntry_OnLogEntry vg_vLogEntryOKBtn" iLogEntry " hwndg_hLogEntryNextBtn" iLogEntry
+		GUI, Add, Button, % "y" iLogEntry%iLogEntry%_Y+iLogEntry%iLogEntry%_H+(g_iMSDNStdBtnSpacing*2) " w" g_iMSDNStdBtnW " h" s_iMSDNStdBtnH " Hidden Left gLogEntry_OnLogEntry vg_vLogEntryOKBtn" iLogEntry " hwndg_hLogEntryNextBtn" iLogEntry
 		, &Next
 		ILButton(g_hLogEntryNextBtn%iLogEntry%, "images\Next.ico", 24, 24, 1)
 		GUI, Add, Button, % "xp yp wp hp Hidden Right gLogEntry_OnCancelBtn vg_vLogEntryPrevBtn" iLogEntry " hwndg_hLogEntryPrevBtn" iLogEntry, &Previous
@@ -235,7 +238,7 @@ InitLogEntryGUI()
 
 	; 1. Move hidden ctrls to just be off the screen (it's important all are in the same place so TurnPage() works properly).
 	; 2. Widen hidden ctrls to match the GUI width.
-	g_iLogEntryBtnStart_X := g_iLogEntryW+iWidestCtrl-s_iMSDNStdBtnW+1
+	g_iLogEntryBtnStart_X := g_iLogEntryW+iWidestCtrl-g_iMSDNStdBtnW+1
 	loop % g_iTotalLogEntries
 	{
 		GUIControl, Move, g_vText%A_Index%, x%g_iLogEntryW%
@@ -245,7 +248,6 @@ InitLogEntryGUI()
 	}
 
 	return
-
 
 	LogEntry_OnSheetEntry:
 	{
@@ -337,6 +339,10 @@ InitLogEntryGUI()
 			, "g_vLogEntryPrevBtn" g_iCurLogEntryNdx+1])
 
 		g_iCurLogEntryNdx++
+		; If this is an edit entry, remove the text
+		iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
+		if (g_avMapDataEntryToDataInfo[iLogEntryCol].DataType = "Text")
+			GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%
 		; Focus new entry
 		GUIControl, Focus, g_vLogEntry%g_iCurLogEntryNdx%
 
@@ -383,6 +389,9 @@ InitLogEntryGUI()
 			iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
 			RemoveLogEntryFromSheet(iLogEntryCol)
 		}
+
+		; Focus current entry.
+		GUIControl, Focus, g_vLogEntry%g_iCurLogEntryNdx%
 
 		return
 	}
@@ -747,10 +756,6 @@ AddEmployee(hParent="")
 {
 	global
 
-	static s_iMSDNStdBtnW := 75
-	static s_iMSDNStdBtnH := 23
-	static s_iMSDNStdBtnSpacing := 6
-
 	/*
 		Add an employee GUI. Items to prompt for:
 			1. Employee Name
@@ -770,10 +775,10 @@ AddEmployee(hParent="")
 	; Apparently declaring iGUI_X, iGUI_Y, etc. local screws up retrieval of x (it keeps coming back blank)
 	GUIControlGet, iGUI_, Pos, g_vNewEmployee_StartDt
 
-	local iBtnEdge := s_iMSDNStdBtnW-1
+	local iBtnEdge := g_iMSDNStdBtnW-1
 	local iCancelX := (iGUI_X+iGUI_W)-iBtnEdge
-	local iOKX := iCancelX-(s_iMSDNStdBtnW+s_iMSDNStdBtnSpacing)
-	GUI, Add, Button, % "x" iOKX " yp+" iGUI_H+(s_iMSDNStdBtnSpacing*2) " w" s_iMSDNStdBtnW " h" s_iMSDNStdBtnH " gNewEmployee_GUISubmit", &OK
+	local iOKX := iCancelX-(g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing)
+	GUI, Add, Button, % "x" iOKX " yp+" iGUI_H+(g_iMSDNStdBtnSpacing*2) " w" g_iMSDNStdBtnW " h" g_iMSDNStdBtnH " gNewEmployee_GUISubmit", &OK
 	GUI, Add, Button, x%iCancelX% yp wp hp gNewEmployee_GUIClose, &Cancel
 
 	g_hParent := hParent
@@ -796,7 +801,7 @@ AddEmployee(hParent="")
 
 		if (aFullName0 < 2)
 		{
-			Msgbox_Error("You must specify a first and last name.`n`n" aFullName1 " " aFullName2, 0)
+			Msgbox_Error("You must specify both a first and last name.`n`n" aFullName1 " " aFullName2, 0)
 			return
 		}
 
@@ -808,8 +813,12 @@ AddEmployee(hParent="")
 		}
 
 		; Now create employee ID.
-		sStrID := SubStr(aFullName1, 1, 1) . SubStr(aFullName2, 1, 1) "-"
-		SetFormat, float, 03.0 ; or 02 will do also
+		sLastName := aFullName3
+		if (sLastName = "")
+			sLastName := aFullName2
+
+		sStrID := SubStr(aFullName1, 1, 1) . SubStr(sLastName, 1, 1) "-"
+		SetFormat, float, 03.0 ; or 02 will do also.
 		sEmployeeID := sStrID . 000
 
 		; See if this employee ID exists, if it does, increment the ID until it doesn't exist.
@@ -845,14 +854,14 @@ AddEmployee(hParent="")
 				vEmployeeSheet.Range(sVal).Value := g_vNewEmployee_Name
 			else if (sKey = "InsertID")
 				vEmployeeSheet.Range(sVal).Value := sEmployeeID
-			else if (sKey = "InsertStartDt") ; Appended
+			else if (sKey = "InsertStartDt") ; Appended.
 			{
 				FormatTime, sStartDt, %g_vNewEmployee_StartDt%, ShortDate
 				vEmployeeSheet.Range(sVal).Value .= sStartDt
 			}
-			else if (sKey = "InsertPos") ; Appended
+			else if (sKey = "InsertPos") ; Appended.
 				vEmployeeSheet.Range(sVal).Value .= g_vNewEmployee_Title
-			else if (sKey = "InsertYear") ; Appended
+			else if (sKey = "InsertYear") ; Appended.
 				vEmployeeSheet.Range(sVal).Value .= A_YYYY
 		}
 
@@ -955,30 +964,13 @@ ValidateLogEntry(sLogEntry, iCurLogEntryNdx, sEntryType)
 				; Set actual cell background color to red to flag it, then add a comment to the cell explaining the flag.
 				iLogEntryCol := GetLogEntryCol(iCurLogEntryNdx)
 				vDataCell := g_vEmployeeSpd.cells(g_iLogEntryRow, iLogEntryCol)
-				vDataCell.Interior.ColorIndex := 3 ; 3=red, 4=green, and 6 = yellow.
+				vDataCell.Interior.ColorIndex := 3 ; 3=red, 4=green, orange = 45, and 6 = yellow.
 				vDataCell.AddComment("Date other than today's date used.")
 
 				; Flag this column because we want to access it quickly and eficiently later.
 				vFlagCell := g_vEmployeeSpd.cells(g_iLogEntryRow, g_iDataFlagCol)
 				vFlagCell.Value := vDataCell.Address(true, false) ; now we can clear out the comments so easily -- hooray!
 			}
-		}
-	}
-	; Validate that start time is before end time.
-	else if (sEntryType = "End Time")
-	{
-		; Get start time from GUI
-		iStartTimeNdx := iCurLogEntryNdx-1
-		GUIControlGet, sStartTime,, g_vLogEntry%iStartTimeNdx%
-		if (sStartTime >= sLogEntry)
-		{
-			; Format start and end time for friendly display
-			FormatTime, sFmtStartTime, %sStartTime%, h:mm tt
-			FormatTime, sFmtEndTime, %sLogEntry%, h:mm tt
-
-			Msgbox_Info("The start time must be before the end time.`n`nStart Time:`t" sFmtStartTime "`nEnd Time:`t`t" sFmtEndTime, 2)
-			GUIControl, Focus, g_vLogEntry%iCurLogEntryNdx%
-			return false
 		}
 	}
 
@@ -1002,19 +994,19 @@ AddLogEntryToSheet(sLogEntry, iLogEntryCol)
 
 	vCell := g_vEmployeeSpd.cells(g_iLogEntryRow, iLogEntryCol)
 
-	; Format Start Time and End Time cells
+	; Format Date and Time cells
 	sDataType := g_avMapDataEntryToDataInfo[iLogEntryCol].DataType
 
 	; Formatting.
-	if (sDataType = "Date") 
+	if (sDataType = "Date")
 	{
 		FormatTime, sLogEntry, %sLogEntry%, ShortDate
 		vCell.Value := sLogEntry
 	}
-	else if (sDataType = "Time") 
+	else if (sDataType = "Time")
 	{
 		FormatTime, sLogEntry, %sLogEntry%, h:mm tt
-		vCell.NumberFormat := "hh:mm"
+		vCell.NumberFormat := "H:m"
 		vCell.Value := sLogEntry
 	}
 	else vCell.Value := sLogEntry
@@ -1080,12 +1072,13 @@ GetListOfEmployees()
 	{
 		vSheet := g_vMTYC_WB.Worksheets(A_Index)
 
+		; All employee names are in this format AA-NNN.
 		if (StrLen(vSheet.Name) == 6 && SubStr(vSheet.Name, 3, 1) == "-")
 		{
-			sNameAndIDAddr := g_IntKeysToIntVals_InEmployeeTemplate.NameAndID
+			sNameAndIDAddr := g_IntKeysToIntVals_InEmployeeTemplate.NameAndIDAddr
 			sFullName := vSheet.Range(sNameAndIDAddr).Text
-			; Trim out employee ID suffix.
-			StringLeft, sFullName, sFullName, InStr(sFullName, " -")
+			; Strip out employee ID.
+			sFullName := SubStr(sFullName, 1, InStr(sFullName, "-")-1)
 			; Because of Excel formatting, leading spaces can happen. Trim those, just in case.
 			aEmployees.Insert(Trim(sFullName))
 		}
@@ -1126,7 +1119,6 @@ MapSheetsToObjects()
 {
 	global g_vMTYC_WB, g_avEmployeeSpds := {}, g_vIntSheetMap := {}
 
-	SetupSplashProgress("Enumerating sheets", g_vMTYC_WB.Worksheets.Count)
 	Loop % g_vMTYC_WB.Worksheets.Count
 	{
 		vSheet := g_vMTYC_WB.Worksheets(A_Index)
@@ -1134,11 +1126,8 @@ MapSheetsToObjects()
 		if (StrLen(vSheet.Name) == 6 && SubStr(vSheet.Name, 3, 1) == "-")
 			g_avEmployeeSpds.Insert(vSheet) ; Employee sheets.
 		else g_vIntSheetMap[vSheet.Name] := vSheet ; Internal sheets.
-
-		IncSplashProgress()
 	}
 
-	;~ EndSplashProgress()
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1205,7 +1194,7 @@ MapIntKeysToIntVals_InEmployeeTemplate()
 	asRowHeadings := []
 	vSpd := g_vIntSheetMap["EmployeeTemplate"]
 	SetupSplashProgress("Setting up internal database map"
-	, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
+		, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
 	for vRange in vSpd.UsedRange.Columns
 	{
 		IncSplashProgress()
@@ -1215,19 +1204,31 @@ MapIntKeysToIntVals_InEmployeeTemplate()
 		vTestCell := vSpd.cells(1, iCol)
 
 		if (vTestCell.Text != "Internal_Key")
+		{
+			; Surge splash forward.
+			UpdateSplashProgress(iCol*vRange.Rows.Count)
 			continue
+		}
 
 		for vRange2 in vRange.Rows
 		{
-			; Okay, so if you don't use A_Index then the calls to cells() fails. That's why we crazy with iCol.
-			vKeyCell := vSpd.cells(A_Index, iCol)
+			IncSplashProgress("Setting up internal database map (" iCol*A_Index ")")
+
+			sKey := vSpd.cells(A_Index, iCol).Text
 			vValCell := vSpd.cells(A_Index, iCol+1)
 
 			; Row headings...
-			if (A_Index == 1 || vKeyCell.Text = "") ; a blank key means no data in the row, but there could be data in a row further down.
+			if (A_Index == 1 || sKey = "") ; a blank key means no data in the row, but there could be data in a row further down.
 				continue
 
-			g_IntKeysToIntVals_InEmployeeTemplate[vKeyCell.Text] := vValCell.Text
+			sVal := vValCell.Text
+			if (sVal = "") ; Number cells have their Text property blanked out.
+			{
+				; Get rid of decimals. I know this could be really bad, but I don't know how to fix it with COM.
+				sVal := Round(vValCell.Value)
+			}
+
+			g_IntKeysToIntVals_InEmployeeTemplate[sKey] := sVal
 		}
 	}
 
@@ -1244,15 +1245,23 @@ MapIntKeysToIntVals_InEmployeeTemplate()
 			This function maps those keys to vals for ease-of-access
 	Parameters
 		vSpd: Spd to map.
+		bUseSplash=true: Use splash while looping?
 */
-MapIntKeysToIntVals_InSpd(vSpd)
+MapIntKeysToIntVals_InSpd(vSpd, bUseSplash=true)
 {
 	vMapping := {}
-	SetupSplashProgress("Setting up internal database map"
-		, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
+
+	if (bUseSplash)
+	{
+		SetupSplashProgress("Setting up internal database map"
+			, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
+	}
+
 	for vRange in vSpd.UsedRange.Columns
 	{
-		IncSplashProgress()
+		if (bUseSplash)
+			IncSplashProgress()
+
 		iCol := A_Index + 0  ; This forces iCol to number, which is important for any call to cells()
 
 		; Skip until we find "Internal_Key" col
@@ -1265,18 +1274,27 @@ MapIntKeysToIntVals_InSpd(vSpd)
 		{
 			IncSplashProgress()
 
-			vKeyCell := vSpd.cells(A_Index, iCol)
+			sKey := vSpd.cells(A_Index, iCol).Text
 			vValCell := vSpd.cells(A_Index, iCol+1)
 
 			; Row headings...
-			if (A_Index == 1 || vKeyCell.Text = "") ; a blank key means no data in the row, but there could be data in a row further down.
+			if (A_Index == 1 || sKey = "") ; a blank key means no data in the row, but there could be data in a row further down.
 				continue
 
-			vMapping[vKeyCell.Text] := vValCell.Text
+			sVal := vValCell.Text
+			if (sVal = "") ; Number cells have their Text property blanked out.
+			{
+				; Get rid of decimals. I know this could be really bad, but I don't know how to fix it with COM.
+				sVal := Round(vValCell.Value)
+			}
+
+			vMapping[sKey] := sVal
 		}
 	}
 
-	;~ EndSplashProgress()
+	if (bUseSplash)
+		EndSplashProgress()
+
 	return vMapping
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1442,7 +1460,6 @@ SaveAll()
 ScanAllEmployeeSpdsForFlags()
 {
 	global
-	static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
 
 	GUI SSS: New, hwndg_hSSS, Employee Flag Scan Summary
 	GUI, Add, ListView, xm y5 w800 r10 AltSubmit Grid NoSort NoSortHdr -ReadOnly -Multi hwndg_hSSS_LV vg_vSSSLV gSSS_LVProc, % GetDataEntryCols()
@@ -1457,15 +1474,15 @@ ScanAllEmployeeSpdsForFlags()
 	GUIControlGet, g_iLV_, Pos, g_vSSSLV
 
 	; Add (hopefully) helpful text.
-	iSpacingBetweenClearAndOK := g_iLV_W-(s_iMSDNStdBtnW*2)-s_iMSDNStdBtnSpacing
-	iTextW := iSpacingBetweenClearAndOK-(s_iMSDNStdBtnW+(s_iMSDNStdBtnSpacing))
+	iSpacingBetweenClearAndOK := g_iLV_W-(g_iMSDNStdBtnW*2)-g_iMSDNStdBtnSpacing
+	iTextW := iSpacingBetweenClearAndOK-(g_iMSDNStdBtnW+(g_iMSDNStdBtnSpacing))
 	GUI, Font, wBold
-	GUI, Add, Text, % "xm+" s_iMSDNStdBtnW+(s_iMSDNStdBtnSpacing) " yp+" g_iLV_H+s_iMSDNStdBtnSpacing+5 " w" iTextW-4 " h" s_iMSDNStdBtnH " Center c0xDF7000", To edit a date, select a row and press F2; you can also double-click a cell under the Date column.
+	GUI, Add, Text, % "xm+" g_iMSDNStdBtnW+(g_iMSDNStdBtnSpacing) " yp+" g_iLV_H+g_iMSDNStdBtnSpacing+5 " w" iTextW-4 " h" g_iMSDNStdBtnH " Center c0xDF7000", To edit a date, select a row and press F2; you can also double-click a cell under the Date column.
 	GUI, Font, wnorm
 	; Add buttons
-	GUI, Add, Button, % "xm yp-5 w" s_iMSDNStdBtnW " hp gSSSGUIClearFlagBtn", C&lear Flag
+	GUI, Add, Button, % "xm yp-5 w" g_iMSDNStdBtnW " hp gSSSGUIClearFlagBtn", C&lear Flag
 	GUI, Add, Button, % "xp+" iSpacingBetweenClearAndOK " yp wp hp gSSSGUISubmit", &OK
-	GUI, Add, Button, % "xp+" s_iMSDNStdBtnW+s_iMSDNStdBtnSpacing " yp wp hp gSSSGUIClose", &Cancel
+	GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp gSSSGUIClose", &Cancel
 
 	local vSpd := "", iSpd := ""
 	for iSpd, vSpd in g_avEmployeeSpds
@@ -1496,9 +1513,9 @@ ScanAllEmployeeSpdsForFlags()
 		local iFirstRow := vSheetMap.StartingRow
 		local iLastRow := vSheetMap.InsertRow-1
 
-		local sTestRange := sStartAddr . iFirstRow ":" sEndAddr . iLastRow
+		local sDataEntryRange := sStartAddr . iFirstRow ":" sEndAddr . iLastRow
 		local vFlagCell
-		for vFlagCell in vSpd.Range(sTestRange)
+		for vFlagCell in vSpd.Range(sDataEntryRange)
 		{
 			IncSplashProgress()
 
@@ -1636,6 +1653,319 @@ ScanAllEmployeeSpdsForFlags()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function: DoGraph
+		Purpose: Graph data
+	Parameters
+		
+*/
+DoGraph()
+{
+	global g_vMTYC_WB, g_avEmployeeSpds, g_avMapDataEntryToDataInfo
+		, g_vIntSheetMap, g_IntKeysToIntVals_InEmployeeTemplate
+
+	StartSplashProgress()
+
+	; Break down hours by
+	; 1. Camp Week + Hours
+	; 2. Activity Type + Hours
+	; 3. Activity Location + Hours
+	; 4. Task + Hours
+	; 5. Excel multi-series graph to break out these in a super graph?
+
+	; Build column layout from DataEntry and Lists spds.
+	vSeriesLayoutData := new EasyIni()
+	vDataEntrySpd := g_vIntSheetMap["DataEntry"]
+	SetupSplashProgress("Setting up graph series data"
+		, vDataEntrySpd.UsedRange.Columns.Count * vDataEntrySpd.UsedRange.Rows.Count)
+	for vRange in vDataEntrySpd.UsedRange.Columns
+	{
+		IncSplashProgress()
+		iCol := A_Index + 0
+
+		; Skip row headers.
+		if (iCol == 1)
+			continue
+
+		sEntryType := vDataEntrySpd.cells(3, iCol).Text
+		if (sEntryType = "List")
+		{
+			sEntry := vDataEntrySpd.cells(1, iCol).Text
+			vSeriesLayoutData[sEntry] := new EasyIni() ; We will fill this later.
+		}
+	}
+
+	; Now for the lists spd.
+	vListsSpd := g_vIntSheetMap["Lists"]
+	SetupSplashProgress("Retrieving series info"
+		, vListsSpd.UsedRange.Columns.Count * vListsSpd.UsedRange.Rows.Count)
+	for vCell in vListsSpd.UsedRange
+	{
+		IncSplashProgress()
+
+		; Loop through all entires in this list.
+		sCell := vCell.Text
+		sSeries := vListsSpd.cells(1, vCell.Column).Text
+
+		bIsHeader := (sSeries = sCell)
+		if (bIsHeader)
+			continue
+
+		; Just because the cell was used doesn't mean it is populated!
+		if (sCell && vSeriesLayoutData.HasKey(sSeries))
+			vSeriesLayoutData[sSeries, sCell] := sCell
+	}
+
+	; Now set up the layout in the Graphs spd.
+	vGraphsSpd := g_vIntSheetMap["Graphs"]
+	vGraphsSpd.Activate ; If this is not activated, all but the first exports fail! Do it now to avoids any other potential issues.
+	SetupSplashProgress("Building series table", 50) ; Not sure how to estimate this one...
+	iStartingDataRow := 3
+	iCol := 1
+
+	; Clear out the graphs spd.
+	vGraphsSpd.UsedRange.Value := ""
+	for iChart in vGraphsSpd.ChartObjects.Count
+		vGraphsSpd.ChartObjects(1).Delete
+
+	; First column should be the employee name.
+	vEmployeeHeaderCall := vGraphsSpd.cells(2, iCol)
+	vEmployeeHeaderCall.Value := "Employee"
+	; Format
+	vEmployeeHeaderCall.ColumnWidth := 26
+	; vEmployeeHeaderCall.Borders.LineStyle := 1 ; xlContinuous=1
+	vEmployeeHeaderCall.Borders.Weight := 4 ; xlThick
+	vEmployeeHeaderCall.HorizontalAlignment := -4108 ; xlCenter
+	vEmployeeHeaderCall.Font.Bold := true
+	vEmployeeHeaderCall.Interior.ColorIndex := 4 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+
+	iCol++
+	; Fill layout in Graphs spd using vSeriesLayoutData.
+	asSeriesAddr := [] ; Used to set up the actual series.
+	for sList, vData in vSeriesLayoutData
+	{
+		; List gets a single column header.
+		vListColHeaderCell := vGraphsSpd.cells(1, iCol)
+		vListColHeaderCell.Value := sList
+
+		for sElem in vData
+		{
+			IncSplashProgress()
+
+			vSubColHeaderCell := vGraphsSpd.cells(2, iCol)
+			vSubColHeaderCell.Value := sElem
+			; Format.
+			vSubColHeaderCell.Borders.Weight := 4 ; xlThick
+			vSubColHeaderCell.HorizontalAlignment := -4108 ; xlCenter
+			;~ vSubColHeaderCell.Font.ColorIndex := 3 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+			vSubColHeaderCell.Interior.ColorIndex := 45 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+
+			; Map this column to the EasyIni object for easy population as we go through the employee spds.
+			vSeriesLayoutData[sList, sElem] := iCol
+			iCol++
+		}
+
+		; Merge List col hedaer cells across this range and then format.
+		sStartAddr := vListColHeaderCell.Address(true, true)
+		sEndAddr := vSubColHeaderCell.Address(true, false)
+		sEndCol := SubStr(sEndAddr, 1, InStr(sEndAddr, "$")-1)
+		; Register in series.
+		asSeriesAddr.Insert(sStartAddr ":" vSubColHeaderCell.Address(true, true))
+		vListColHeaderCell := vGraphsSpd.Range(sStartAddr ":" sEndCol . vListColHeaderCell.Row)
+		vListColHeaderCell.Merge
+		; Format.
+		vListColHeaderCell.ColumnWidth := 12
+		vListColHeaderCell.Borders.Weight := 4 ; xlThick
+		vListColHeaderCell.HorizontalAlignment := -4108 ; xlCenter
+		;~ vListColHeaderCell.Font.ColorIndex := 3 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+		vListColHeaderCell.Interior.ColorIndex := 42 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+	}
+	iStartingDataRow := vSubColHeaderCell.Row+1
+
+	; Loop through each row, populating the activities and the hours.
+	; This is hard to estimate, and our estimate is pretty rough.
+	; Estimate: Number of spds * Rows in data flag col.
+	; Note: The number of rows aren't going to be identical between all spds.
+	; Note: Currently data flag is 16, but that's could change.
+	SetupSplashProgress("Aggregating data from employees"
+		, g_avEmployeeSpds.MaxIndex() * g_avEmployeeSpds[1].UsedRange.Columns(16).Rows.Count)
+	avEmployeeData := new EasyIni()
+	for iSpd, vSpd in g_avEmployeeSpds
+	{
+		vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
+		sStartAddr := vSheetMap.FirstDataEntryAddr
+		StringSplit, aStartAddr, sStartAddr, `$
+		sEndAddr := vSheetMap.LastDataEntryAddr
+		StringSplit, aEndAddr, sEndAddr, `$
+		sStartAddr := aStartAddr2
+		sEndAddr := aEndAddr2
+
+		iFirstRow := vSheetMap.StartingRow
+		iLastRow := vSheetMap.InsertRow-1
+
+		sDataEntryRange := sStartAddr . iFirstRow ":" sEndAddr . iLastRow
+		vSeriesData := new EasyIni()
+
+		for vCell in vSpd.Range(sDataEntryRange)
+		{
+			sCol := g_avMapDataEntryToDataInfo[vCell.Column].Entry
+			if (vSeriesLayoutData.HasKey(sCol))
+			{
+				iHoursCol := vSheetMap.HoursCol + 0
+				vHoursCell := vSpd.cells(vCell.Row, iHoursCol)
+
+				if (vSeriesData[sCol, vCell.Text])
+					vSeriesData[sCol, vCell.Text] += vHoursCell.Value
+				else vSeriesData[sCol, vCell.Text] := vHoursCell.Value
+			}
+
+			IncSplashProgress("Getting " sCol " data for " vSheetMap.Name)
+		}
+		; Map is Name - ID.
+		avEmployeeData[Trim(vSheetMap.Name) " (" vSpd.Name ")"] := vSeriesData
+
+		; Find and set graph start date to the earliest date found.
+		vFirstDataEntryCell := vSpd.Range(vSheetMap.FirstDataEntryAddr)
+		vStartDtCell := vSpd.cells(vFirstDataEntryCell.Row+1, vFirstDataEntryCell.Column+1)
+		; Get numeric date value.
+		vStartDtCell.NumberFormat := "h:mm"
+		iSpdStartDt := vStartDtCell.Value
+		; Restore cell format to date.
+		vStartDtCell.NumberFormat := "m/d/yyyy"
+		if (iSpdStartDt < iStartDt || iStartDt = "")
+		{
+			iStartDt := iSpdStartDt
+			sStartDt := vStartDtCell.Value
+		}
+
+		; Now find and set graph end date to the latest date found.
+		vLastDataEntryCell := vSpd.cells(vSheetMap.InsertRow-1, vFirstDataEntryCell.Column+1)
+		vEndDtCell := vSpd.cells(vFirstDataEntryCell.Row+1, vFirstDataEntryCell.Column+1)
+		; Get numeric date value.
+		vEndDtCell.NumberFormat := "h:mm"
+		iSpdEndDt := vEndDtCell.Value
+		; Restore cell format to date.
+		vEndDtCell.NumberFormat := "m/d/yyyy"
+		if (iEndDt < iSpdEndDt || iEndDt = "")
+		{
+			iEndDt := iSpdEndDt
+			sEndDt := vEndDtCell.Value
+		}
+	}
+
+	/*
+	Add data to Graphs sheet.
+
+		The format is going to look like this:
+		*********************************************************************************************************************************
+		**************Activity Location********************************Activity Type*******Camp Week**********Task******************
+		Employee****Donkey Kong***Rappelling***Rock Climbing***High***Training****Home School 1*******Assist***Participant
+		***Obama***1:00*************2:00**********1:00**************3:00***2:00*********1:00******************3:00*****4:00********
+		***Biden*****1:00*************2:00**********1:00**************3:00***2:00*********1:00******************3:00*****4:00********
+	*/
+
+	; Populate series data from all employees. Estimate is Number of Graphs * Employee Count/Series.
+	SetupSplashProgress("Aggregating data from employees", asSeriesAddr.MaxIndex() * g_avEmployeeSpds.MaxIndex())
+	iRow := iStartingDataRow
+	for sEmployee, vSheetData in avEmployeeData
+	{
+		iCol := 1
+
+		; Fill in employee name.
+		vEmployeeNameCell := vGraphsSpd.cells(iRow, iCol)
+		vEmployeeNameCell.Value := sEmployee
+		; Formatting.
+		vEmployeeNameCell.Interior.ColorIndex := 4 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+
+		for sDataType, vData in vSheetData
+		{
+			for sBreakdownType, iHours in vData
+			{
+				; Find which column we should populate.
+				iDataCol := vSeriesLayoutData[sDataType, sBreakdownType]
+
+				; 1:00*************2:00**********1:00**************3:00***2:00*********1:00******************3:00*****4:00
+				vHoursCell := vGraphsSpd.cells(iRow, iDataCol)
+				vHoursCell.Value := Round(iHours*24, 2) ; *24 to get time in hours.
+				; Formatting.
+				; vHoursCell.NumberFormat := "h:mm"
+
+				iCol++ ; Next column.
+				IncSplashProgress(sEmployee ": " sDataType " - " sBreakdownType)
+			}
+		}
+
+		iRow++ ; 1 row per employee.
+		IncSplashProgress("Aggregating data from employees")
+	}
+
+	; Setup graphs. Estimate is Number of Graphs * 2 * Employee Count/Series
+	; * 2 because we have to delete the series automatically added by Excel.
+	; and this turned out to be a pretty good estimate!
+	SetupSplashProgress("Creating graphs", asSeriesAddr.MaxIndex() * 2 * g_avEmployeeSpds.MaxIndex())
+	for iChart, sSeriesAddr in asSeriesAddr
+	{
+		; xl3DArea=-4098
+		; xl3DClusteredColumn=54
+		; xl3DColumnStacked=55
+		vGraphsSpd.Shapes.AddChart2(286, 54)
+		vChartObject := vGraphsSpd.ChartObjects(iChart)
+		vChart := vChartObject.Chart
+		vChart.ChartStyle := 294
+
+		; $B$1:$N$2
+		StringSplit, asAddr, sSeriesAddr, `$
+		sStartCol := asAddr2
+		sEndCol := asAddr4
+
+		sTitleAddr := SubStr(sSeriesAddr, 1, InStr(sSeriesAddr, ":")-1)
+		sChartType := vGraphsSpd.Range(sTitleAddr).Value
+		sChartSubtitle := "Period: " sStartDt " - " sEndDt
+
+		sSourceData := asAddr1 . asAddr2 . "2:" . asAddr4 . iRow-1
+		vChart.SetSourceData(vGraphsSpd.Range(sSourceData))
+		; Delete the automatically added series because we need to do all the work.
+		Loop % vChart.SeriesCollection.Count
+		{
+			vChart.SeriesCollection(1).Delete
+			IncSplashProgress("Deleting series " A_Index)
+		}
+
+		; Ugh. Have to set up the series by looping AGAIN! :(
+		for sEmployee in avEmployeeData
+		{
+			iSeriesSt := A_Index+2
+
+			vChart.SeriesCollection.Add(vGraphsSpd.Range(sStartCol . iSeriesSt ":" sEndCol . iSeriesSt))
+			vChart.SeriesCollection(A_Index).Name := "=Graphs!$A$" iSeriesSt ; For some reasons this is the only way the names stick.
+			vChart.SeriesCollection(A_Index).XValues := vGraphsSpd.Range(sStartCol "2:" sEndCol "2") ; Headers are always on row 2.
+			vChart.SeriesCollection(A_Index).Values := vGraphsSpd.Range(sStartCol . iSeriesSt ":" sEndCol . iSeriesSt)
+
+			IncSplashProgress("Graph: " sChartType " - Series " A_Index " - " sEmployee)
+		}
+
+		; Set chart title.
+		vChart.HasTitle := true
+		vChart.ChartTitle.Text := "Employee Hours by " sChartType "`n" sChartSubtitle
+		; Format chart.
+		iChartWidth := 1000
+		iChartHeight := 600
+		vChartObject.Left := 0
+		vChartObject.Top := (A_Index-1) * iChartHeight
+		vChartObject.Width := iChartWidth
+		vChartObject.Height := iChartHeight
+		vChartObject.RoundedCorners := true
+
+		vChart.Export(A_WorkingDir "\Employee Hours by " sChartType ".png")
+	}
+
+	EndSplashProgress()
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: InitAdminGUI
 		Purpose: Initialize the administrator's GUI
 	Parameters
@@ -1645,7 +1975,6 @@ InitAdminGUI()
 {
 	global
 
-	static s_iMSDNStdBtnW := 75, s_iMSDNStdBtnH := 23, s_iMSDNStdBtnSpacing := 6
 	static s_iCoolBtnW := 126, s_iCoolBtnH := 36, s_iCoolBtnSpacingX := 14, s_iCoolBtnSpacingY := 46
 
 	GUI, AdminCmdCenter_: New, +hwndg_hAdminCmdCenter, Administrative Command Center®
@@ -1670,20 +1999,20 @@ InitAdminGUI()
 	ILButton(g_hScanBtn, "images\Scan.ico", 24, 24, 0)
 	GUI, Add, Button, % "xp+" s_iCoolBtnW+ s_iCoolBtnSpacingX " yp wp hp hwndg_hLogEntryBtn gAdminCmdCenter_LogEntryBtn",`tAdd &Log Entry
 	ILButton(g_hLogEntryBtn, "images\LogEntry.ico", 24, 24, 0)
-	GUI, Add, Button, % "xm+14 yp+" s_iCoolBtnSpacingY " wp hp vg_vBottomBtn hwndg_hGraphBtn gAdminCmdCenter_GraphBtn",`t&Graph`n(Coming Soon)
+	GUI, Add, Button, % "xm+14 yp+" s_iCoolBtnSpacingY " wp hp vg_vBottomBtn hwndg_hGraphBtn gAdminCmdCenter_GraphBtn",`t&Graph All Data
 	ILButton(g_hGraphBtn, "images\Graph.ico", 24, 24, 0)
 
 	GUIControlGet, iFirstBtn_, Pos, g_vFirstBtn
 	GUIControlGet, iFarRightBtn_, Pos, g_vFarRightBtn
 	GUIControlGet, iBottomBtn_, Pos, g_vBottomBtn
 
-	local iMSDNBtnOffset := s_iMSDNStdBtnW+s_iMSDNStdBtnSpacing
+	local iMSDNBtnOffset := g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing
 	local iGroupBoxW := iFarRightBtn_X+iFarRightBtn_W
-	GUI, Add, Button, % "xm+" iGroupBoxW-s_iMSDNStdBtnW " yp+" s_iCoolBtnSpacingY+s_iMSDNStdBtnSpacing " w" s_iMSDNStdBtnW " h" s_iMSDNStdBtnH " gAdminCmdCenter_GUIEscape", &OK
+	GUI, Add, Button, % "xm+" iGroupBoxW-g_iMSDNStdBtnW " yp+" s_iCoolBtnSpacingY+g_iMSDNStdBtnSpacing " w" g_iMSDNStdBtnW " h" g_iMSDNStdBtnH " gAdminCmdCenter_GUIEscape", &OK
 
 	; Draw GroupBox around buttons
-	local iGroupBoxY := (iFirstBtn_Y-s_iCoolBtnSpacingY+s_iCoolBtnH)-(s_iMSDNStdBtnSpacing*2)
-	GUI, Add, Groupbox, % "xm y" iGroupBoxY " w" iGroupBoxW " h" (iBottomBtn_Y-iGroupBoxY)+iBottomBtn_H+(s_iMSDNStdBtnSpacing*2), Actions
+	local iGroupBoxY := (iFirstBtn_Y-s_iCoolBtnSpacingY+s_iCoolBtnH)-(g_iMSDNStdBtnSpacing*2)
+	GUI, Add, Groupbox, % "xm y" iGroupBoxY " w" iGroupBoxW " h" (iBottomBtn_Y-iGroupBoxY)+iBottomBtn_H+(g_iMSDNStdBtnSpacing*2), Actions
 
 	; Align text with groupbox
 	GUIControl, Move, g_vWelcomeText, w%iGroupBoxW%
@@ -1739,7 +2068,7 @@ InitAdminGUI()
 	AdminCmdCenter_GraphBtn:
 	{
 		GUI, AdminCmdCenter_: Default
-		Msgbox Coming soon!
+		DoGraph()
 		return
 	}
 
@@ -1809,21 +2138,29 @@ SetupSplashProgress(sHeader, iRange)
 {
 	global
 
-	GUIControl,, g_vSP_Output, %sHeader%...
-	GUIControl, % "+Range0-" iRange, g_vSP_Progress
+	; TODO: Parent splash to Admin Window or Log Entry GUI (Give Log Entry GUI precedence)
+	GUIControl, SplashProgess_:, g_vSP_Progress ; Reset progress.
+	GUIControl, SplashProgess_:, g_vSP_Output, %sHeader%...
+	GUIControl, % "SplashProgess_: +Range0-" iRange, g_vSP_Progress
 
 	return
 }
 
-UpdateSplashProgress(iNdx)
+UpdateSplashProgress(iNdx, sText="")
 {
-	GUIControl,, g_vSP_Progress, % iNdx
+	GUIControl, SplashProgess_:, g_vSP_Progress, % iNdx
+	if (sText)
+		GUIControl, SplashProgess_:, g_vSP_Output, %sText%...
+
 	return
 }
 
-IncSplashProgress()
+IncSplashProgress(sText="")
 {
-	GUIControl,, g_vSP_Progress, +1
+	GUIControl, SplashProgess_:, g_vSP_Progress, +1
+	if (sText)
+		GUIControl, SplashProgess_:, g_vSP_Output, %sText%...
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
