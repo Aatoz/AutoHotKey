@@ -222,7 +222,7 @@ InitLogEntryGUI()
 		GUI, Add, Text, x-10 y-10 w0 h0 Hidden Disabled vg_vIntLogEntryCol%iLogEntry%, %iCol2%
 	}
 	g_iTotalLogEntries := iLogEntry
-	g_iCurLogEntryNdx := 1
+	g_iCurLogEntryNdx := 0
 	g_avRunningLog := []
 
 	; Calc the GUI Width
@@ -369,7 +369,7 @@ InitLogEntryGUI()
 				, "g_vLogEntryPrevBtn" g_iCurLogEntryNdx]
 				, ["g_vSheetText", "g_vSheetDDL", "g_vSheetEntryOKBtn", "g_vSheetCancelBtn"])
 
-			UndoRowProc()
+			g_iCurLogEntryNdx := UndoRowProc()
 		}
 		else
 		{
@@ -432,6 +432,9 @@ InitLogEntryGUI()
 		GUIControl, Enable, g_vSheetEntryOKBtn
 		GUIControl, Show, g_vSheetEntryOKBtn
 
+		; Reset log entry.
+		g_iCurLogEntryNdx := 0
+
 		return
 	}
 
@@ -453,8 +456,13 @@ InitLogEntryGUI()
 			if (Msgbox_YesNo("Exit Application", "Exiting now will cause you to lose all your changes.`n`nAre you sure you want to exit?"))
 			{
 				; If there is no parent, this is the main app and we should shut down now.
-				if (!g_hParent)
-					gosub ExitApp
+				if (g_hParent)
+				{
+					; Delete the row we inserted.
+					if (g_iCurLogEntryNdx)
+						g_iCurLogEntryNdx := UndoRowProc()
+				}
+				else gosub ExitApp
 			}
 			else return
 		}
@@ -598,7 +606,7 @@ UndoRowProc()
 		g_iLogEntryRow--
 	}
 
-	return
+	return g_iCurLogEntryNdx - 1
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
