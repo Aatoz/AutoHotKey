@@ -1,11 +1,13 @@
 #SingleInstance Force
 #Persistent
+#NoTrayIcon
 
 SetWorkingDir, %A_ScriptDir%
 
-; This is a cool clock OSD which uses CFlyout
+; This is a cool clock OSD which uses CFlyout.
 
-g_vClock := new CFlyout(WinExist("ahk_class Progman"), [GetTime(), GetDay(), GetDate()], false, true)
+g_vClock := new CFlyout([GetTime(), GetDay(), GetDate()], "Parent=" WinExist("ahk_class Progman"))
+g_vClock.OnMessage("Copy", "OnCopy")
 
 Hotkey, IfWinActive, % "ahk_id" g_vClock.m_hFlyout
 	Hotkey, !r, Reload
@@ -19,8 +21,8 @@ return
 
 ClockProc:
 {
-	;~ if (GetTime() == g_vClock.m_asItems[1])
-		;~ return ; No update necessary.
+	if (GetTime() == g_vClock.m_asItems[1])
+		return ; No update necessary.
 
 	g_vClock.SetItem(GetTime(), 1)
 
@@ -40,6 +42,14 @@ GetDay()
 GetDate()
 {
 	return "   " . A_MM "/" A_DD "/" A_YYYY
+}
+
+OnCopy(vFlyout, msg)
+{
+	if (msg = "Copy")
+		clipboard := Trim(vFlyout.m_sCurSel)
+
+	return
 }
 
 Edit:
