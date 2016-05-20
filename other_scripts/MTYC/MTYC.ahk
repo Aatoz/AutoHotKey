@@ -36,8 +36,8 @@ Loop %0% ; for each parameter
 		g_bIsAdmin := true
 }
 
-StartSplashProgress()
-SetupSplashProgress("Loading spreadsheet", 3)
+InitSplashProgress()
+StartSplashProgress("Loading spreadsheet", 3)
 
 ; Then initialize everything.
 Init()
@@ -117,6 +117,9 @@ Init()
 	MapDataEntryToDataInfo()
 	MapIntKeysToIntVals_InEmployeeTemplate()
 
+	; Contextual list filters.
+	CreateListMappingFilters()
+
 	InitLogEntryGUI()
 
 	return
@@ -167,7 +170,7 @@ InitLogEntryGUI()
 		g_iSheetDDL_W := 160
 	local iWidestCtrl := g_iSheetDDL_W, iLogEntry := 0
 	; Create a data entry interface for each data entry object.
-	SetupSplashProgress("Creating user interface", vDataEntrySpd.UsedRange.Columns.Count)
+	StartSplashProgress("Creating user interface", vDataEntrySpd.UsedRange.Columns.Count)
 	for k in vDataEntrySpd.UsedRange.Columns ; go through all used columns on row 1.
 	{
 		IncSplashProgress()
@@ -196,7 +199,7 @@ InitLogEntryGUI()
 		if (sGUIDataType = "DDL")
 		{
 			sListID := vDataEntrySpd.cells(1, A_Index).Text
-			sDefault := st_glue(GetListFromSheet(sListID), "|")
+			sDefault := st_glue(GetListElems(sListID), "|")
 		}
 		if (sDataType = "Time")
 		{
@@ -269,7 +272,7 @@ InitLogEntryGUI()
 		g_vEmployeeSpd.Activate
 
 		; Map internal keys to vals in this employee spd
-		g_IntKeysToIntVals_InEmployeeSpd := MapIntKeysToIntVals_InSpd(g_vEmployeeSpd)
+		g_IntKeysToIntVals_InEmployeeSpd := MapIntKeysToIntVals_InSpd(g_vEmployeeSpd, false)
 
 		; Insert row in the spd now because we can undo any changes, even deleting the row entirely, if necessary.
 		; Doing copy/paste proc in order to bring over formatting and formulas.
@@ -338,11 +341,15 @@ InitLogEntryGUI()
 			, "g_vLogEntryOKBtn" g_iCurLogEntryNdx+1
 			, "g_vLogEntryPrevBtn" g_iCurLogEntryNdx+1])
 
+		; Increment log entry.
 		g_iCurLogEntryNdx++
-		; If this is an edit entry, remove the text
+		; If the log entry is a DDL, then populate it.
+		PopulateNextList_IfNeeded()
+		; If this is an edit entry, remove the text.
 		iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
 		if (g_avMapDataEntryToDataInfo[iLogEntryCol].DataType = "Text")
 			GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%
+
 		; Focus new entry
 		GUIControl, Focus, g_vLogEntry%g_iCurLogEntryNdx%
 
@@ -686,39 +693,87 @@ TurnPage(bFwd, aControlsToRemove, aControlsToFocus)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: GetListFromSheet
+	Function: PopulateNextList_IfNeeded
+		Purpose: To populate the current log entry DDL, if it is a DDL
+	Parameters
+		
+*/
+PopulateNextList_IfNeeded()
+{
+	global g_avMapDataEntryToDataInfo, g_iCurLogEntryNdx, g_vListMappings
+
+	iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
+	sDataType := g_avMapDataEntryToDataInfo[iLogEntryCol].DataType
+
+	if (sDataType != "List")
+		return false ; Not needed.
+
+	sListID := g_avMapDataEntryToDataInfo[iLogEntryCol].Entry
+
+	; Get context for this last by finding the previous list
+	iPrevEntry := g_iCurLogEntryNdx-1
+	GUIControlGet, sPrevLogEntry,, g_vLogEntry%iPrevEntry%
+	iPrevEntryCol := GetLogEntryCol(iPrevEntry)
+	vPrevMap := g_avMapDataEntryToDataInfo[iPrevEntryCol]
+	sPrevDataType := vPrevMap.DataType
+
+	; Keep looping until we find a list.
+	if (sPrevDataType = "List")
+	{
+		; Now we need to retrieve the correct mapping by the List ID.
+		sPrevListID := vPrevMap.Entry
+		if (g_vListMappings.HasKey(sPrevListID))
+		{
+			; Populate DDL with filtered list.
+			sMapDirective := g_vListMappings[sPrevListID, sPrevLogEntry]
+			if (sMapDirective = "" || sMapDirective = "All")
+			{
+				GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" GetListElems(sListID)
+				return false ; we didn't filter the list.
+			}
+			else if (sMapDirective = "List")
+			{
+				GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" GetListElems(sPrevLogEntry)
+				return true ; we filtered the list.
+			}
+		}
+	}
+
+	GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" GetListElems(sListID)
+	return false ; nothing to filter.
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: GetListMappingByID
+		Purpose: To return EasyIni list mapping for filtering a list.
+	Parameters
+		sListID: This should be a key that exists in g_vListMappings
+*/
+GetListMappingByID(sListID)
+{
+	global g_vListMappings
+
+	if (g_vListMappings.HasKey(sListID))
+		return g_vListMappings[sListID]
+	return false
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: GetListElems
 		Purpose: Load list elements for sListID and return as simple array
 	Parameters
 		sListID: List ID
 */
-GetListFromSheet(sListID)
+GetListElems(sListID)
 {
-	global g_vIntSheetMap
-
-	; Retrieve appropriate list from lists spd
-	aDDLOptions := []
-	vListsSpd := g_vIntSheetMap["Lists"]
-	for vListsRange in vListsSpd.UsedRange.Columns ; go through all used columns on row 1
-	{
-		sCurListName := vListsSpd.cells(1, A_Index).Text
-		if (sCurListName = sListID)
-		{	; Matched our lists!
-			; Loop over lists in column
-			for vCell in vListsRange.Rows ; will go through all cells in row
-			{
-				if (A_Index == 1)
-					continue ; Header
-
-				if (vCell.Text)
-					aDDLOptions.Insert(vCell.Text)
-				else break
-			}
-
-			break
-		}
-	}
-
-	return aDDLOptions
+	global g_vLists
+	return st_glue(g_vLists[sListID], "|")
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1146,7 +1201,7 @@ MapDataEntryToDataInfo()
 
 	asRowHeadings := []
 	vDataEntrySpd := g_vIntSheetMap["DataEntry"]
-	SetupSplashProgress("Setting up data entry database"
+	StartSplashProgress("Setting up data entry database"
 		, vDataEntrySpd.UsedRange.Columns.Count * vDataEntrySpd.UsedRange.Rows.Count)
 	for vRange in vDataEntrySpd.UsedRange.Columns
 	{
@@ -1193,7 +1248,7 @@ MapIntKeysToIntVals_InEmployeeTemplate()
 
 	asRowHeadings := []
 	vSpd := g_vIntSheetMap["EmployeeTemplate"]
-	SetupSplashProgress("Setting up internal database map"
+	StartSplashProgress("Setting up internal database map"
 		, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
 	for vRange in vSpd.UsedRange.Columns
 	{
@@ -1253,7 +1308,7 @@ MapIntKeysToIntVals_InSpd(vSpd, bUseSplash=true)
 
 	if (bUseSplash)
 	{
-		SetupSplashProgress("Setting up internal database map"
+		StartSplashProgress("Setting up internal database map"
 			, vSpd.UsedRange.Columns.Count * vSpd.UsedRange.Rows.Count)
 	}
 
@@ -1272,7 +1327,8 @@ MapIntKeysToIntVals_InSpd(vSpd, bUseSplash=true)
 
 		for vRange2 in vRange.Rows
 		{
-			IncSplashProgress()
+			if (bUseSplash)
+				IncSplashProgress()
 
 			sKey := vSpd.cells(A_Index, iCol).Text
 			vValCell := vSpd.cells(A_Index, iCol+1)
@@ -1359,6 +1415,78 @@ MapDataEntryColHeaderToCellAddr()
 	sRange .= sLastCol . sDataEntryRow
 	for vCell in g_vEmployeeSpd.Range(sRange)
 		g_vMapDataEntryColHeaderToCellAddr[vCell.Text] := vCell.Address(true, false)
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: CreateListMappingFilters
+		Purpose: ; We have multiple list entries which are dependent upon each other. The filter mappings makes this a cinch!
+	Parameters
+		
+*/
+CreateListMappingFilters()
+{
+	global g_vIntSheetMap, g_vLists := {}, g_vListMappings := {}
+
+	; Loop over lists spd.
+	vListsSpd := g_vIntSheetMap["Lists"]
+	for vListsRange in vListsSpd.UsedRange.Columns ; loop by column+row.
+	{
+		sTestKey := vListsSpd.cells(1, A_Index).Text
+		if (sTestKey)
+			sLoopKey := sTestKey
+
+		; Assume we are looping through lists if the loop key is blank. This has to do with the layout of the Lists spd.
+		if (sLoopKey = "Lists")
+		{
+			sListName := vListsSpd.cells(2, A_Index).Text
+			asList := []
+
+			for vCell in vListsRange.Rows ; go through all cells in column.
+			{
+				if (A_Index< 3)
+					continue ; Headers
+
+				if (vCell.Text)
+					asList.Insert(vCell.Text)
+				else break
+			}
+
+			g_vLists[sListName] := asList
+		}
+		else if (sLoopKey = "Mapping")
+		{
+			sTestListName := vListsSpd.cells(2, A_Index).Text
+			if (sTestListName)
+				sMappingListName := sTestListName
+
+			bIsKeys := vListsSpd.cells(3, A_Index).Text = "Key"
+			if (bIsKeys)
+				continue ; will retrieve keys/val in same iteration.
+
+			for vCell in vListsRange.Rows ; go through all cells in column.
+			{
+				if (A_Index < 4)
+					continue ; Headers.
+
+				if (vCell.Text)
+				{
+					if (bIsKeys)
+						g_vListMappings[sMappingListName, vCell.Text] := ""
+					else ; we are looping through vals.
+					{
+						sKey := vListsSpd.cells(vCell.Row, vCell.Column-1).Text
+						g_vListMappings[sMappingListName, sKey] := vCell.Text
+					}
+				}
+				else break
+			}
+		}
+	}
 
 	return
 }
@@ -1493,8 +1621,7 @@ ScanAllEmployeeSpdsForFlags()
 			; Number of spds * rows in data flag col is a good estimate.
 			; Currently data flag is 16, but that's bound to change.
 			; But this is just an estimate, so big deal.
-			StartSplashProgress()
-			SetupSplashProgress("Scanning"
+			StartSplashProgress("Scanning"
 				, g_avEmployeeSpds.MaxIndex() * vSpd.UsedRange.Columns(16).Rows.Count)
 		}
 		IncSplashProgress()
@@ -1661,9 +1788,7 @@ ScanAllEmployeeSpdsForFlags()
 DoGraph()
 {
 	global g_vMTYC_WB, g_avEmployeeSpds, g_avMapDataEntryToDataInfo
-		, g_vIntSheetMap, g_IntKeysToIntVals_InEmployeeTemplate
-
-	StartSplashProgress()
+		, g_vIntSheetMap, g_IntKeysToIntVals_InEmployeeTemplate, g_vLists
 
 	; Break down hours by
 	; 1. Camp Week + Hours
@@ -1675,7 +1800,7 @@ DoGraph()
 	; Build column layout from DataEntry and Lists spds.
 	vSeriesLayoutData := new EasyIni()
 	vDataEntrySpd := g_vIntSheetMap["DataEntry"]
-	SetupSplashProgress("Setting up graph series data"
+	StartSplashProgress("Setting up graph series data"
 		, vDataEntrySpd.UsedRange.Columns.Count * vDataEntrySpd.UsedRange.Rows.Count)
 	for vRange in vDataEntrySpd.UsedRange.Columns
 	{
@@ -1696,29 +1821,25 @@ DoGraph()
 
 	; Now for the lists spd.
 	vListsSpd := g_vIntSheetMap["Lists"]
-	SetupSplashProgress("Retrieving series info"
+	StartSplashProgress("Retrieving series info"
 		, vListsSpd.UsedRange.Columns.Count * vListsSpd.UsedRange.Rows.Count)
-	for vCell in vListsSpd.UsedRange
+	for sList, asElems in g_vLists
 	{
 		IncSplashProgress()
 
-		; Loop through all entires in this list.
-		sCell := vCell.Text
-		sSeries := vListsSpd.cells(1, vCell.Column).Text
-
-		bIsHeader := (sSeries = sCell)
-		if (bIsHeader)
-			continue
-
+		sSeries := sList
 		; Just because the cell was used doesn't mean it is populated!
-		if (sCell && vSeriesLayoutData.HasKey(sSeries))
-			vSeriesLayoutData[sSeries, sCell] := sCell
+		if (vSeriesLayoutData.HasKey(sSeries))
+		{
+			for iElem, sElem in asElems
+				vSeriesLayoutData[sSeries, sElem] := sElem
+		}
 	}
 
 	; Now set up the layout in the Graphs spd.
 	vGraphsSpd := g_vIntSheetMap["Graphs"]
 	vGraphsSpd.Activate ; If this is not activated, all but the first exports fail! Do it now to avoids any other potential issues.
-	SetupSplashProgress("Building series table", 50) ; Not sure how to estimate this one...
+	StartSplashProgress("Building series table", 50) ; Not sure how to estimate this one...
 	iStartingDataRow := 3
 	iCol := 1
 
@@ -1781,17 +1902,29 @@ DoGraph()
 	}
 	iStartingDataRow := vSubColHeaderCell.Row+1
 
+	; Build accurrate estimation of data to loop through using employee template.
+	vSheetMap := g_IntKeysToIntVals_InEmployeeTemplate
+	vFirstColCell := g_avEmployeeSpds[1].Range(vSheetMap.FirstDataEntryAddr)
+	vLastColCell := g_avEmployeeSpds[1].Range(vSheetMap.LastDataEntryAddr)
+	iFirstCol := vFirstColCell.Column
+	iLastCol := vLastColCell.Column+1
+	iFirstRow := vFirstColCell.Row+1
+	iTotCols := iLastCol-iFirstCol
+	vSheetMap := MapIntKeysToIntVals_InSpd(g_avEmployeeSpds[1], false)
+	iLastRow := vSheetMap.InsertRow
+	iTotRows := iLastRow-iFirstRow
+
 	; Loop through each row, populating the activities and the hours.
 	; This is hard to estimate, and our estimate is pretty rough.
 	; Estimate: Number of spds * Rows in data flag col.
 	; Note: The number of rows aren't going to be identical between all spds.
 	; Note: Currently data flag is 16, but that's could change.
-	SetupSplashProgress("Aggregating data from employees"
-		, g_avEmployeeSpds.MaxIndex() * g_avEmployeeSpds[1].UsedRange.Columns(16).Rows.Count)
+	StartSplashProgress("Aggregating data from employees", g_avEmployeeSpds.MaxIndex() * iTotRows * iTotCols)
 	avEmployeeData := new EasyIni()
 	for iSpd, vSpd in g_avEmployeeSpds
 	{
-		vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
+		if (iSpd > 1) ; we already built the first map!
+			vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
 		sStartAddr := vSheetMap.FirstDataEntryAddr
 		StringSplit, aStartAddr, sStartAddr, `$
 		sEndAddr := vSheetMap.LastDataEntryAddr
@@ -1812,7 +1945,6 @@ DoGraph()
 			{
 				iHoursCol := vSheetMap.HoursCol + 0
 				vHoursCell := vSpd.cells(vCell.Row, iHoursCol)
-
 				if (vSeriesData[sCol, vCell.Text])
 					vSeriesData[sCol, vCell.Text] += vHoursCell.Value
 				else vSeriesData[sCol, vCell.Text] := vHoursCell.Value
@@ -1838,8 +1970,7 @@ DoGraph()
 		}
 
 		; Now find and set graph end date to the latest date found.
-		vLastDataEntryCell := vSpd.cells(vSheetMap.InsertRow-1, vFirstDataEntryCell.Column+1)
-		vEndDtCell := vSpd.cells(vFirstDataEntryCell.Row+1, vFirstDataEntryCell.Column+1)
+		vEndDtCell := vSpd.cells(vSheetMap.InsertRow-1, vFirstDataEntryCell.Column+1)
 		; Get numeric date value.
 		vEndDtCell.NumberFormat := "h:mm"
 		iSpdEndDt := vEndDtCell.Value
@@ -1864,7 +1995,7 @@ DoGraph()
 	*/
 
 	; Populate series data from all employees. Estimate is Number of Graphs * Employee Count/Series.
-	SetupSplashProgress("Aggregating data from employees", asSeriesAddr.MaxIndex() * g_avEmployeeSpds.MaxIndex())
+	StartSplashProgress("Aggregating data from employees", asSeriesAddr.MaxIndex() * g_avEmployeeSpds.MaxIndex())
 	iRow := iStartingDataRow
 	for sEmployee, vSheetData in avEmployeeData
 	{
@@ -1901,7 +2032,7 @@ DoGraph()
 	; Setup graphs. Estimate is Number of Graphs * 2 * Employee Count/Series
 	; * 2 because we have to delete the series automatically added by Excel.
 	; and this turned out to be a pretty good estimate!
-	SetupSplashProgress("Creating graphs", asSeriesAddr.MaxIndex() * 2 * g_avEmployeeSpds.MaxIndex())
+	StartSplashProgress("Creating graphs", asSeriesAddr.MaxIndex() * 2 * g_avEmployeeSpds.MaxIndex())
 	for iChart, sSeriesAddr in asSeriesAddr
 	{
 		; xl3DArea=-4098
@@ -1955,10 +2086,18 @@ DoGraph()
 		vChartObject.Height := iChartHeight
 		vChartObject.RoundedCorners := true
 
+		; Export chart into working directory.
 		vChart.Export(A_WorkingDir "\Employee Hours by " sChartType ".png")
 	}
 
 	EndSplashProgress()
+
+	bOpenFolder := Msgbox_YesNo("Graphing completed"
+		, "Finished graping all data. Files are saved in: " A_WorkingDir
+		. "`n`nOpen that folder now?")
+	if (bOpenFolder)
+		Run, explorer.exe %A_WorkingDir%
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2085,12 +2224,12 @@ InitAdminGUI()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: StartSplashProgress
-		Purpose: Output progress for loading application
+	Function: InitSplashProgress
+		Purpose: Setup progress for loading application. Show it with StartSplashProgress.
 	Parameters
 		
 */
-StartSplashProgress()
+InitSplashProgress()
 {
 	global
 
@@ -2105,11 +2244,44 @@ StartSplashProgress()
 	GUI, Add, Progress, % "x0 y" g_iPic_Y+g_iPic_H+1 " w" g_iPic_W " h20 c2BB70B BackGround333333 +Border vg_vSP_Progress"
 	; Resize text to span GUI
 	GUIControl, Move, g_vSP_Output, w%g_iPic_W%
-	GUI, Show
 
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: StartSplashProgress
+		Purpose:
+	Parameters
+		sHeader: Text to output
+		iRange: Progress range
+*/
+StartSplashProgress(sHeader, iRange)
+{
+	global
+
+	; Parent splash to Admin Window or Log Entry GUI (Give Log Entry GUI precedence).
+	If (WinExist("ahk_id" g_hLogEntry))
+	{
+		GUI, SplashProgess_:+Owner%g_hLogEntry%
+		WinSet, Disable,, ahk_id %g_hLogEntry%
+	}
+	else if (WinExist("ahk_id" g_hAdminCmdCenter))
+	{
+		GUI, SplashProgess_:+Owner%g_hAdminCmdCenter%
+		WinSet, Disable,, ahk_id %g_hAdminCmdCenter%
+	}
+
+	GUIControl, SplashProgess_:, g_vSP_Progress ; Reset progress.
+	GUIControl, SplashProgess_:, g_vSP_Output, %sHeader%...
+	GUIControl, % "SplashProgess_: +Range0-" iRange, g_vSP_Progress
+
+	GUI, SplashProgess_: Show
+
+	return
+}
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
@@ -2121,30 +2293,17 @@ StartSplashProgress()
 */
 EndSplashProgress()
 {
-	GUI, SplashProgess_: Destroy
-	return
-}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-/*
-	Author: Verdlin
-	Function:
-		Purpose:
-	Parameters
-		
-*/
-SetupSplashProgress(sHeader, iRange)
-{
 	global
 
-	; TODO: Parent splash to Admin Window or Log Entry GUI (Give Log Entry GUI precedence)
-	GUIControl, SplashProgess_:, g_vSP_Progress ; Reset progress.
-	GUIControl, SplashProgess_:, g_vSP_Output, %sHeader%...
-	GUIControl, % "SplashProgess_: +Range0-" iRange, g_vSP_Progress
+	GUI, SplashProgess_: Hide
+
+	If (WinExist("ahk_id" g_hLogEntry))
+		WinSet, Enable,, ahk_id %g_hLogEntry%
+	else WinSet, Enable,, ahk_id %g_hAdminCmdCenter%
 
 	return
 }
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 UpdateSplashProgress(iNdx, sText="")
 {
