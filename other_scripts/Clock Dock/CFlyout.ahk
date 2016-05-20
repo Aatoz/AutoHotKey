@@ -1,8 +1,4 @@
-/*
-	TODO:
-		1. AddSeparator() -- needs a separator defined in Flyout_Config. It's a string, and we fill the entire width of the LB with this string
-			Calculate it using the FNT functions.
-*/
+; BIG TODO: Allow GUI style settings to be specified through __New because the constructor is just ridiculous
 
 class CFlyout
 {
@@ -11,7 +7,7 @@ class CFlyout
 	public:
 	----------------------------------------------------------------------------------------------------------------------------------
 	*/
-	; Shows the flyout
+	; Shows the flyout.
 	 Show()
 	{
 		this.EnsureCorrectDefaultGUI()
@@ -57,6 +53,11 @@ class CFlyout
 				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
 					Hotkey, Up, CFlyout_OnArrowUp
 			}
+			else if (A_LoopField = "Copy")
+			{
+				Hotkey, IfWinActive, % "ahk_id" this.m_hFlyout
+					Hotkey, ^C, CFlyout_OnCopy
+			}
 			else OnMessage(A_LoopField, "CFlyout_OnMessage")
 
 			if (%A_LoopField% == WM_LBUTTONDOWN)
@@ -74,37 +75,47 @@ class CFlyout
 	; 2. Sets iH to what CalcHeight() returns.
 	GetWidthAndHeight(ByRef riW, ByRef riH)
 	{
-		; The two lines below ensure that these are out params (as opposed to in/out)
+		; The two lines below ensure that these are out params (as opposed to in/out).
 		riH := riW :=
 
-		while (A_Index <= this.m_iMaxRows)
+		if (this.m_bAutoSizeW)
 		{
-			sTmp := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
+			while (A_Index <= this.m_iMaxRows
+				&& A_Index + this.m_vTLB.TopIndex < this.m_asItems.MaxIndex())
+			{
+				sTmp := this.m_asItems[A_Index + this.m_vTLB.TopIndex + 1]
 
-			if (A_Index + this.m_iDrawnAtNdx > this.m_asItems.MaxIndex())
-				break
+				iTmpW := Str_MeasureText(sTmp == "" ? "a" : sTmp, this.m_hFont).right
+				if (iTmpW < this.m_iW && iTmpW > riW)
+					riW := iTmpW
+				; Msgbox % st_concat("`n", sTmp, iTmpW, this.m_iW)
 
-			iTmpW := Str_MeasureText(sTmp == A_Blank ? "a" : sTmp, this.m_hFont).right
-			if (iTmpW < this.m_iW && iTmpW > riW)
-				riW := iTmpW
+				; Transparent LB doesn't support word wrap.
+				;~ Str_Wrap(sTmp == "" ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
+				riH += this.m_vTLB.ItemHeight
+			}
 
-			; Transparent LB doesn't support 
-			;~ Str_Wrap(sTmp == A_Blank ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
-			riH += this.m_vTLB.ItemHeight
+			riW += 9
+			; TODO: Dynamic scrollbar stuff.
+			if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide.
+				riW += 17
+			riH += 4 ; Why do I have this?
+		}
+		else
+		{
+			riW := this.m_iW
+
+			iRows := this.m_asItems.MaxIndex()
+			if (iRows > this.m_iMaxRows)
+				iRows := this.m_iMaxRows
+			riH := this.m_vTLB.ItemHeight * iRows
+			riH += 4 ; For some reason the entire height is short by 5px, no matter how many items (I think). It is concerning that it is necessary.
 		}
 
-		if (riW == A_Blank)
+		if (!riW)
 			iW := this.m_iW
-		if (riH == A_Blank)
-			;~ Str_Wrap("a", this.m_iW, this.m_hFont, true, riH)
-			riH := this.m_vTLB.ItemHeight
-
-		riW += 9
-		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide
-			riW += 18
-		riH += 5
-
-		riW := this.m_iW ; TODO: logic for auto-sizing width from wrapper
+		if (!riH)
+			riH := Str_MeasureText("a", this.m_hFont).bottom ; Str_Wrap("a", this.m_iW, this.m_hFont, true, riH)
 
 		return
 	}
@@ -114,34 +125,35 @@ class CFlyout
 	{
 		while (A_Index <= this.m_iMaxRows)
 		{
-			sTmp := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
+			sTmp := this.m_asItems[A_Index + this.m_vTLB.TopIndex]
 
-			if (A_Index + this.m_iDrawnAtNdx > this.m_asItems.MaxIndex())
+			if (A_Index + this.m_vTLB.TopIndex > this.m_asItems.MaxIndex())
 				break
 
-			iTmpW := Str_MeasureText(sTmp == A_Blank ? "a" : sTmp, this.m_hFont).right
+			iTmpW := Str_MeasureText(sTmp == "" ? "a" : sTmp, this.m_hFont).right
 			if (iTmpW < this.m_iW && iTmpW > riW)
 				riW := iTmpW
 
-			; Transparent LB doesn't support 
-			;~ Str_Wrap(sTmp == A_Blank ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH)
+			; Transparent LB doesn't support.
+			;~ Str_Wrap(sTmp == "" ? "a" : sTmp, this.m_iW, this.m_hFont, true, iTmpH).
 			riH += this.m_vTLB.ItemHeight
 		}
 
 		if (riW == A_Blank)
 			iW := this.m_iW
 		if (riH == A_Blank)
-			;~ Str_Wrap("a", this.m_iW, this.m_hFont, true, riH)
+			;~ Str_Wrap("a", this.m_iW, this.m_hFont, true, riH).
 			riH := this.m_vTLB.ItemHeight
 
 		riW += 9
-		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide
+		if (this.m_asItems.MaxIndex() > this.m_iMaxRows) ; Scrollbar is 18px wide.
 			riW += 18
 		riH += 5
+
 		return
 	}
 
-	; Calculates height from m_iDrawnAtNdx (topmost item being display) to item number iTo. Used in CFlyoutMenuHandler.
+	; Calculates height from TopIndex (topmost item being display) to item number iTo. Used in CFlyoutMenuHandler.
 	CalcHeightTo(iTo)
 	{
 		VarSetCapacity(RECT, 16, 0)
@@ -151,9 +163,9 @@ class CFlyout
 
 		while (A_Index <= iTo)
 		{
-			sTmp := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
+			sTmp := this.m_asItems[A_Index + this.m_vTLB.TopIndex]
 
-			if (A_Index + this.m_iDrawnAtNdx > this.m_asItems.MaxIndex())
+			if (A_Index + this.m_vTLB.TopIndex > this.m_asItems.MaxIndex())
 				break
 
 			Str_Wrap(sTmp, this.m_iW, this.m_hFont, true, iTmpH)
@@ -166,20 +178,39 @@ class CFlyout
 		return iH
 	}
 
-	; Returns currently selected item in flyout
+	; Returns currently selected item in flyout.
 	GetCurSel()
 	{
 		ControlGet, sCurSel, Choice, ,, % "ahk_id" this.m_hListBox
 		return sCurSel
 	}
 
-	; Returns index of currently selected item in flyout
+	; Returns index of currently selected item in flyout.
 	GetCurSelNdx()
 	{
 		return this.m_vTLB.CurSel
 	}
 
-	; Finds the string and returns the index
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: just Verdlin
+		Function: SetItem
+			Purpose: To change a single item
+		Parameters
+			sData: New string
+			iAt: Which string to replace
+	*/
+	SetItem(sData, iAt)
+	{
+		this.m_asItems[iAt] := sData
+		this.m_vTLB.Items[iAt] := sData
+		this.m_vTLB.RedrawItem(iAt-1)
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	; Finds the string and returns the index.
 	FindString(sString)
 	{
 		ControlGet, iString, FindString, %sString%,, % "ahk_id" this.m_hListBox
@@ -196,6 +227,7 @@ class CFlyout
 		else if (iSel < 0) ; Wrap to bottom
 			SendMessage, LB_SETCURSEL, % this.m_vTLB.ItemCount - 1, 0, , % "ahk_id" this.m_hListBox
 		else SendMessage, LB_SETCURSEL, % iSel, 0, , % "ahk_id" this.m_hListBox ; Move Up/Down
+
 		return
 	}
 
@@ -218,7 +250,7 @@ class CFlyout
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
-		Function:
+		Function: Click
 			Purpose:
 		Parameters
 			iClickY: Where to click
@@ -230,12 +262,21 @@ class CFlyout
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: Scroll
+			Purpose:
+		Parameters
+			bUp: Scroll up or down
+	*/
 	Scroll(bUp)
 	{
 		static WM_VSCROLL:=0x0115
 		PostMessage, WM_VSCROLL, % !bUp, 0,, % "ahk_id " this.m_hListBox
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
@@ -254,37 +295,39 @@ class CFlyout
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	; Updates flyout with new items specified in aStringList; aStringList is assigned to m_asItems.
-	; If aStringList is 0, then the flyout is redrawn using the same m_asItems. 
-	; f aStringList is non-zero, then potential changes in the flyout include changes in Height,
-	; and changes in X and Y positioning (depending on m_iAnchorAt, m_bDrawBelowAnchor and m_bFollowMouse).
+	; Updates flyout with new items specified in aStringList; aStringList is assigned to m_asItems	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: UpdateFlyout
+			Purpose: Update flyout with new items
+		Parameters
+			aStringList = 0
+				If aStringList is 0, then the flyout is redrawn using m_asItems which may or may not be unchanged.
+				If aStringList is non-zero, then potential changes in the flyout include changes in Height,
+				and changes in X and Y positioning (depending on m_iAnchorAt, m_bDrawBelowAnchor and m_bFollowMouse).
+	*/
 	UpdateFlyout(aStringList = 0)
 	{
 		this.EnsureCorrectDefaultGUI()
 
 		if (aStringList == 0)
 			aStringList := this.m_asItems
-		else
-		{
-			; Set up new cmd list for display.
-			this.m_asItems := aStringList
+		else this.m_asItems := aStringList ; Set up new cmd list for display.
 
-			; List box.
-			this.m_vTLB.SetRedraw(false)
-			GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents.
-			GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
-			this.m_vTLB.Update()
-			this.m_vTLB.SetRedraw(true)
-		}
+		; List box. Note: Redrawing will happen in RedrawControls().
+		;this.m_vTLB.Items := this.m_asItems
+		GUIControl,, m_vLB, % "|" this.GetCmdListForListBox() ; First | replaces all the LB contents
+		;GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
 
 		if (this.m_bIsHidden)
 			this.Show()
 
-		; Resize GUI controls, if needed.
+		; Redraw and resize GUI controls, if needed.
 		this.RedrawControls()
 
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; GUI interface for editing Flyout_Config.ini. May be callable without initializing any CFlyout object like so, “CFlyout.GUIEditSettings()”
 		; 1. hParent is for parentage GUI. If nonzero, then the parent window will be deactivated until the GUI is closed.
@@ -305,28 +348,24 @@ class CFlyout
 		;~ GUI, Margin, %iMSDNStdBtnSpacing%, %iMSDNStdBtnSpacing%
 
 		; Load settings from Flyout_config.ini
-		if (!this.LoadDefaultSettings(sError))
-		{
-			Msgbox 8192,, %sError%
-			return false
-		}
+		this.LoadDefaultSettings()
 
-		g_vTmpFlyout := new CFlyout(0, ["This is a preview", "1", "2", "3"])
+		g_vTmpFlyout := new CFlyout(["This is a preview", "1", "2", "3"], "ShowOnCreate=True")
 		g_vConfigIni := class_EasyIni(A_WorkingDir "\Flyout_config.ini")
 		g_bReloadOnExit := bReloadOnExit
 
-		if (sGUI == A_Blank)
-			GUI GUIFlyoutEdit: New, hwndhFlyoutEdit Resize MinSize, Flyout Settings
+		if (sGUI == "")
+			GUI GUIFlyoutEdit: New, hwndg_hFlyoutEdit Resize MinSize, Flyout Settings
 		else GUI %sGUI%:Default
 
-		GUI, Add, ListView, xm y5 w450 r14 AltSubmit hwndhLV vvGUIFlyoutEditLV gGUIFlyoutEditLVProc, Option|Value
+		GUI, Add, ListView, xm y5 w450 r20 AltSubmit hwndhLV vvGUIFlyoutEditLV gGUIFlyoutEditLVProc, Option|Value
 		LV_Colors.OnMessage()
 		LV_Colors.Attach(hLV)
 
 		GUIControlGet, iLV_, Pos, vGUIFlyoutEditLV
 		GUI, Add, Button, % "xp yp+" iLV_H+iMSDNStdBtnSpacing " w450 h" iMSDNStdBtnH " vvGUIFlyoutEditSettings gGUIFlyoutEditSettings", &Edit
 
-		if (sGUI == A_Blank)
+		if (sGUI == "")
 		{
 			GUI, Add, Button, % "xp+" 450-(iMSDNStdBtnW*2)-iMSDNStdBtnSpacing " yp+" iMSDNStdBtnH+iMSDNStdBtnSpacing " w" iMSDNStdBtnW " hp vvGUIFlyoutEditGUIOK gGUIFlyoutEditGUIOK", &OK
 			GUI, Add, Button, % "xp+" iMSDNStdBtnW+iMSDNStdBtnSpacing " yp wp hp vvGUIFlyoutEditGUIClose gGUIFlyoutEditGUIClose", &Cancel
@@ -343,26 +382,26 @@ class CFlyout
 		LV_ModifyCol()
 		GUIControl, +Redraw, %hLV%
 
-		g_hOwner := sGUI == A_Blank ? hParent : hFlyoutEdit
+		g_hOwner := sGUI == "" ? hParent : g_hFlyoutEdit
 		if (g_hOwner)
 		{
 			GUI +Owner%g_hOwner%
 			WinSet, Disable,, ahk_id %g_hOwner%
 		}
 
-		if (sGUI == A_Blank)
+		if (sGUI == "")
 		{
 			GUI Show, x-32768 AutoSize
-			this.CenterWndOnOwner(hFlyoutEdit, g_hOwner)
+			this.CenterWndOnOwner(g_hFlyoutEdit, g_hOwner)
 		}
-		else WinActivate, ahk_id %g_hOwner% ; Owner was de-activated through creation of g_vTmpFlyout
+		else WinActivate, ahk_id %g_hOwner% ; Owner was de-activated through creation of g_vTmpFlyout.
 
 		GUIControl, Focus, vGUIFlyoutEditLV
 		LV_Modify(1, "Select")
 		LV_Modify(1, "Focus")
 
 	; Wait for dialog to be dismissed
-	while (sGUI == A_Blank && WinExist("ahk_id" hFlyoutEdit))
+	while (sGUI == "" && WinExist("ahk_id" g_hFlyoutEdit))
 	{
 		if (g_hOwner && !WinExist("ahk_id" g_hOwner))
 			break ; If the owner was closed somehow, then this dialog should also be closed.
@@ -378,6 +417,8 @@ class CFlyout
 				gosub GUIFlyoutEditSettings
 				return
 			}
+			else if (GetKeyState("Ctrl"), GetKeyState("c"))
+				clipboard := LV_GetSelText(2)
 
 			return
 		}
@@ -404,10 +445,10 @@ class CFlyout
 				; It is inferior to the actual color picker dlg from Dlg_Color because it does not allow you to
 				; choose/define custom colors
 				SetTimer, GUIFlyout_HideColorOption, 100
-				if (Fnt_ChooseFont(hFlyoutEdit, sFontName, sFont))
+				if (Fnt_ChooseFont(g_hFlyoutEdit, sFontName, sFont))
 				{
 					sVal := sFontName ", " sFont
-					StringReplace, sVal, sVal, c000000%A_Space%
+					StringReplace, sVal, sVal, c000000,, All
 					LV_Modify(LV_GetSel(), "", sCurRowCol1, sVal)
 
 					g_vConfigIni.Flyout.Font := sVal
@@ -421,7 +462,7 @@ class CFlyout
 			else if (sCurRowCol1 = "FontColor" || sCurRowCol1 = "HighlightColor")
 			{
 				sTmpColor := g_vConfigIni.Flyout[sCurRowCol1]
-				sColor := Dlg_Color(sTmpColor, hFlyoutEdit)
+				sColor := Dlg_Color(sTmpColor, g_hFlyoutEdit)
 				sVal := RGB(sColor)
 
 				GUIControl, -Redraw, %hLV%
@@ -469,13 +510,17 @@ class CFlyout
 				else aKeysValsCopy.Insert(key, val)
 			}
 
-			g_vTmpFlyout := new CFlyout(0, ["This is a preview", "1", "2", "3"]
-				, aKeysValsCopy.ReadOnly, aKeysValsCopy.ShowInTaskbar, aKeysValsCopy.X, aKeysValsCopy.Y, aKeysValsCopy.W
-				, aKeysValsCopy.MaxRows, aKeysValsCopy.AnchorAt, aKeysValsCopy.DrawBelowAnchor, aKeysValsCopy.Background
-				, aKeysValsCopy.Font, "c" aKeysValsCopy.FontColor, aKeysValsCopy.TextAlign, aKeysValsCopy.AlwaysOnTop
-				, true, aKeysValsCopy.ExitOnEsc, aKeysValsCopy.HighlightColor, aKeysValsCopy.HighlightTrans)
+			g_vTmpFlyout := new CFlyout(["This is a preview", "1", "2", "3"]
+				, "ReadOnly=" aKeysValsCopy.ReadOnly, "ShowInTaskbar=" aKeysValsCopy.ShowInTaskbar
+				, "ShowOnCreate=" aKeysValsCopy.ShowOnCreate, "AutoSizeW=" aKeysValsCopy.AutoSizeW
+				, "X="aKeysValsCopy.X, "Y="aKeysValsCopy.Y, "W="aKeysValsCopy.W
+				, "R="aKeysValsCopy.MaxRows, "AnchorAt="aKeysValsCopy.AnchorAt
+				, "DrawBelowAnchor="aKeysValsCopy.DrawBelowAnchor, "Background="aKeysValsCopy.Background
+				, "Font="aKeysValsCopy.Font " c" aKeysValsCopy.FontColor
+				, "AlwaysOnTop="aKeysValsCopy.AlwaysOnTop, "ExitOnEsc="aKeysValsCopy.ExitOnEsc
+				, "Highlight=t" aKeysValsCopy.HighlightTrans " c" aKeysValsCopy.HighlightColor)
 
-			WinActivate, ahk_id %hFlyoutEdit%
+			WinActivate, ahk_id %g_hFlyoutEdit%
 			return
 		}
 
@@ -483,7 +528,7 @@ class CFlyout
 		{
 			Critical
 
-			if (hFlyoutEdit)
+			if (g_hFlyoutEdit)
 			{
 				Anchor2("GUIFlyoutEdit:vGUIFlyoutEditLV", "xwyh", "0, 1, 0, 1")
 				Anchor2("GUIFlyoutEdit:vGUIFlyoutEditSettings", "xwyh", "0, 1, 1, 0")
@@ -550,56 +595,30 @@ class CFlyout
 		; 11. sBackground = 0. Background picture for Flyout. If 0 or an invalid file, then the background will be all Black.
 		; 12. sFont = 0. Font options in native AHK format sans color. For example, “Arial, s15 Bold”
 		; 13. sFontColor = 0. Font color in native AHK format (so it can be hex code or plain color like “Blue”)
-	__New(hParent = 0, asTextToDisplay = 0, bReadOnly = "", bShowInTaskbar = "", iX = "", iY = "", iW = "", iMaxRows = 10, iAnchorAt = -99999, bDrawBelowAnchor = true, sBackground = 0, sFont = 0, sFontColor = 0, sTextAlign = "", bAlwaysOnTop = "", bShowOnCreate = true, bExitOnEsc = true, sHighlightColor = "", sHighlightTrans = "")
+		; 14. bFollowMouse=True
+	__New(asTextToDisplay, aParms*)
 	{
+		; TODO: Fix bug where if not text is passed on, we don't select the first item upon init.
 		global
 		local iLocX, iLocY, iLocW, iLocH, iLocScreenH, sLocPreventFocus, sLocShowInTaskbar, sLocNoActivate
 
+		; Settings important to CFlyout.
 		SetWinDelay, -1
-		CoordMode, Mouse ; Defaults to Screen
-
-		this.m_hParent := hParent
-		if (asTextToDisplay = 0)
-			asTextToDisplay := [""]
+		CoordMode, Mouse ; Defaults to Screen.
 
 		; Load settings from Flyout_config.ini
-		if (!this.LoadDefaultSettings(sError))
-		{
-			Msgbox 8192,, %sError%
-			return false
-		}
+		this.LoadDefaultSettings()
 
-		if (iX != A_Blank && iX < -32768 && iY != A_Blank && iY < -32768)
-			this.m_bFollowMouse := true
-		if (iX != A_Blank)
-			this.m_iX := iX
-		if (iY != A_Blank)
-			this.m_iY := iY
-		if (iW != A_Blank)
-			this.m_iW := iW
-		if (this.m_iMaxRows <= 0 || (iMaxRows > 0 && iMaxRows != 10))
-			this.m_iMaxRows := iMaxRows
-		if (iAnchorAt != A_Blank || iAnchorAt = -99999)
-			this.m_iAnchorAt := iAnchorAt
-		if (sBackground)
-			this.m_sBackground := sBackground
-		if (bReadOnly != A_Blank)
-			this.m_bReadOnly := bReadOnly
-		if (bShowInTaskbar != A_Blank)
-			this.m_bShowInTaskbar:= bShowInTaskbar
-		if (bAlwaysOnTop != A_Blank)
-			this.m_bAlwaysOnTop := bAlwaysOnTop
-		if (sFont)
-			this.m_sFont := sFont
-		if (sFontColor)
-			this.m_sFontColor := sFontColor
-		if (sHighlightColor)
-			this.m_sHighlightColor := sHighlightColor
-		if (sHighlightTrans)
-			this.m_sHighlightTrans := sHighlightTrans
+		; Make sure we at least have a blank list of items.
+		if (!asTextToDisplay.MaxIndex())
+			asTextToDisplay := [""]
+		this.m_asItems := asTextToDisplay
 
-		; Naming convention is GUI_FlyoutN. If, for example, 2 CFlyouts already exists, name this flyout GUI_Flyout3
-		Loop
+		; Override default settings by parsing function parms.
+		this.ParseParms(aParms)
+
+		; Naming convention is GUI_FlyoutN. If, for example, 2 CFlyouts already exists, name this flyout GUI_Flyout3.
+		Loop ; until we find an unused CFlyout.
 		{
 			GUI, GUI_Flyout%A_Index%:+LastFoundExist
 			IfWinExist
@@ -615,52 +634,49 @@ class CFlyout
 
 		Hotkey, IfWinActive, ahk_id %g_hFlyout%
 		{
-			Hotkey, ^C, CFlyout_CopySelected
 			if (this.m_bExitOnEsc)
 				Hotkey, Esc, CFlyout_GUIEscape
 		}
 
 		; Font and color settings
+		GUI, Font, s10, Verdana  ; Set 10-point Verdana.
 		GUI, Font, % SubStr(this.m_sFont, InStr(this.m_sFont, ",") + 1) " " this.m_sFontColor, % SubStr(this.m_sFont, 1, InStr(this.m_sFont, ",") - 1) ; c000080 ; c83B2F7 ; EEAA99
-		GUI, Color, Black ; a black background helps reduce the eye's natural reaction to the blinking effect
+		GUI, Color, Black ; a black background helps reduce the eye's natural reaction to the blinking effect.
 
 		; Add picture
 		; Not specifying width and height so that image does not get morphed.
-		GUI, Add, Picture, +0x4 AltSubmit X0 Y0 hwndg_hPic, % this.m_sBackground
+		GUI, Add, Picture, +0x4 AltSubmit X0 Y0 hwndg_hPic vm_vPic, % this.m_sBackground
 
-		; Add ListBox, populate it, then make it transparent
-		this.m_asItems := asTextToDisplay
-		GUI, Add, ListBox, % "x0 y0 r" (asTextToDisplay.MaxIndex() > iMaxRows ? iMaxRows : asTextToDisplay.MaxIndex()) " Choose1 vm_vLB HWNDg_hListBox", % this.GetCmdListForListBox()
+		; Add ListBox but don't populate it until we make it transparent.
+		GUI, Add, ListBox, % "x0 y0 r" (this.m_asItems.MaxIndex() > this.m_iMaxRows ? this.m_iMaxRows : this.m_asItems.MaxIndex()) " Choose1 vm_vLB HWNDg_hListBox", % this.GetCmdListForListBox()
 		this.m_hListBox := g_hListBox
-		this.m_vTLB := new TransparentListBox(g_hListBox, g_hPic, SubStr(this.m_sFontColor, 2), SubStr(this.m_sFontColor, 2), this.m_sHighlightColor, this.m_sHighlightTrans)
-
 		this.m_hFont := Fnt_GetFont(this.m_hListBox)
-		this.GetWidthAndHeight(iLocW, iLocH)
-		GUIControl, MoveDraw, m_vLB, W%iLocW%
+		this.m_vTLB := new TransparentListBox(g_hListBox, g_hPic ; Handles
+			, SubStr(this.m_sFontColor, 2), SubStr(this.m_sFontColor, 2) ; Font
+			, this.m_sHighlightColor, this.m_sHighlightTrans) ; Highlight
+		; Drawing
 		this.RedrawControls()
+		GUIControl, Choose, m_vLB, 1 ; Choose the first entry in the list.
+
+		this.GetWidthAndHeight(iLocW, iLocH)
 
 		; End controls init. Begin GUI init
-		this.m_bReadOnly := bReadOnly
-		if (this.m_hParent != 0)
+		if (this.m_hParent)
 		{
 			GUI, % "+Owner" this.m_hParent
 			if (this.m_bReadOnly)
 				WinSet, Disable,, ahk_id %g_hFlyout%
-			;~ else WinSet, Disable,, % "ahk_id" this.m_hParent
 		}
 
 		iLocX := this.m_iX
 		iLocY := this.m_iY
-		if (this.m_iAnchorAt >= -32768)
+		if (this.m_iAnchorAt != "" && this.m_iAnchorAt > -99999)
 		{
-			this.m_bDrawBelowAnchor := bDrawBelowAnchor
-
 			iLocScreenH := GetMonitorRectAt(iLocX, iLocY).bottom
-			if (bDrawBelowAnchor)
+			iLocY := iLocScreenH - iLocH - this.m_iAnchorAt
+			if (this.m_bDrawBelowAnchor)
 				iLocY := iLocScreenH - this.m_iAnchorAt
-			else iLocY := iLocScreenH - iLocH - this.m_iAnchorAt
 		}
-		else this.m_bDrawBelowAnchor := false ; if we aren't going to anchor, then this setting is superfluous
 
 		if (this.m_bFollowMouse)
 		{
@@ -670,12 +686,12 @@ class CFlyout
 
 		; See http://www.autohotkey.com/board/topic/21449-how-to-prevent-the-parent-window-from-losing-focus/
 		sLocPreventFocus := this.m_bReadOnly ? "+0x40000000 -0x80000000" : ""
-		sLocShowInTaskbar := bShowInTaskbar ? "" : "+ToolWindow"
+		sLocShowInTaskbar := this.m_bShowInTaskbar ? "" : "+ToolWindow"
 		sLocAlwaysOnTop := this.m_bAlwaysOnTop ? "AlwaysOnTop" : ""
 		GUI, +LastFound -Caption %sLocAlwaysOnTop% %sLocPreventFocus% %sLocShowInTaskbar%
 
-		sLocNoActivate := bReadOnly ? "NoActivate" : ""
-		if (this.m_asItems.MaxIndex() && bShowOnCreate) ; If we have text to display and should show it on creation, do it now.
+		sLocNoActivate := this.m_bReadOnly ? "NoActivate" : ""
+		if (this.m_asItems.MaxIndex() && this.m_bShowOnCreate) ; If we have text to display and should show it on creation, do it now.
 			GUI, Show, X%iLocX% Y%iLocY% W%iLocW% H%iLocH% %sLocNoActivate%
 		else ; create the GUI but keep it hidden.
 		{
@@ -684,6 +700,10 @@ class CFlyout
 			WinMove, % "ahk_id" this.m_hFlyout,, %iLocX%
 		}
 
+		; TODO: Allow it to optionally be calculated up-front?
+		; Perform time-consuming operations after display.
+		this.CalcSeparator()
+
 		return this
 
 
@@ -691,22 +711,7 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_GUIEscape:
 		{
-			Msgbox escape..
 			Object(CFlyout.FromHwnd[WinExist("A")]).__Delete()
-			return
-		}
-		;;;;;;;;;;;;;;
-		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-		;;;;;;;;;;;;;;
-		CFlyout_CopySelected:
-		{
-			sTmpSel := Object(CFlyout.FromHwnd[g_hFlyout]).GetCurSel()
-			if (sTmpSel != A_Blank)
-				clipboard := sTmpSel
-
-			sTmpSel :=
 			return
 		}
 		;;;;;;;;;;;;;;
@@ -716,8 +721,9 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowDown:
 		{
-			Object(CFlyout.FromHwnd[WinExist("A")]).Move(false)
-			return
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+			vFlyout.Move(false)
+			return Func(vFlyout.m_sCallbackFunc).(vFlyout, VK_DOWN:=40)
 		}
 		;;;;;;;;;;;;;;
 		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -726,7 +732,25 @@ class CFlyout
 		;;;;;;;;;;;;;;
 		CFlyout_OnArrowUp:
 		{
-			Object(CFlyout.FromHwnd[WinExist("A")]).Move(true)
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+			vFlyout.Move(true)
+			return Func(vFlyout.m_sCallbackFunc).(vFlyout, VK_UP:=38)
+		}
+		;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+		;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+		;;;;;;;;;;;;;;
+		CFlyout_OnCopy:
+		{
+			vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+
+			; If there's a callback, let the callback do what it wants.
+			if (IsFunc(vFlyout.m_sCallbackFunc))
+				return Func(vFlyout.m_sCallbackFunc).(vFlyout, "Copy")
+			; else just copy m_sCurSel to clipboard.
+			clipboard := vFlyout.m_sCurSel
+
 			return
 		}
 		;;;;;;;;;;;;;;
@@ -766,15 +790,123 @@ class CFlyout
 			return iW
 		if (aName = "GetFlyoutH")
 			return iH
+		if (aName = "m_sCurSel")
+			return this.GetCurSel()
+		if (aName = "m_iCurSel")
+			return this.GetCurSelNdx()
 
 		return
 	}
 
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: ParseParms
+			Purpose: Parse parms in aParms and set appropriate member variables
+		Parameters
+			aParms
+	*/
+	ParseParms(aParms)
+	{
+		static s_asKeysMap := { X: "iX", Y: "iY", W: "iW", R: "iMaxRows", AnchorAt: "iAnchorAt", AutoSizeW: "bAutoSizeW"
+		, FollowMouse: "bFollowMouse", DrawBelowAnchor: "bDrawBelowAnchor", ShowOnCreate: "bShowOnCreate"
+		, ExitOnEsc: "bExitOnEsc", ReadOnly: "bReadOnly", ShowInTaskbar: "bShowInTaskbar"
+		, AlwaysOnTop: "bAlwaysOnTop", Parent: "hParent", Background: "sBackground"
+		, Font: "sFont", Highlight: "sHighlightColor", Separator: "sSeparator"}
+
+		for iParm, sParm in aParms
+		{
+			sParm := Trim(sParm) ; Spaces can mess things up.
+
+			iPosOfEquals := InStr(sParm, "=")
+			sKey := SubStr(sParm, 1, iPosOfEquals-1)
+			sVal := SubStr(sParm, iPosOfEquals+1)
+
+			; Build string list of errors.
+			bValidKey := true
+			if (!s_asKeysMap.HasKey(sKey))
+			{
+				bValidKey := false
+				sErrors .= (sErrors ? "`n" : "") "Invalid key:`t" sKey "=" sVal
+			}
+
+			if (sKey = "Font")
+			{
+				; Add keys first or else weird crashes can happen.
+				this.m_sFont := this.m_sFontColor := ""
+
+				; Format is native GUI format: Consolas, s16 c0xFF
+				iCommaPos := InStr(sVal, ",")
+				if (iCommaPos)
+				{
+					sFontOpts := SubStr(sVal, iCommaPos+1)
+					StringSplit, aFontOpts, sFontOpts, %A_Space%
+					; Find font color c0xFF.
+					Loop %aFontOpts0%
+					{
+						sFontOpt := Trim(aFontOpts%A_Index%) ; Spaces seriously mess things up.
+						if (SubStr(sFontOpt, 1, 1) = "c")
+						{
+							this.m_sFontColor := sFontOpt
+							; Now set m_sFont.
+							StringReplace, sNewFont, sVal, %sFontOpt%
+							this.m_sFont := sNewFont
+							break
+						}
+					}
+					; If no font color was specified, m_sFont is simply the val
+					if (!this.m_sFont)
+						this.m_sFont := sVal
+				}
+			}
+			else if (sKey = "Highlight")
+			{
+				; Add keys first or else weird crashes can happen.
+				this.m_sHighlightTrans := this.m_sHighlightColor :=
+
+				; Format is t200 c0x0
+				iCommaPos := InStr(sVal, ",")
+				sOpts := SubStr(sVal, iCommaPos+1)
+				StringSplit, aOpts, sOpts, %A_Space%
+				; Find font color c0xFF.
+				Loop %aOpts0%
+				{
+					sOpt := Trim(aOpts%A_Index%) ; Spaces seriously mess things up.
+					sSubKey := SubStr(sOpt, 1, 1)
+					sSubVal := SubStr(sOpt, 2)
+
+					if (sSubKey = "t")
+						this.m_sHighlightTrans := sSubVal
+					else if (sSubKey = "c")
+						this.m_sHighlightColor := sSubVal
+				}
+			}
+			else
+			{
+				sClassKey := s_asKeysMap[sKey]
+
+				; Is this a bool?
+				if (SubStr(sClassKey, 1, 1) = "b")
+					sVal := (sVal == true || sVal = "true")
+
+				; Dynamically set key/val pair!
+				this["m_" sClassKey] := sVal
+				
+			}
+		}
+
+		; Display list of errors for non-compiled scripts.
+		if (sErrors && !A_IsCompiled)
+			Msgbox 8256,, %sErrors%
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 	; Loads settings for flyout from Flyout_Config.ini. If any options are not specified,
-	; the default options specified in GetDefaultConfigIni will be used. If any unknown keys are in the inis, then an error is returned.
-		; 1. rsError is set to an error message if the function returns false.
-	; You can override default settings in Initialize()
-	LoadDefaultSettings(ByRef rsError)
+	; the default options specified in GetDefaultConfigIni will be used. If any unknown keys are in the inis, they are simply ignored.
+	; You can override default settings in __New
+	LoadDefaultSettings()
 	{
 		vDefaultConfigIni := class_EasyIni("", this.GetDefaultConfigIni())
 		this.m_vConfigIni := class_EasyIni(A_WorkingDir "\Flyout_config.ini")
@@ -794,26 +926,28 @@ class CFlyout
 				this.m_iY := val
 			else if (key = "W")
 				this.m_iW := val
+			else if (key = "AutoSizeW")
+				this.m_bAutoSizeW := (val == true || val = "true")
 			;~ else if (key = "H")
 				;~ this.m_iH := val
 			else if (key = "MaxRows")
 				this.m_iMaxRows := val
-			;~ else if (key = "MaxWidth")
-				;~ this.m_iMaxWidth := val
 			else if (key = "AnchorAt")
 				this.m_iAnchorAt := val
 			else if (key = "DrawBelowAnchor")
-				this.m_bDrawBelowAnchor := val
+				this.m_bDrawBelowAnchor := (val == true || val = "true")
 			else if (key = "Background")
 				this.m_sBackground := val
 			else if (key = "ReadOnly")
-				this.m_bReadOnly := val
+				this.m_bReadOnly := (val == true || val = "true")
 			else if (key = "ShowInTaskbar")
-				this.m_bShowInTaskbar := val
+				this.m_bShowInTaskbar := (val == true || val = "true")
+			else if (key = "ShowOnCreate")
+				this.m_bShowOnCreate := (val == true || val = "true")
 			else if (key = "ExitOnEsc")
-				this.m_bExitOnEsc := (val == true)
+				this.m_bExitOnEsc := (val == true || val = "true")
 			else if (key = "AlwaysOnTop")
-				this.m_bAlwaysOnTop := val
+				this.m_bAlwaysOnTop := (val == true || val = "true")
 			else if (key = "Font")
 				this.m_sFont := val
 			else if (key = "FontColor")
@@ -822,11 +956,9 @@ class CFlyout
 				this.m_sHighlightColor := val
 			else if (key = "HighlightTrans")
 				this.m_sHighlightTrans := val
-			else
-			{
-				rsError := "Error: Missing key/val pair for " key "."
-				return false
-			}
+			; else Errors here cause a crash. It's weird, and I think it has to do with DynaExpr.
+			; but is erroring even a good idea? What if it's just a deprecated key?
+			; For now, let's just ignore it.
 		}
 
 		return true
@@ -838,7 +970,6 @@ class CFlyout
 	{
 		this.EnsureCorrectDefaultGUI()
 
-		iWidth := iHeight :=
 		; If the cmd list has been updated, then this will use the new dimensions needed for the GUI;
 		; otherwise, it uses the dimensions that the GUI is already using.
 		this.GetWidthAndHeight(iWidth, iHeight)
@@ -860,13 +991,13 @@ class CFlyout
 		else if (this.m_bFollowMouse)
 			GetRectForTooltip(iX, iY, iWidth, iHeight)
 
-		WinMove, % "ahk_id" this.m_hFlyout,, %iX%, %iY%, %iWidth%, %iHeight%
+		WinMove, % "ahk_id" this.m_hFlyout,, iX, iY, iWidth, iHeight
 
 		; Update TLB.
-		this.m_vTLB.SetRedraw(false)
-		WinMove, % "ahk_id" this.m_vTLB.hLB,, 0, 0, iWidth, iHeight
+		GUIControl, Move, m_vLB, X0 Y0 W%iWidth% H%iHeight%
 		this.m_vTLB.Update()
-		this.m_vTLB.SetRedraw(true)
+
+		GUIControl, Move, m_vPic, X0 Y0
 
 		return
 	}
@@ -885,32 +1016,97 @@ class CFlyout
 		return st_glue(asCmdListForDisplay)
 	}
 
-	; Formats m_asItems for display on m_LB control.
+	; Formats items for display on ListBox control.
 	GetCmdListForListBox()
 	{
-		sCmdListForListBox :=
-		Loop, % this.m_asItems.MaxIndex()
-		{
-			CurElement := this.m_asItems[A_Index + this.m_iDrawnAtNdx]
-			if (A_Index == 1)
-				sCmdListForListBox := CurElement
-			else sCmdListForListBox = %sCmdListForListBox%|%CurElement%
-		}
-		return sCmdListForListBox
+		return st_glue(this.m_asItems, "|")
 	}
 
-	; Currently unused. The idea is to fill a completely empty line a specified separator
-	; such as "-". Then flyout text, mainly in ReadOnly mode, could be made more readable being separated by “-”s.
-	; See DictLookup for an example of what I have in mind.
-	CalcAndSetSeparator()
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: CalcSeparator
+			Purpose: To calc separator and set m_sSeparatorLine
+		Parameters
+			
+	*/
+	CalcSeparator()
 	{
-		this.m_sSeparator :=
-		iMaxChars := Str_GetMaxCharsForFont("-", this.m_iW, this.m_hFont) ; TODO: User set the Separator
+		; This avoids infinite recursion in Str_GetMaxCharsForFont.
+		if (this.m_sSeparator = "")
+			this.m_sSeparator := "-"
 
-		Loop %iMaxChars%
-			this.m_sSeparator .= "-"
+		iMaxChars := Str_GetMaxCharsForFont(this.m_sSeparator, this.m_iW, this.m_hFont)
+
+		this.m_sSeparatorLine :=
+		Loop % iMaxChars
+			this.m_sSeparatorLine .= "-"
+
 		return
 	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: Clear
+			Purpose: Clear the flyout
+		Parameters
+			bUpdate: Update flyout after clearing?
+	*/
+	Clear(bUpdate = false)
+	{
+		this.m_asItems := []
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddLine
+			Purpose: To add a separator line
+		Parameters
+			iAt: Where to insert the separator. Inserted at bottom, if blank.
+			bUpdate: Update flyout after adding line?
+	*/
+	AddLine(iAt="", bUpdate=false)
+	{
+		if (iAt)
+			this.m_asItems.InsertAt(iAt, this.m_sSeparatorLine)
+		else this.m_asItems.Insert(this.m_sSeparatorLine)
+
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: AddText
+			Purpose: To add text
+		Parameters
+			iAt: Where to insert the text. Inserted at bottom, if blank.
+			bUpdate: Update flyout after adding text?
+	*/
+	AddText(sText, iAt="", bUpdate=false)
+	{
+		if (iAt)
+			this.m_asItems.InsertAt(iAt, sText)
+		else this.m_asItems.Insert(sText)
+
+		if (bUpdate)
+			this.UpdateFlyout()
+
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 	; Safety function to ensure that all GUI commands used by the class are directed towards the right GUI.
 	EnsureCorrectDefaultGUI()
@@ -934,12 +1130,15 @@ class CFlyout
 				HighlightColor=0x6AEFF
 				HighlightTrans=85
 				MaxRows=10
-				ReadOnly=0
-				ShowInTaskbar=0
+				AlwaysOnTop=false
+				ReadOnly=false
+				ShowInTaskbar=false
+				ShowOnCreate=true
+				ExitOnEsc=true
 				X=0
 				Y=0
 				W=400
-				ExitOnEsc=true
+				AutoSizeW=false
 			)"
 	}
 
@@ -1006,11 +1205,10 @@ class CFlyout
 
 		m_bFollowMouse := false ; Set to true when m_iX and m_iY are less than -32768
 		static m_iMouseOffset := 16 ; Static pixel offset used to separate mouse pointer from Flyout when m_bFollowMouse is true
-		m_sSeparator := ; Not yet interfaced. The idea is to fill a completely empty line a specified separator such as "-"
 
-		m_iDrawnAtNdx := 0 ; 0-based. Used to keep tracking scrolling position. If iMaxRows is set to 10,
-			; and 11 elements are in asTextToDisplay, and the user has scrolled to the 11th element,
-			; then m_iDrawnAtNdx is set to 1, since we have scrolled past position 1.
+		m_sSeparator := ; The idea is to fill a completely empty line a specified separator such as "-"
+		m_sSeparatorLine :=
+
 		m_bIsHidden := ; True when Hide() is called. False when Show() is called.
 
 		; Handles
@@ -1045,6 +1243,13 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 	hFlyout := DllCall("GetParent", uint, hGUICtrl)
 	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
 
+	if (this.m_bHandleClick && msg == WM_LBUTTONDOWN:=513)
+	{ 
+		CoordMode, Mouse, Relative
+		MouseGetPos,, iClickY
+		vFlyout.Click(iClickY)
+	}
+
 	if (IsFunc(vFlyout.m_sCallbackFunc))
 		bRet := Func(vFlyout.m_sCallbackFunc).(vFlyout, msg)
 
@@ -1062,7 +1267,10 @@ CFlyout_MouseProc(nCode, wParam, lParam, msg)
 	global g_hMouseHook, g_hFlyout
 
 	vFlyout := Object(CFlyout.FromHwnd[g_hFlyout])
-	vFlyout.RedrawControls()
+
+	vFlyout.GetWidthAndHeight(iWidth, iHeight)
+	GetRectForTooltip(iX, iY, iWidth, iHeight)
+	WinMove, % "ahk_id" vFlyout.m_hFlyout,, %iX%, %iY%, %iWidth%, %iHeight%
 
 	vFlyout :=
 	return DllCall("CallNextHookEx", "uint", g_hMouseHook, "int", nCode, "uint", wParam, "uint", lParam)
