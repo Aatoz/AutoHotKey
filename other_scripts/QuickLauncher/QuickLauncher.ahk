@@ -29,7 +29,7 @@ if (A_IsCompiled)
 g_bIsFirstRun := AddContextMenuToRegistryIfNeeded()
 InitEverything()
 
-OnMessage(WM_DISPLAYCHANGE:=126, "InitEverything")
+OnMessage(WM_DISPLAYCHANGE:=126, "OnDisplayChange")
 OnMessage(WM_SETTINGCHANGE:=26, "LoadQLDB") ; TODO: This may be better to split out into a separate function beacuse it's inefficient to reload everything (including the defaults)
 
 ; TODO: Command to reload instead of hotkey
@@ -48,23 +48,34 @@ return
 InitEverything()
 {
 	InitGlobals()
-	InitializeQuickLauncher()
+	InitQuickLauncher()
+	InitFlyout()
+	InitTrayMenu()
 
-	; Merge flyout configuration.
-	vDefaultFlyoutConfig := new EasyIni("", GetDefaultFlyoutConfigIni())
-	vTmpFlyoutConfig := new EasyIni("Flyout_config")
-	vTmpFlyoutConfig.Merge(vDefaultFlyoutConfig)
-	; Now save so the the CFlyout gets these changes.
-	vTmpFlyoutConfig.Save()
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	; Create CFlyout but start with it hidden (last parameter hides it for us).
-	global g_hQL, g_iQLY, g_iTaskBarH
-	global g_vGUIFlyout := new CFlyout(g_hQL, 0, false, false, "", "", "", 10, A_ScreenHeight - g_iQLY - g_iTaskBarH, false, vTmpFlyoutConfig.Flyout.Background, 0, 0, "", false, false)
-	g_vGUIFlyout.OnMessage(WM_LBUTTONDOWN:=513
-		. "," WM_LBUTTONUP:=514
-		. "," WM_LBUTTONDBLCLK:=515
-		. "," WM_RBUTTONDOWN:=516
-		, "QL_OnCFlyoutClick")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: OnDisplayChange
+		Purpose: To make sure GUIs retain the window positions.
+			This particular window message tends to really screw things up, moving windows to weird places.
+	Parameters
+		
+*/
+OnDisplayChange()
+{
+	global g_hQL, g_iQLX, g_iQLY, g_iQLW, g_iQLH, g_vGUIFlyout
+
+	WinMove, ahk_id %g_hQL%,, g_iQLX, g_iQLY, g_iQLW, g_iQLH
+
+	iX := g_vGUIFlyout.GetFlyoutX
+	iY := g_vGUIFlyout.mGetFlyoutY
+	iW := g_vGUIFlyout.m_vConfigIni.Flyout.W
+	iH := g_vGUIFlyout.m_vConfigIni.Flyout.H
+	WinMove, % "ahk_id" g_vGUIFlyout.m_hFlyout,, iX, iY, iW, iH
 
 	return
 }
@@ -115,12 +126,40 @@ InitGlobals()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: InitializeQuickLauncher
+	Function: InitTrayMenu
+		Purpose: Set up tray menu
+	Parameters
+		
+*/
+InitTrayMenu()
+{
+	; Tray icon
+	;Menu, TRAY, Icon, images\Main.ico,, 1
+
+	OnExit, ExitProc
+
+	Menu, TRAY, NoStandard
+	Menu, TRAY, MainWindow ; For compiled scripts
+	Menu, Tray, Tip, Quick Launcher
+	Menu, TRAY, Add, &Open, QL_Show
+	;Menu, TRAY, Icon, &Open, images\Open.ico,, 16
+	Menu, TRAY, Add, E&xit, ExitApp
+	Menu, TRAY, Default, &Open
+	Menu, TRAY, Click, 1
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: InitQuickLauncher
 		Purpose: Initialize the QL GUI
 	Parameters
 		
 */
-InitializeQuickLauncher()
+InitQuickLauncher()
 {
 	global
 
@@ -144,7 +183,8 @@ InitializeQuickLauncher()
 		;~ sBackground := "" ; TODO: Standard pic?
 
 	GUI, QuickLauncher:New, +Hwndg_hQL, Quick Launcher
-	GUI, Add, Picture, AltSubmit x36 y0 W%g_iQLW% H%g_iQLH%, %sBackground%
+	;~ GUI, Add, Picture, AltSubmit x36 y0 W%g_iQLW% H%g_iQLH%, %sBackground%
+	GUI, Add, Picture, AltSubmit x0 y0 W%g_iQLW%, %sBackground% ; H%g_iQLH%
 
 	GUI, Font, s55 c0x48A4FF, %sFont% ; c83B2F7 ; c000080 ; c83B2F7 ; q
 	GUI, Add, Text, hwndg_hQLText vQLText xp y0 W%g_iQLW% H%g_iQLH% Center BackgroundTrans +0x80, |
@@ -153,8 +193,8 @@ InitializeQuickLauncher()
 	GUI, Add, Edit, HwndQLEditHwnd BackgroundTrans vQLEdit gQLEditProc ; Can't use hidden because keystrokes are actually sent to this edit.
 	g_hQLEdit := QLEditHwnd
 
-	GUI, Add, Button, x0 y0 h32 w36 hwndg_hQLSettings , `n&s ; gLaunchQuickLauncherEditor
-	ILButton(g_hQLSettings, "images\Settings.ico", 32, 32, 4)
+	;~ GUI, Add, Button, x0 y0 h32 w36 hwndg_hQLSettings , `n&s ; gLaunchQuickLauncherEditor
+	;~ ILButton(g_hQLSettings, "images\Settings.ico", 32, 32, 4)
 
 	GUI, Color, Black
 	GUI, +LastFound -Caption
@@ -178,8 +218,10 @@ InitializeQuickLauncher()
 		Hotkey, WheelDown, Flyout_WheelDown
 		Hotkey, WheelUp, Flyout_WheelUp
 
-		; Delete keys
-		Hotkey, +Delete, QL_RemoveSelectedCmd
+		; Editing commands
+		Hotkey, AppsKey, QL_ShowFlyoutMenu
+		Hotkey, ^Delete, QL_RemoveSelectedCmd
+		Hotkey, ^r, QL_RenameSelectedCmd
 
 		; Submit keys.
 		Hotkey, Enter, QLEnterProc
@@ -213,6 +255,41 @@ InitializeQuickLauncher()
 	; Load the arrays even if we don't use a flyout, because, most of the time, we will.
 	; Also I think this may be faster than loading the arrays upon creation.
 	LoadQLDB()
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: InitFlyout
+		Purpose: Initialize flyout
+	Parameters
+		
+*/
+InitFlyout()
+{
+	; Merge flyout configuration.
+	vDefaultFlyoutConfig := new EasyIni("", GetDefaultFlyoutConfigIni())
+	vTmpFlyoutConfig := new EasyIni("Flyout_config")
+	vTmpFlyoutConfig.Merge(vDefaultFlyoutConfig)
+	; Now save so the the CFlyout gets these changes.
+	vTmpFlyoutConfig.Save()
+
+	; Create CFlyout but start with it hidden (last parameter hides it for us).
+	global g_hQL, g_iQLY, g_iTaskBarH
+	;global g_vGUIFlyout := new CFlyout(g_hQL, 0, false, false, "", "", "", 10, A_ScreenHeight - g_iQLY - g_iTaskBarH, false, vTmpFlyoutConfig.Flyout.Background, 0, 0, "", false, false)
+
+	global g_vGUIFlyout := new CFlyout(0, "Parent="g_hQL,
+		, "Y=" A_ScreenHeight - g_iQLY - g_iTaskBarH
+		, "Background=" vTmpFlyoutConfig.Flyout.Background)
+
+	g_vGUIFlyout.OnMessage(WM_LBUTTONDOWN:=513
+		. "," WM_LBUTTONUP:=514
+		. "," WM_LBUTTONDBLCLK:=515
+		. "," WM_RBUTTONDOWN:=516
+		, "QL_OnCFlyoutClick")
 
 	return
 }
@@ -267,7 +344,7 @@ QL_RemoveSelectedCmd:
 		return
 
 	; Prompt to delete.
-	if (!Msgbox_YesNo("Remove the following command: " g_vGUIFlyout.GetCurSel(), "Remove command"))
+	if (!Msgbox_YesNo("Remove this command?`n`n" g_vGUIFlyout.GetCurSel(), "Remove command"))
 		return
 
 	; Remember last selected item.
@@ -281,6 +358,55 @@ QL_RemoveSelectedCmd:
 		g_iLastSel := 1
 	g_vGUIFlyout.MoveTo(g_iLastSel)
 
+	return
+}
+
+QL_RenameSelectedCmd:
+{
+	if (IsDisplayingHelpInfo())
+		return
+
+	vCmd := g_vCommandsIni[g_vGUIFlyout.GetCurSel()]
+	sNewCmd := AddCmdProc(vCmd, false)
+
+	if (sNewCmd = "")
+		return
+
+	if (g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel()))
+	{
+		g_MasterIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		Msgbox % st_concat("`n", g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel())
+			, g_MasterIni.HasKey(sNewCmd))
+		Msgbox Save in %A_ThisLabel%
+		g_MasterIni.Save()
+	}
+	else if (g_RecentIni.HasKey(g_vGUIFlyout.GetCurSel()))
+	{
+		g_RecentIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd)
+		g_RecentIni.Save()
+	}
+
+	QLEditProc()
+	return
+}
+
+QL_ResetSelCmdHitCount:
+{
+	vCmd := g_vCommandsIni[g_vGUIFlyout.GetCurSel()]
+	vCmd.HitCount := 1
+	if (g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel()))
+	{
+		g_MasterIni[g_vGUIFlyout.GetCurSel()].HitCount := 1
+		Msgbox Save in %A_ThisLabel%
+		g_MasterIni.Save()
+	}
+	else if (g_RecentIni.HasKey(g_vGUIFlyout.GetCurSel()))
+	{
+		g_RecentIni[g_vGUIFlyout.GetCurSel()].HitCount := 1
+		g_RecentIni.Save()
+	}
+
+	QLEditProc()
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -335,11 +461,12 @@ QL_SimulateDragNDrop(DDContents)
 /*
 	Author: Verdlin
 	Function: AddCmdProc
-		Purpose: To localize logic to add a command to the database
+		Purpose: To localize logic to add a command to the database. Returns the new command name, if any.
 	Parameters
 		vCmd
+		bSaveToDB=true: Set to false when we first want to prompt for a new command.
 */
-AddCmdProc(vCmd)
+AddCmdProc(vCmd, bSaveToDB=true)
 {
 	bContinue := true
 	while (!sAddUserCmd && bContinue)
@@ -362,10 +489,10 @@ AddCmdProc(vCmd)
 		else sAddUserCmd := Trim(sAddUserCmd) ; Spaces mess things up.
 	}
 
-	if (sAddUserCmd) ; If a valid shortcut was specified
+	if (bSaveToDB && sAddUserCmd) ; If a valid shortcut was specified and we need to save to the DB.
 		SaveToDB(sAddUserCmd, vCmd, "Master")
 
-	return
+	return sAddUserCmd
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -456,11 +583,25 @@ UpdateCommands(sKeyInput, bShowAllCmds=false)
 	global g_vGUIFlyout
 	global g_bShowAllCmds := bShowAllCmds
 
-	asShortcuts := GetMatchingCommands(sKeyInput)
-	if (asShortcuts[1] != "" || IsDisplayingHelpInfo() || g_bShowAllCmds)
+	aCmds := GetMatchingCommands(sKeyInput)
+	if (aCmds[1] != "" || IsDisplayingHelpInfo() || g_bShowAllCmds)
 	{
-		g_vGUIFlyout.UpdateFlyout(asShortcuts)
-		g_vGUIFlyout.MoveTo(1)
+		; Reduce flickering by only updating when necessary.
+		; Don't check prev cmds if the arrays don't match or are huge.
+		bUpdate := true
+		aPrevCmds := g_vGUIFlyout.m_asItems
+		if (aCmds.MaxIndex() == aPrevCmds.MaxIndex() && aCmds.MaxIndex() < 25)
+		{
+			sPrevCmds := st_glue(aPrevCmds)
+			sCmds := st_glue(aCmds)
+			bUpdate := (sPrevCmds != sCmds)
+		}
+
+		if (bUpdate)
+		{
+			g_vGUIFlyout.UpdateFlyout(aCmds)
+			g_vGUIFlyout.MoveTo(1)
+		}
 	}
 
 	return
@@ -478,8 +619,10 @@ UpdateCommands(sKeyInput, bShowAllCmds=false)
 DisplayListOfAvailCommands()
 {
 	global g_vGUIFlyout, g_asCommandsHelp
+
 	if (!g_vGUIFlyout.m_bIsHidden)
 		g_vGUIFlyout.UpdateFlyout(g_asCommandsHelp)
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -507,10 +650,41 @@ IsDisplayingHelpInfo()
 	Parameters
 		
 */
+QL_ShowFlyoutMenu:
+{
+	QL_ShowFlyoutMenu()
+	return
+}
+
 QL_ShowFlyoutMenu()
 {
+	global g_vCommandsIni, g_vGUIFlyout
+	static s_bInit := false
+
+	; Disable context-menu on help info.
+	if (IsDisplayingHelpInfo())
+		return
+
+	if (s_bInit)
+		Menu, CFlyoutMenu, Delete
+
 	Menu, CFlyoutMenu, Add, &Delete, QL_RemoveSelectedCmd
+	Menu, CFlyoutMenu, Icon, &Delete, images\Delete.ico,, 16
+	Menu, CFlyoutMenu, Add, &Rename, QL_RenameSelectedCmd
+	Menu, CFlyoutMenu, Icon, &Rename, images\Edit.ico,, 16
+
+	iHitCount := g_vCommandsIni[g_vGUIFlyout.GetCurSel()].HitCount
+	Menu, CFlyoutMenu, Add, Reset hit &count`t(%iHitCount%), QL_ResetSelCmdHitCount
+	Menu, CFlyoutMenu, Icon, Reset hit &count`t(%iHitCount%), images\Revert.ico,, 16
+
 	Menu, CFlyoutMenu, Show
+
+	s_bInit := true
+	return
+}
+
+DummyLabel:
+{
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -562,6 +736,8 @@ QuickLaunch(sCmd="")
 		return
 
 	vCmd := ParseCmd(sCmd, false)
+	if (IsObject(vCmd))
+		sValidCmd := sCmd
 
 	; This wasn't parsed, so try again using the currently selected item in the flyout.
 	bIsNewCmd := !g_vCommandsIni.HasKey(sCmd)
@@ -573,7 +749,7 @@ QuickLaunch(sCmd="")
 		bUsedExistingCmd := true
 	}
 
-	;~ Msgbox % "about to call " vCmd.Func
+	;~ Msgbox % st_concat("`n", "about to call " vCmd.Func, vCmd.Parms)
 	if (vCmd.Func)
 		bCmdWorked := (Func(vCmd.Func).(vCmd.Parms) || vCmd.Func = "DynaExpr_Eval") ; return val for this function is unreliable
 	;~ Msgbox % st_concat("`n", bUsedExistingCmd, bCmdWorked)
@@ -598,6 +774,12 @@ QuickLaunch(sCmd="")
 		SaveToDB(sCmd, vCmd, "Recent")
 	else if (bCmdWorked) ; If the command succeeded, update the hit count.
 	{
+		if (sValidCmd = "")
+		{
+			Msgbox_Error("Could not get a valid command.", 2)
+			return
+		}
+
 		if (g_vCommandsIni[sValidCmd].HasKey("HitCount") && g_vCommandsIni[sValidCmd].HitCount != "")
 			g_vCommandsIni[sValidCmd].HitCount := g_vCommandsIni[sValidCmd].HitCount+1
 		else g_vCommandsIni[sValidCmd].HitCount := 1
@@ -608,7 +790,7 @@ QuickLaunch(sCmd="")
 				g_MasterIni[sValidCmd].HitCount := g_MasterIni[sValidCmd].HitCount+1
 			else g_MasterIni[sValidCmd].HitCount := 1
 
-			g_MasterIni.Save()
+			; Save on exit.
 		}
 		else if (g_RecentIni.HasKey(sValidCmd))
 		{
@@ -616,7 +798,7 @@ QuickLaunch(sCmd="")
 				g_RecentIni[sValidCmd].HitCount := g_RecentIni[sValidCmd].HitCount+1
 			else g_RecentIni[sValidCmd].HitCount := 1
 
-			g_RecentIni.Save()
+			; Save on exit.
 		}
 	}
 
@@ -694,6 +876,7 @@ SaveToDB(sCmd, vCmdInfo, sIni)
 		if (g_MasterIni.AddSection(sCmd, "", "", sError))
 		{
 			g_MasterIni[sCmd] := vCmdInfo
+			Msgbox Save in %A_ThisFunc%()
 			g_MasterIni.Save()
 		}
 		else Msgbox 8192,, %sError%
@@ -733,6 +916,7 @@ RemoveCmdFromDB(sCmd)
 	if (g_MasterIni.HasKey(sCmd))
 	{
 		g_MasterIni.Remove(sCmd)
+		Msgbox Save in %A_ThisFunc%()
 		g_MasterIni.Save()
 	}
 	else
@@ -1017,6 +1201,22 @@ QuickLauncherGUIEscape:
 {
 	QL_Hide()
 	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: OnExit
+		Purpose: Save settings on close.
+	Parameters
+		
+*/
+ExitProc:
+{
+	g_MasterIni.Save()
+	g_RecentIni.Save()
+	ExitApp
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
