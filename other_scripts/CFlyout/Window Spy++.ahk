@@ -5,7 +5,11 @@
 SetWorkingDir, %A_ScriptDir%
 SendMode, Input
 
-g_vSpy := new CFlyout(WinExist("ahk_class Progman"), 0, false, true, A_ScreenWidth - 465, "", 465, 28, 0, false, "", "", "", "", true, "", "", "", "-") ; c0xFF0080
+g_vSpy := new CFlyout(["Tmp"], "Parent=" WinExist("ahk_class Progman")
+	, "DrawBelowAnchor="false
+	, "Font=Cambria, s16 c0xFEF9BC", "Highlight=t110 c0xB3B3FF"
+	, "ExitOnEsc=true", "Separator=-")
+
 g_vSpy.OnMessage(WM_LBUTTONDBLCLK:=515 ",Copy", "WSpy_OnMessage")
 
 WinSetTitle, % "ahk_id" g_vSpy.m_hFlyout,, Window Spy++ ; b/c default title is "GUI_FlyoutN" (where N = the number of flyouts currently running in the script)
@@ -154,8 +158,8 @@ UpdateSpecs(bShowControlSpecs)
 	g_vSpy.AddText("MouseX: " iMouseX)
 	g_vSpy.AddText("MouseY: " iMouseY)
 	g_vSpy.AddLine()
-	g_vSpy.AddText("Current Time: " A_Hour ":" A_Min)
-	g_vSpy.AddText("Current Date: " sCurrentDate)
+	g_vSpy.AddText("Time: " A_Hour ":" A_Min)
+	g_vSpy.AddText("Date: " sCurrentDate)
 
 	return
 }
