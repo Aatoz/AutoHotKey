@@ -2120,8 +2120,10 @@ DoGraph()
 		vChartObject.Height := iChartHeight
 		vChartObject.RoundedCorners := true
 		; Legend at bottom
-		msoElementLegendBottom := 104
-		vChart.SetElement(msoElementLegendBottom)
+		vChart.SetElement(msoElementLegendBottom := 104)
+		; Series title
+		vChart.Axes(xlValue:=2, xlPrimary:=1).HasTitle := true
+		vChart.Axes(xlValue, xlPrimary).AxisTitle.Text := "Hours"
 
 		; Export chart into working directory.
 		vChart.Export(A_WorkingDir "\Employee Hours by " sChartType ".png")
