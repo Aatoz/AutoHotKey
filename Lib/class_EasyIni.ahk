@@ -140,15 +140,15 @@ class EasyIni
 			return false
 		}
 
-		aKeyValsCopy := this[sOldSec]
+		this[sNewSec] := this[sOldSec]
 		this.DeleteSection(sOldSec)
-		this[sNewSec] := aKeyValsCopy
+
 		return true
 	}
 
 	DeleteSection(sec)
 	{
-		this.Delete(sec)
+		this.Remove(sec)
 		return
 	}
 
@@ -340,7 +340,7 @@ class EasyIni
 	{
 		; TODO: Perhaps just save one ini, read it back in, and then perform merging? I think this would help with formatting.
 		; [Sections]
-		for sec, aKeysAndVals in vOtherIni
+		for sec, aKeysToVals in vOtherIni
 		{
 			if (!this.HasKey(sec))
 				if (bRemoveNonMatching)
@@ -348,7 +348,7 @@ class EasyIni
 				else this.AddSection(sec)
 
 			; key=val
-			for key, val in aKeysAndVals
+			for key, val in aKeysToVals
 			{
 				bMakeException := vExceptionsIni[sec].HasKey(key)
 
@@ -460,13 +460,13 @@ class EasyIni
 			bIsFirstLine := false
 		}
 
-		for section, aKeysAndVals in this
+		for section, aKeysToVals in this
 		{
 			FileAppend, % (bIsFirstLine ? "[" : "`n[") section "]", %sFile%
 			bIsFirstLine := false
 
 			bEmptySection := true
-			for key, val in aKeysAndVals
+			for key, val in aKeysToVals
 			{
 				bEmptySection := false
 				FileAppend, `n%key%=%val%, %sFile%
