@@ -367,7 +367,7 @@ QL_RenameSelectedCmd:
 		return
 
 	vCmd := g_vCommandsIni[g_vGUIFlyout.GetCurSel()]
-	sNewCmd := AddCmdProc(vCmd, false)
+	sNewCmd := AddCmdProc(vCmd, false, g_vGUIFlyout.GetCurSel())
 
 	if (sNewCmd = "")
 		return
@@ -375,18 +375,24 @@ QL_RenameSelectedCmd:
 	if (g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel()))
 	{
 		g_MasterIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
-		Msgbox % st_concat("`n", g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel())
-			, g_MasterIni.HasKey(sNewCmd))
-		Msgbox Save in %A_ThisLabel%
 		g_MasterIni.Save()
 	}
 	else if (g_RecentIni.HasKey(g_vGUIFlyout.GetCurSel()))
 	{
-		g_RecentIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd)
+		g_RecentIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
 		g_RecentIni.Save()
 	}
+	; Instead of reloading inis, update commands ini.
+	if (g_vCommandsIni.HasKey(g_vGUIFlyout.GetCurSel()))
+		g_vCommandsIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
 
-	QLEditProc()
+	if (sError)
+		Msgbox_Error(sError, 2)
+
+	iLastSel := g_vGUIFlyout.GetCurSelNdx()+1
+	UpdateCommands(QL_GetEditText())
+	g_vGUIFlyout.MoveTo(iLastSel)
+
 	return
 }
 
@@ -397,7 +403,6 @@ QL_ResetSelCmdHitCount:
 	if (g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel()))
 	{
 		g_MasterIni[g_vGUIFlyout.GetCurSel()].HitCount := 1
-		Msgbox Save in %A_ThisLabel%
 		g_MasterIni.Save()
 	}
 	else if (g_RecentIni.HasKey(g_vGUIFlyout.GetCurSel()))
@@ -406,7 +411,6 @@ QL_ResetSelCmdHitCount:
 		g_RecentIni.Save()
 	}
 
-	QLEditProc()
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -465,8 +469,9 @@ QL_SimulateDragNDrop(DDContents)
 	Parameters
 		vCmd
 		bSaveToDB=true: Set to false when we first want to prompt for a new command.
+		sDefaultName="": Suggested name for command
 */
-AddCmdProc(vCmd, bSaveToDB=true)
+AddCmdProc(vCmd, bSaveToDB=true, sDefaultName="")
 {
 	bContinue := true
 	while (!sAddUserCmd && bContinue)
@@ -480,7 +485,7 @@ AddCmdProc(vCmd, bSaveToDB=true)
 				break
 		}
 
-		InputBox, sAddUserCmd, Add Command to Quick Launcher, % "Specify a shortcut for " vCmd.Parms
+		Inputbox, sAddUserCmd, Add Command to Quick Launcher, % "Specify a shortcut for " vCmd.Parms,,,,,,,, %sDefaultName%
 		if (ErrorLevel)
 		{
 			bContinue := false
@@ -876,7 +881,6 @@ SaveToDB(sCmd, vCmdInfo, sIni)
 		if (g_MasterIni.AddSection(sCmd, "", "", sError))
 		{
 			g_MasterIni[sCmd] := vCmdInfo
-			Msgbox Save in %A_ThisFunc%()
 			g_MasterIni.Save()
 		}
 		else Msgbox 8192,, %sError%
@@ -916,7 +920,6 @@ RemoveCmdFromDB(sCmd)
 	if (g_MasterIni.HasKey(sCmd))
 	{
 		g_MasterIni.Remove(sCmd)
-		Msgbox Save in %A_ThisFunc%()
 		g_MasterIni.Save()
 	}
 	else
