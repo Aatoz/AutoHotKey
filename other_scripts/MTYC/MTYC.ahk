@@ -145,12 +145,12 @@ InitLogEntryGUI()
 	; We are going to assume the columns are the same between ALL employee spds.
 	; This is a bit yuck, but probably not ever going to be a problem.
 
-; Data entry
+	; Data entry
+	g_vMapSpdDataTypeToGUIDataType := {Date: "DateTime", Time: "Edit", List: "DDL", Text: "Edit"}
 	local k
 		, iTotalCols := 0
 		, vCell :=
 		, vDataEntrySpd := g_vIntSheetMap["DataEntry"]
-		, vMapSpdDataTypeToGUIDataType := {Date: "DateTime", Time: "DateTime", List: "DDL", Text: "Edit"}
 		, aEmployees := []
 
 	GUI, LogEntry_: New, +hwndg_hLogEntry, Log Entry Helper
@@ -194,8 +194,8 @@ InitLogEntryGUI()
 		GUIControlGet, g_iText_, Pos, g_vText%iLogEntry%
 		iWidestCtrl := (g_iText_W > iWidestCtrl ? g_iText_W : iWidestCtrl)
 
-		local sDefault :=, sTimeSpinner :=, sWidthOverride :=
-		sGUIDataType := vMapSpdDataTypeToGUIDataType[sDataType]
+		local sDefault :=, sWidthOverride :=
+		sGUIDataType := g_vMapSpdDataTypeToGUIDataType[sDataType]
 		if (sGUIDataType = "DDL")
 		{
 			sListID := vDataEntrySpd.cells(1, A_Index).Text
@@ -203,11 +203,11 @@ InitLogEntryGUI()
 		}
 		if (sDataType = "Time")
 		{
-			sDefault := "H:m" ; for DateTime, this specifies whether to use Date or Time.
-			sTimeSpinner := "1"
+			sDefault := 1.0
+			OnMessage(WM_CHAR:=258, "LogEntry_TimeEditProc")
 		}
 
-		GUI, Add, %sGUIDataType%, Hidden vg_vLogEntry%iLogEntry% %sTimeSpinner%, %sDefault%
+		GUI, Add, %sGUIDataType%, Hidden vg_vLogEntry%iLogEntry%, %sDefault%
 		GUIControlGet, iLogEntry%iLogEntry%_, Pos, g_vLogEntry%iLogEntry%
 
 		; X is determined after we've finished looping.
@@ -297,6 +297,7 @@ InitLogEntryGUI()
 		GUIControlGet, g_iLogEntryOKBtnStart_, Pos, g_vLogEntryOKBtn%g_iCurLogEntryNdx%
 		; Focus entry
 		GUIControl, Focus, g_vLogEntry%g_iCurLogEntryNdx%
+
 		return
 	}
 
@@ -307,7 +308,7 @@ InitLogEntryGUI()
 		; Get current log entry
 		GUIControlGet, sLogEntry,, g_vLogEntry%g_iCurLogEntryNdx%
 		iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
-		sEntryType := g_avMapDataEntryToDataInfo[iLogEntryCol].Entry
+		sEntryType := g_vMapDataEntryToDataInfo[iLogEntryCol].Entry
 
 		; Data validation.
 		if (!ValidateLogEntry(sLogEntry, g_iCurLogEntryNdx, sEntryType))
@@ -345,10 +346,16 @@ InitLogEntryGUI()
 		g_iCurLogEntryNdx++
 		; If the log entry is a DDL, then populate it.
 		PopulateNextList_IfNeeded()
-		; If this is an edit entry, remove the text.
+
+		; If this is an edit control, then preselect the default text so users can just type away.
 		iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
-		if (g_avMapDataEntryToDataInfo[iLogEntryCol].DataType = "Text")
-			GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%
+		sDataType := g_vMapDataEntryToDataInfo[iLogEntryCol].DataType
+		sGUIDataType := g_vMapSpdDataTypeToGUIDataType[sDataType]
+		if (sGUIDataType = "Edit")
+		{
+			GUIControlGet, hEdit, hWnd, g_vLogEntry%g_iCurLogEntryNdx%
+			SendMessage, EM_SETSEL:=177, 0, -1,, ahk_id %hEdit%
+		}
 
 		; Focus new entry
 		GUIControl, Focus, g_vLogEntry%g_iCurLogEntryNdx%
@@ -485,6 +492,45 @@ InitLogEntryGUI()
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function: LogEntry_TimeEditProc
+		Purpose: To limit edit to alphanumeric characters
+	Parameters
+		
+*/
+LogEntry_TimeEditProc(wParam, lParam, msg, hWnd)
+{
+	global g_iCurLogEntryNdx, g_vMapDataEntryToDataInfo
+	static s_sSpecialChars := "3,8,9,13,22" ; Ctrl-C = 3, Backspace = 8, Tab = 9, Enter = 13, Ctrl-V = 22.
+
+	GUIControlGet, hCurCtrl, hWnd, g_vLogEntry%g_iCurLogEntryNdx%
+	GUIControlGet, sEdit,, g_vLogEntry%g_iCurLogEntryNdx%
+	hCurCtrl += 0 ; Convert hex string to int since hWnd parm is int.
+	iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
+	sDataType := g_vMapDataEntryToDataInfo[iLogEntryCol].DataType
+
+	if (sDataType = "Time" && hWnd == hCurCtrl)
+	{
+		if wParam In %s_sSpecialChars% ; permitted
+			return
+
+		sInput := Chr(wParam) ; Return an empty string to allow the char. Return 0 to disallow.
+		if sInput is not digit ; Check special cases to allow non-digits.
+		{
+			if (sInput = "-") && (sEdit = "") ; Negative sign is allowed as first char only.
+				return
+			if (sInput = ".") && (!InStr(sEdit, ".")) ; One decimal point is allowed.
+				return
+			return 0 ; All other non-digits are disallowed.
+		}
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: AddLogEntry()
 		Purpose: To show Log Entry GUI to the user can add a log entry.
 	Parameters
@@ -525,7 +571,7 @@ AddLogEntry(hParent="")
 */
 InsertRowProc(vSpd, iInsertRow, iDataFlagCol)
 {
-	global g_vIntSheetMap, g_avMapDataEntryToDataInfo, g_IntKeysToIntVals_InEmployeeSpd
+	global g_vIntSheetMap, g_vMapDataEntryToDataInfo, g_IntKeysToIntVals_InEmployeeSpd
 
 	iStartingRow := g_IntKeysToIntVals_InEmployeeSpd.StartingRow
 	if (iInsertRow-1 == iStartingRow)
@@ -556,7 +602,7 @@ InsertRowProc(vSpd, iInsertRow, iDataFlagCol)
 	; Clear everything out.
 	vSpd.Range("A" iInsertRow ":" aSplitAddress1 . iInsertRow).ClearContents
 	; Now restore formulas.
-	for iDataEntryCol, vDataInfo in g_avMapDataEntryToDataInfo
+	for iDataEntryCol, vDataInfo in g_vMapDataEntryToDataInfo
 	{
 		vCell := vSpd.cells(iInsertRow, iDataEntryCol)
 		vCellAbove := vSpd.cells(iInsertRow-1, iDataEntryCol)
@@ -708,21 +754,21 @@ TurnPage(bFwd, aControlsToRemove, aControlsToFocus)
 */
 PopulateNextList_IfNeeded()
 {
-	global g_avMapDataEntryToDataInfo, g_iCurLogEntryNdx, g_vListMappings
+	global g_vMapDataEntryToDataInfo, g_iCurLogEntryNdx, g_vListMappings
 
 	iLogEntryCol := GetLogEntryCol(g_iCurLogEntryNdx)
-	sDataType := g_avMapDataEntryToDataInfo[iLogEntryCol].DataType
+	sDataType := g_vMapDataEntryToDataInfo[iLogEntryCol].DataType
 
 	if (sDataType != "List")
 		return false ; Not needed.
 
-	sListID := g_avMapDataEntryToDataInfo[iLogEntryCol].Entry
+	sListID := g_vMapDataEntryToDataInfo[iLogEntryCol].Entry
 
 	; Get context for this last by finding the previous list
 	iPrevEntry := g_iCurLogEntryNdx-1
 	GUIControlGet, sPrevLogEntry,, g_vLogEntry%iPrevEntry%
 	iPrevEntryCol := GetLogEntryCol(iPrevEntry)
-	vPrevMap := g_avMapDataEntryToDataInfo[iPrevEntryCol]
+	vPrevMap := g_vMapDataEntryToDataInfo[iPrevEntryCol]
 	sPrevDataType := vPrevMap.DataType
 
 	; Keep looping until we find a list.
@@ -739,10 +785,14 @@ PopulateNextList_IfNeeded()
 				GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" GetListElems(sListID)
 				return false ; we didn't filter the list.
 			}
-			else if (sMapDirective = "List")
+			else ; see if mapping directive is the name of a list.
 			{
-				GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" GetListElems(sPrevLogEntry)
-				return true ; we filtered the list.
+				sListElems := GetListElems(sMapDirective)
+				if (sListElems)
+				{
+					GUIControl,, g_vLogEntry%g_iCurLogEntryNdx%, % "|" sListElems
+					return true ; we filtered the list.
+				}
 			}
 		}
 	}
@@ -799,7 +849,7 @@ CopySheet(vSheet, sName)
 	global g_vMTYC_WB
 
 	; Not sure why I need the second parm, but I think this is harmless.
-	vSheet.Copy(ComObjMissing(), g_vMTYC_WB.Sheets("EmployeeTemplate"))
+	vSheet.Copy(g_vMTYC_WB.Sheets("EmployeeTemplate"))
 	vCopiedSheet := g_vMTYC_WB.Worksheets(vSheet.Name " (2)")
 	vCopiedSheet.Name := sName
 
@@ -972,7 +1022,7 @@ GetLogEntryCol(iLogEntry)
 GetLogSummary()
 {
 	global g_avRunningLog
-	, g_vIntSheetMap, g_avMapDataEntryToDataInfo
+	, g_vIntSheetMap, g_vMapDataEntryToDataInfo
 	, g_vEmployeeSpd
 
 	aSummary := ["All of the following data will be added to the employee sheet named, " """" g_vEmployeeSpd.Name """`n"]
@@ -1052,13 +1102,13 @@ ValidateLogEntry(sLogEntry, iCurLogEntryNdx, sEntryType)
 */
 AddLogEntryToSheet(sLogEntry, iLogEntryCol)
 {
-	global g_avMapDataEntryToDataInfo, g_avRunningLog
+	global g_vMapDataEntryToDataInfo, g_avRunningLog
 	, g_vEmployeeSpd, g_iLogEntryRow
 
 	vCell := g_vEmployeeSpd.cells(g_iLogEntryRow, iLogEntryCol)
 
 	; Format Date and Time cells
-	sDataType := g_avMapDataEntryToDataInfo[iLogEntryCol].DataType
+	sDataType := g_vMapDataEntryToDataInfo[iLogEntryCol].DataType
 
 	; Formatting.
 	if (sDataType = "Date")
@@ -1068,14 +1118,13 @@ AddLogEntryToSheet(sLogEntry, iLogEntryCol)
 	}
 	else if (sDataType = "Time")
 	{
-		FormatTime, sLogEntry, %sLogEntry%, h:mm tt
-		vCell.NumberFormat := "H:m"
+		vCell.NumberFormat := "0.00" ; Formats as number.
 		vCell.Value := sLogEntry
 	}
 	else vCell.Value := sLogEntry
 
 	; Add to log.
-	g_avRunningLog.Insert(Object("Entry", g_avMapDataEntryToDataInfo[vCell.Column].Entry
+	g_avRunningLog.Insert(Object("Entry", g_vMapDataEntryToDataInfo[vCell.Column].Entry
 		, "Text", sLogEntry
 		, "Type", sDataType))
 
@@ -1094,7 +1143,7 @@ AddLogEntryToSheet(sLogEntry, iLogEntryCol)
 RemoveLogEntryFromSheet(iLogEntryCol)
 {
 	global g_vEmployeeSpd, g_iLogEntryRow, g_avRunningLog
-		, g_avMapDataEntryToDataInfo, g_iDataFlagCol
+		, g_vMapDataEntryToDataInfo, g_iDataFlagCol
 
 	; Force to number
 	iLogEntryCol += 0.0
@@ -1107,7 +1156,7 @@ RemoveLogEntryFromSheet(iLogEntryCol)
 	vCell.Value := A_Blank
 
 	; This is a bit hacky, but oh well. If this was today's entry and was flagged, clear that flag out.
-	sEntryType := g_avMapDataEntryToDataInfo[vCell.Column].Entry
+	sEntryType := g_vMapDataEntryToDataInfo[vCell.Column].Entry
 	if (sEntryType = "Date")
 	{
 		vCell := g_vEmployeeSpd.cells(g_iLogEntryRow, g_iDataFlagCol)
@@ -1160,10 +1209,10 @@ GetListOfEmployees()
 */
 GetDataEntryCols()
 {
-	global g_avMapDataEntryToDataInfo
+	global g_vMapDataEntryToDataInfo
 
 	aTmp := []
-	for iDataEntry, vDataInfo in g_avMapDataEntryToDataInfo
+	for iDataEntry, vDataInfo in g_vMapDataEntryToDataInfo
 		aTmp.Insert(vDataInfo.Entry)
 
 	return st_glue(aTmp, "|")
@@ -1205,7 +1254,7 @@ MapSheetsToObjects()
 */
 MapDataEntryToDataInfo()
 {
-	global g_vIntSheetMap, g_avMapDataEntryToDataInfo := {}
+	global g_vIntSheetMap, g_vMapDataEntryToDataInfo := {}
 
 	asRowHeadings := []
 	vDataEntrySpd := g_vIntSheetMap["DataEntry"]
@@ -1233,7 +1282,7 @@ MapDataEntryToDataInfo()
 			vDataInfo[sRowHeading] := vCell.text
 		}
 
-		g_avMapDataEntryToDataInfo[vCell.Column] := vDataInfo
+		g_vMapDataEntryToDataInfo[vCell.Column] := vDataInfo
 	}
 
 	;~ EndSplashProgress()
@@ -1588,7 +1637,7 @@ SaveAll()
 /*
 	Author: Verdlin
 	Function: ScanAllEmployeeSpdsForFlags
-		Purpose: To find all the Flags (this is a column in each employee spd)output them to the user,
+		Purpose: To find all the Flags (this is a column in each employee spd) output them to the user,
 			and provide an option to clear or keep each flag.
 	Parameters
 		
@@ -1620,21 +1669,12 @@ ScanAllEmployeeSpdsForFlags()
 	GUI, Add, Button, % "xp+" iSpacingBetweenClearAndOK " yp wp hp gSSSGUISubmit", &OK
 	GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp gSSSGUIClose", &Cancel
 
+	; Loop through all employee spds, searching for and collecting flagged data.
+	SetupSplashForGlobalScan("Scanning all employees")
 	local vSpd := "", iSpd := ""
 	for iSpd, vSpd in g_avEmployeeSpds
 	{
-		; This is a lengthy process, so use the splash progress.
-		if (iSpd == 1)
-		{
-			; Number of spds * rows in data flag col is a good estimate.
-			; Currently data flag is 16, but that's bound to change.
-			; But this is just an estimate, so big deal.
-			StartSplashProgress("Scanning"
-				, g_avEmployeeSpds.MaxIndex() * vSpd.UsedRange.Columns(16).Rows.Count)
-		}
-		IncSplashProgress()
-
-		local vSheetMap := MapIntKeysToIntVals_InSpd(vSpd)
+		vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
 		local sStartAddr := vSheetMap.FirstDataEntryAddr
 		StringSplit, aStartAddr, sStartAddr, `$
 		local sEndAddr := vSheetMap.LastDataEntryAddr
@@ -1652,7 +1692,7 @@ ScanAllEmployeeSpdsForFlags()
 		local vFlagCell
 		for vFlagCell in vSpd.Range(sDataEntryRange)
 		{
-			IncSplashProgress()
+			IncSplashProgress("Scanning all employees (" vSpd.Name ")")
 
 			if (vFlagCell.Comment.Text = "")
 				continue ; no flag to catch.
@@ -1679,12 +1719,17 @@ ScanAllEmployeeSpdsForFlags()
 		}
 	}
 
-	LV_SetDefault("SSS", "g_vSSSLV")
-	LV_ModifyCol()
-
-	GUI, SSS:Show
-
 	EndSplashProgress()
+
+	if (!iRow)
+		Msgbox_Info("No suspicious data was found -- hooray!", "Scan Completed")
+	else
+	{
+		LV_SetDefault("SSS", "g_vSSSLV")
+		LV_ModifyCol()
+		GUI, SSS:Show
+	}
+
 	return
 
 	SSS_LVProc:
@@ -1795,7 +1840,7 @@ ScanAllEmployeeSpdsForFlags()
 */
 DoGraph()
 {
-	global g_vMTYC_WB, g_avEmployeeSpds, g_avMapDataEntryToDataInfo
+	global g_vMTYC_WB, g_avEmployeeSpds, g_vMapDataEntryToDataInfo
 		, g_vIntSheetMap, g_IntKeysToIntVals_InEmployeeTemplate, g_vLists
 
 	; Break down hours by
@@ -1910,29 +1955,12 @@ DoGraph()
 	}
 	iStartingDataRow := vSubColHeaderCell.Row+1
 
-	; Build accurrate estimation of data to loop through using employee template.
-	vSheetMap := g_IntKeysToIntVals_InEmployeeTemplate
-	vFirstColCell := g_avEmployeeSpds[1].Range(vSheetMap.FirstDataEntryAddr)
-	vLastColCell := g_avEmployeeSpds[1].Range(vSheetMap.LastDataEntryAddr)
-	iFirstCol := vFirstColCell.Column
-	iLastCol := vLastColCell.Column+1
-	iFirstRow := vFirstColCell.Row+1
-	iTotCols := iLastCol-iFirstCol
-	vSheetMap := MapIntKeysToIntVals_InSpd(g_avEmployeeSpds[1], false)
-	iLastRow := vSheetMap.InsertRow
-	iTotRows := iLastRow-iFirstRow
-
 	; Loop through each row, populating the activities and the hours.
-	; This is hard to estimate, and our estimate is pretty rough.
-	; Estimate: Number of spds * Rows in data flag col.
-	; Note: The number of rows aren't going to be identical between all spds.
-	; Note: Currently data flag is 16, but that's could change.
-	StartSplashProgress("Aggregating data from employees", g_avEmployeeSpds.MaxIndex() * iTotRows * iTotCols)
+	SetupSplashForGlobalScan("Aggregating data from employees")
 	avEmployeeData := new EasyIni()
 	for iSpd, vSpd in g_avEmployeeSpds
 	{
-		if (iSpd > 1) ; we already built the first map!
-			vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
+		vSheetMap := MapIntKeysToIntVals_InSpd(vSpd, false)
 		sStartAddr := vSheetMap.FirstDataEntryAddr
 		StringSplit, aStartAddr, sStartAddr, `$
 		sEndAddr := vSheetMap.LastDataEntryAddr
@@ -1948,7 +1976,7 @@ DoGraph()
 
 		for vCell in vSpd.Range(sDataEntryRange)
 		{
-			sCol := g_avMapDataEntryToDataInfo[vCell.Column].Entry
+			sCol := g_vMapDataEntryToDataInfo[vCell.Column].Entry
 			if (vSeriesLayoutData.HasKey(sCol))
 			{
 				iHoursCol := vSheetMap.HoursCol + 0
@@ -2024,9 +2052,7 @@ DoGraph()
 
 				; 1:00*************2:00**********1:00**************3:00***2:00*********1:00******************3:00*****4:00
 				vHoursCell := vGraphsSpd.cells(iRow, iDataCol)
-				vHoursCell.Value := Round(iHours*24, 2) ; *24 to get time in hours.
-				; Formatting.
-				; vHoursCell.NumberFormat := "h:mm"
+				vHoursCell.Value := Round(iHours, 2)
 
 				iCol++ ; Next column.
 				IncSplashProgress(sEmployee ": " sDataType " - " sBreakdownType)
@@ -2093,6 +2119,9 @@ DoGraph()
 		vChartObject.Width := iChartWidth
 		vChartObject.Height := iChartHeight
 		vChartObject.RoundedCorners := true
+		; Legend at bottom
+		msoElementLegendBottom := 104
+		vChart.SetElement(msoElementLegendBottom)
 
 		; Export chart into working directory.
 		vChart.Export(A_WorkingDir "\Employee Hours by " sChartType ".png")
@@ -2107,6 +2136,46 @@ DoGraph()
 		Run, explorer.exe %A_WorkingDir%
 
 	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: SetupSplashForGlobalScan
+		Purpose: To build an accurrate estimation of data to loop through.
+			In 2 separate contexts we need to loop through ALL employee data.
+			This function contains the logic to estimate the amount of iterations it's going to take so we can
+			output a decent splash progress while we loop.
+			Return the estimated total number of iterations/cells.
+	Parameters
+		sSplashText: Text to put on splash.
+*/
+SetupSplashForGlobalScan(sSplashText)
+{
+	global g_IntKeysToIntVals_InEmployeeTemplate, g_avEmployeeSpds
+
+	; Find first and last columns through employee template.
+	vSheetMap := g_IntKeysToIntVals_InEmployeeTemplate
+	vFirstColCell := g_avEmployeeSpds[1].Range(vSheetMap.FirstDataEntryAddr)
+	vLastColCell := g_avEmployeeSpds[1].Range(vSheetMap.LastDataEntryAddr)
+	; Calc total cols.
+	iFirstCol := vFirstColCell.Column
+	iLastCol := vLastColCell.Column+1
+	iFirstRow := vFirstColCell.Row+1
+	iTotCols := iLastCol-iFirstCol
+	; Estimate total rows through mapping of first employee spd.
+	vSheetMap := MapIntKeysToIntVals_InSpd(g_avEmployeeSpds[1], false)
+	iLastRow := vSheetMap.InsertRow
+	iTotRows := iLastRow-iFirstRow
+
+	; This is hard to estimate, and our estimate is pretty rough.
+	; Estimate: Number of spds * Rows in data flag col.
+	; Note: The number of rows aren't going to be identical between all spds.
+	iTotCells := g_avEmployeeSpds.MaxIndex() * iTotRows * iTotCols
+	StartSplashProgress(sSplashText, iTotCells)
+
+	return iTotCells
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
