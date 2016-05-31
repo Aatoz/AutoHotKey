@@ -350,7 +350,12 @@ class CFlyout
 		; Load settings from Flyout_config.ini
 		this.LoadDefaultSettings()
 
-		g_vTmpFlyout := new CFlyout(["This is a preview", "1", "2", "3"], "ShowOnCreate=True")
+		; If we are editing from an existing flyout, use the current background (b/c it may have been overridden from the constructor).
+		local vExistingFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+		local sBkgdParm := "Background=" this.m_sBackground
+		if (IsObject(vExistingFlyout))
+			sBkgdParm := "Background=" vExistingFlyout.m_sBackground
+		g_vTmpFlyout := new CFlyout(["This is a preview", "1", "2", "3"], "ShowOnCreate=True", sBkgdParm)
 		g_vConfigIni := class_EasyIni(A_WorkingDir "\Flyout_config.ini")
 		g_bReloadOnExit := bReloadOnExit
 
@@ -648,7 +653,8 @@ class CFlyout
 		GUI, Add, Picture, +0x4 AltSubmit X0 Y0 hwndg_hPic vm_vPic, % this.m_sBackground
 
 		; Add ListBox but don't populate it until we make it transparent.
-		GUI, Add, ListBox, % "x0 y0 r" (this.m_asItems.MaxIndex() > this.m_iMaxRows ? this.m_iMaxRows : this.m_asItems.MaxIndex()) " Choose1 vm_vLB HWNDg_hListBox", % this.GetCmdListForListBox()
+		sLocShowBorder := (this.m_bShowBorder ? "" : "-E0x200")
+		GUI, Add, ListBox, % "x0 y0 r" (this.m_asItems.MaxIndex() > this.m_iMaxRows ? this.m_iMaxRows : this.m_asItems.MaxIndex()) " Choose1 vm_vLB HWNDg_hListBox 0x80 " sLocShowBorder, % this.GetCmdListForListBox() ; 0x80 allows tabs.
 		this.m_hListBox := g_hListBox
 		this.m_hFont := Fnt_GetFont(this.m_hListBox)
 		this.m_vTLB := new TransparentListBox(g_hListBox, g_hPic ; Handles
@@ -812,7 +818,7 @@ class CFlyout
 		, FollowMouse: "bFollowMouse", DrawBelowAnchor: "bDrawBelowAnchor", ShowOnCreate: "bShowOnCreate"
 		, ExitOnEsc: "bExitOnEsc", ReadOnly: "bReadOnly", ShowInTaskbar: "bShowInTaskbar"
 		, AlwaysOnTop: "bAlwaysOnTop", Parent: "hParent", Background: "sBackground"
-		, Font: "sFont", Highlight: "sHighlightColor", Separator: "sSeparator"}
+		, Font: "sFont", Highlight: "sHighlightColor", Separator: "sSeparator", ShowBorder: "bShowBorder"}
 
 		for iParm, sParm in aParms
 		{
@@ -949,13 +955,19 @@ class CFlyout
 			else if (key = "AlwaysOnTop")
 				this.m_bAlwaysOnTop := (val == true || val = "true")
 			else if (key = "Font")
+			{
+				; This is probably only an issue for me, but it's nice to fix it for me.
+				StringReplace, val, val, c000000,, All
 				this.m_sFont := val
+			}
 			else if (key = "FontColor")
 				this.m_sFontColor := "c" val
 			else if (key = "HighlightColor")
 				this.m_sHighlightColor := val
 			else if (key = "HighlightTrans")
 				this.m_sHighlightTrans := val
+			else if (key = "ShowBorder")
+				this.m_bShowBorder := (val == true || val = "true")
 			; else Errors here cause a crash. It's weird, and I think it has to do with DynaExpr.
 			; but is erroring even a good idea? What if it's just a deprecated key?
 			; For now, let's just ignore it.
@@ -1139,6 +1151,7 @@ class CFlyout
 				Y=0
 				W=400
 				AutoSizeW=false
+				ShowBorder=true
 			)"
 	}
 
