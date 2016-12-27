@@ -96,12 +96,5 @@ Reload:
 ExitApp:
 	ExitApp
 
-OnSettingChange()
-{
-	Msgbox %A_ThisFunc%()
-	InitClock()
-	return
-}
-
 
 #Include %A_ScriptDir%\CFlyout.ahk
