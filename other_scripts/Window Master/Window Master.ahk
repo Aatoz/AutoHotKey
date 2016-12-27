@@ -516,7 +516,8 @@ InitMenuHandler()
 			vTmp.Save()
 		}
 
-		g_vFlyoutMH := new CFlyoutMenuHandler(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll", vTmp.Flyout.X, vTmp.Flyout.Y, 0, 0, GetLeapMenuConfigIni(), "Left")
+		;g_vFlyoutMH := new CFlyoutMenuHandler(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll", vTmp.Flyout.X, vTmp.Flyout.Y, 0, 0, GetLeapMenuConfigIni(), "Left")
+		g_vFlyoutMH := new CFlyoutMenuHandler("", "", "", "", GetLeapMenuConfigIni(), "Left")
 		if (g_bHasLeap)
 			g_vLeapMH := new CLeapMenu(g_vFlyoutMH, g_vLeap)
 
@@ -3573,7 +3574,7 @@ StartHotkeyThread()
 
 	if (sScript)
 	{
-		g_vDLL:=CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
+		g_vDLL := CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
 		g_vDLL.ahkTextDll[CreateScript("g_exe:=CriticalObject(" . &AhkExported() . ")"sScript)]
 	}
 
@@ -4160,7 +4161,7 @@ Leap_MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 
 	; Tracking gets iffy at these points, and currently the interaction box class does not help with this problem.
 	; TODO: Use Data confidence factor in v2.0
-	if (rLeapData.Hand1.PalmX > 290 || || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
+	if (rLeapData.Hand1.PalmX > 290 || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
 		return
 
 	; TODO: Two-handed resize?
@@ -4747,6 +4748,59 @@ Leap_ToggleTracking()
 
 	return
 }
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: Leap_MouseMode()
+		Purpose: To move a the mouse in real-time based upon a single-hand's palm position
+	Parameters
+		rLeapData
+		rasGestures
+		hWnd="A"
+*/
+Leap_MouseMode(ByRef rLeapData, ByRef rasGestures, hWnd="A")
+{
+	global g_vLeap, g_DictMonInfo
+
+	SetMouseDelay, -1
+	MakeValidHwnd(hWnd)
+
+	; Tracking gets iffy at these points, and currently the interaction box class does not help with this problem.
+	; TODO: Use Data confidence factor in v2.0
+	if (rLeapData.Hand1.PalmX > 290 || rLeapData.Hand1.PalmX < -270 || rLeapData.Hand1.PalmY > 505)
+		return
+
+	; Take into account the velocity.
+	iVelocityX := abs(rLeapData.Finger1.VelocityX)
+	iVelocityY := abs(rLeapData.Finger1.VelocityY)
+
+	iVelocityXFactor := g_vLeap.CalcVelocityFactor(iVelocityX, 75)
+	iVelocityYFactor := g_vLeap.CalcVelocityFactor(iVelocityY, 75)
+
+	; Get palm X and Y movement.
+	iFingerXDelta := rLeapData.Finger1.DeltaX
+	iFingerYDelta := rLeapData.Finger1.DeltaY
+	iFingerYDelta *= -1 ; Movement should be reversed, in this particular case.
+
+	MouseGetPos, iCurX, iCurY
+
+	; TODO: When skeletal tracking becomes available, we may be able to enable this or something like it.
+	;~ bMoveAlongXOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger8"))
+	;~ bMoveAlongYOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger7") && !rLeapData.HasKey("Finger8"))
+
+	; Strip out noise from humanity's generable inability to stabilize their palms.
+	if (abs(iFingerXDelta) > 0.35)
+		iNewX := iCurX + (iFingerXDelta*(iVelocityXFactor))
+	if (abs(iFingerYDelta) > 0.35)
+		iNewY := iCurY + (iFingerYDelta*(iVelocityYFactor))
+
+	MouseMove, %iNewX%, %iNewY%, 0 ; 0 is fastest speed
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -5632,7 +5686,7 @@ ToggleAlwaysOnTop:
 {
 	WinExist("A")
 	WinGet, ExStyle, ExStyle
-	if (ExStyle & 0x8)  ; 0x8 is WS_EX_TOPMOST.
+	if (ExStyle & WS_EX_TOPMOST:=8)
 		Winset, AlwaysOnTop, off
 	else WinSet, AlwaysOnTop, on
 	return
@@ -5699,16 +5753,79 @@ BrowserRefresh:
 }
 NextTrack:
 {
+	hActiveWnd := WinExist("A")
+	SetTitleMatchMode, 2
+
+	WinGetClass, sBeatportClass, Beatport Pro
+	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
+	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	{
+		WinActivate
+		Sleep 100
+		Send, `]
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+	else if (InStr(sBeatportClass, "Beatport"))
+	{
+		WinActivate
+		Send, {Right}
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+
 	Send {Media_Next}
 	return
 }
 PreviousTrack:
 {
+	hActiveWnd := WinExist("A")
+	SetTitleMatchMode, 2
+
+	WinGetClass, sBeatportClass, Beatport Pro
+	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
+	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	{
+		WinActivate
+		Sleep 100
+		Send, `[
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+	else if (InStr(sBeatportClass, "Beatport"))
+	{
+		WinActivate
+		Send, {Left}
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+
 	Send {Media_Prev}
 	return
 }
 PlayOrPauseTrack:
 {
+	hActiveWnd := WinExist("A")
+	SetTitleMatchMode, 2
+
+	WinGetClass, sBeatportClass, Beatport Pro
+	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
+	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	{
+		WinActivate
+		Sleep 100
+		Send, {Space}
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+	else if (InStr(sBeatportClass, "Beatport"))
+	{
+		WinActivate
+		Send, {Space}
+		WinActivate, ahk_id %hActiveWnd%
+		return
+	}
+
 	Send {Media_Play_Pause}
 	return
 }
@@ -6154,7 +6271,7 @@ Volume OSD
 	Function: VolumeOSD_Adj
 		Purpose: To adjust volume in an aesthetic fashion (Although this isn't necessary with Win8+)
 			Note: Caller is responsible to dismiss the OSD!
-			Note: In Windows 8, the OSD is ignored.
+			Note: In Windows 8+, the OSD is ignored because the OS provides it's own.
 	Parameters:
 		EVolumeType
 			1. Volume_Up
@@ -6353,8 +6470,8 @@ GetLeapMenuConfigIni()
 			4. Maximize Vertically=Func:MaximizeVertically(m_hActiveWndBeforeMenu)
 			5. Maximize Horizontally=Func:MaximizeHorizontally(m_hActiveWndBeforeMenu)
 			;~ 6. Close Window=Func:CloseWindow(m_hActiveWndBeforeMenu)
-			7. Close All Windows=ExitAllMenus
-			8. Close All but Curent Window=ExitAllMenus
+			7. Close All Windows=Internal:ExitAllMenus
+			8. Close All but Current Window=Internal:ExitAllMenus
 
 	)"
 		vTmpMenu := class_EasyIni("MergedMenu", sSharedMenu)
@@ -6376,7 +6493,7 @@ GetLeapMenuConfigIni()
 			}
 		}
 		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Open App"] := "Label:LaunchMainDlg"
-		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Exit (Esc)"] := "ExitAllMenus"
+		vTmpMenu.MainMenu[iCurMainMenuNum++ . ". Exit (Esc)"] := "Internal:ExitAllMenus"
 
 	return vTmpMenu.ToVar()
 }
@@ -6905,6 +7022,15 @@ GetDefaultInteractiveIni()
 			Hotkey=LWin + LAlt + X
 			HelpDesc=Toggles playing/pausing tracking. Useful when needing to use other applications which require use of the Leap Motion Controller.
 
+			[Mouse Mode]
+			Activate=true
+			GestureName=Mouse Mode
+			UsesPinch=false
+			UsesGestures=false
+			CallbackWillStop=false
+			Hotkey=LWin + LCtrl + M
+			HelpDesc=Moves mouse relative to palm motion. For best results, lay palm relatively flat.
+
 			[Internal_Quick Menu]
 			Activate=false
 			GestureName=
@@ -7023,6 +7149,8 @@ GetDefaultLeapGesturesIni()
 			Gesture=Swipe Up, Circle Right
 			[Zoom]
 			Gesture=Swipe Up, Swipe Down, Circle Left
+			[Mouse Mode]
+			Gesture=Swipe Forward, Swipe Left
 		)"
 }
 ;;;;;;;;;;;;;;
