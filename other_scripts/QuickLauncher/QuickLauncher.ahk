@@ -182,22 +182,16 @@ InitQuickLauncher()
 	;~ if (!FileExist(sBackground))
 		;~ sBackground := "" ; TODO: Standard pic?
 
-	GUI, QuickLauncher:New, +Hwndg_hQL, Quick Launcher
-	;~ GUI, Add, Picture, AltSubmit x36 y0 W%g_iQLW% H%g_iQLH%, %sBackground%
-	GUI, Add, Picture, AltSubmit x0 y0 W%g_iQLW%, %sBackground% ; H%g_iQLH%
+	GUI, QuickLauncher:New, +Hwndg_hQL +LastFound -Caption, Quick Launcher
+	GUI, Color, Black
+
+	GUI, Add, Picture, AltSubmit x0 y0 w%g_iQLW%, %sBackground% ; H%g_iQLH%
 
 	GUI, Font, s55 c0x48A4FF, %sFont% ; c83B2F7 ; c000080 ; c83B2F7 ; q
-	GUI, Add, Text, hwndg_hQLText vQLText xp y0 W%g_iQLW% H%g_iQLH% Center BackgroundTrans +0x80, |
-	;~ GUI, Add, GroupBox, x0 y0 W%g_iQLW% H%g_iQLH%
+	GUI, Add, Text, hwndg_hQLText vQLText x0 y0 w%g_iQLW% h%g_iQLH% Center BackgroundTrans +0x80, |
 
-	GUI, Add, Edit, HwndQLEditHwnd BackgroundTrans vQLEdit gQLEditProc ; Can't use hidden because keystrokes are actually sent to this edit.
-	g_hQLEdit := QLEditHwnd
+	GUI, Add, Edit, +Hwndg_hQLEdit BackgroundTrans vQLEdit gQLEditProc ; Can't use hidden because keystrokes are actually sent to this edit.
 
-	;~ GUI, Add, Button, x0 y0 h32 w36 hwndg_hQLSettings , `n&s ; gLaunchQuickLauncherEditor
-	;~ ILButton(g_hQLSettings, "images\Settings.ico", 32, 32, 4)
-
-	GUI, Color, Black
-	GUI, +LastFound -Caption
 	;~ WinSet, Transparent, 0
 	;~ GUI, Show, X-32768 Y-32768 W%g_iQLW% h%g_iQLH%
 
@@ -242,6 +236,9 @@ InitQuickLauncher()
 			Hotkey, +%sHK%, QLCaretProc
 			Hotkey, ^+%sHK%, QLCaretProc
 		}
+
+		; Copy
+		Hotkey, $^c, QL_Copy
 	}
 
 	Hotkey, IfWinExist
@@ -289,7 +286,7 @@ InitFlyout()
 		. "," WM_LBUTTONUP:=514
 		. "," WM_LBUTTONDBLCLK:=515
 		. "," WM_RBUTTONDOWN:=516
-		, "QL_OnCFlyoutClick")
+		, "QL_OnFlyoutMessage")
 
 	return
 }
@@ -410,6 +407,21 @@ QL_ResetSelCmdHitCount:
 		g_RecentIni[g_vGUIFlyout.GetCurSel()].HitCount := 1
 		g_RecentIni.Save()
 	}
+
+	return
+}
+
+QL_Copy:
+{
+	VarSetCapacity(iStart, 4), VarSetCapacity(iEnd, 4)
+	SendMessage, EM_GETSEL:=176, &iStart, &iEnd,, ahk_id %g_hQLEdit%
+	iStart := NumGet(iStart)
+	iEnd := NumGet(iEnd)
+
+	; If text is selected, copy that text; otherwise copy what is selected in the flyout.
+	if (iStart != iEnd || ErrorLevel = "FAIL")
+		Send ^c
+	else clipboard := g_vGUIFlyout.m_sCurSel
 
 	return
 }
@@ -719,6 +731,38 @@ LoadQLDB()
 	global g_vCommandsIni := new EasyIni("Master.ini") ; ObjCopy is actually not copying properly, so, at least for now, just init to Master.ini
 	g_vCommandsIni.Merge(g_RecentIni)
 
+	RegisterCommandsToVoiceControl()
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: RegisterCommandsToVoiceControl
+		Purpose:
+	Parameters
+		
+*/
+RegisterCommandsToVoiceControl()
+{
+	global g_vCommandsIni
+
+	global g_vVoiceCtrl := new CustomSpeech
+
+	g_vVoiceCtrl.Recognize(true)
+	g_vVoiceCtrl.Listen(false)
+	this.m_bListen := false
+	return
+
+	aVoiceCmds := []
+	for sec in g_vCommandsIni
+		aVoiceCmds.Insert(sec)
+
+	g_vVoiceCtrl.Recognize(aVoiceCmds)
+	g_vVoiceCtrl.Listen(false)
+
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -730,14 +774,15 @@ LoadQLDB()
 		Purpose: The main quick launch routine
 	Parameters
 		sCmd="": Command to launch
+		bFromGUI=true: We can QuickLaunch from the backdoor, such as through the voice interface.
 */
-QuickLaunch(sCmd="")
+QuickLaunch(sCmd="", bFromGUI=true)
 {
 	global g_vGUIFlyout, g_hQL, g_vCommandsIni, g_asCommandsHelp
 		, g_vCommandsIni, g_MasterIni, g_RecentIni
 
 	; Are we displaying help text?
-	if (IsDisplayingHelpInfo())
+	if (bFromGUI && IsDisplayingHelpInfo())
 		return
 
 	vCmd := ParseCmd(sCmd, false)
@@ -749,7 +794,30 @@ QuickLaunch(sCmd="")
 	;~ Msgbox % st_concat("`n", !vCmd && bIsNewCmd, bIsNewCmd)
 	if (!vCmd && bIsNewCmd)
 	{
-		sValidCmd := g_vGUIFlyout.GetCurSel()
+		if (bFromGui)
+			sValidCmd := g_vGUIFlyout.GetCurSel()
+		else
+		{
+			sValidCmd := GetMatchingCommands(sCmd)[1]
+			if (!sValidCmd)
+				return
+
+			; Give a brief prompt to give the user a chance to cancel the command.
+			bCancel := false
+			CornerNotify(0.5, sValidCmd, "Press escape if you do not want to launch this command.")
+			global cornernotify_hwnd
+			Msgbox %cornernotify_hwnd%
+			while (WinExist("ahk_id" cornernotify_hwnd))
+			{
+				if (bCancel := GetKeyState("Esc", "D"))
+					break
+				continue
+			}
+
+			if (bCancel)
+				return
+		}
+
 		vCmd := ParseCmd(sValidCmd, true)
 		bUsedExistingCmd := true
 	}
@@ -772,7 +840,8 @@ QuickLaunch(sCmd="")
 	}
 	;~ Msgbox % st_concat("`n", bIsNewCmd, bCmdWorked, bUsedExistingCmd, "Save?`t" bSaveCmd)
 	; Hide
-	QL_Hide()
+	if (bFromGUI)
+		QL_Hide()
 
 	; Save
 	if (bSaveCmd)
@@ -876,6 +945,8 @@ SaveToDB(sCmd, vCmdInfo, sIni)
 {
 	global g_vCommandsIni, g_MasterIni, g_RecentIni
 
+	; Escape ampersands (and then unescape later).
+
 	if (sIni = "Master")
 	{
 		if (g_MasterIni.AddSection(sCmd, "", "", sError))
@@ -935,16 +1006,16 @@ RemoveCmdFromDB(sCmd)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: QL_OnCFlyoutClick
+	Function: QL_OnFlyoutMessage
 		Purpose: Callback for CFlyout click events
 	Parameters
 		vFlyout: Flyout clicked
 		msg: window message
 */
-QL_OnCFlyoutClick(vFlyout, msg)
+QL_OnFlyoutMessage(vFlyout, msg)
 {
 	global g_hQL
-	static WM_LBUTTONDOWN:=513, WM_LBUTTONDBLCLK := 515, WM_RBUTTONDOWN:=516
+	static WM_LBUTTONDOWN:=513, WM_LBUTTONUP:=514, WM_LBUTTONDBLCLK := 515, WM_RBUTTONDOWN:=516
 	Critical
 
 	MouseGetPos,,, hActiveWndUnderCursor
@@ -956,7 +1027,9 @@ QL_OnCFlyoutClick(vFlyout, msg)
 		CoordMode, Mouse, Relative
 		MouseGetPos,, iMouseY
 		vFlyout.Click(iMouseY)
-		QL_ShowFlyoutMenu() ; RClick messages are getting lost a LOT; it's slightly better, though unconventional, to show the menu on RClick.
+		; RClick messages are getting lost a LOT!
+		; it's slightly better, though unconventional, to show the menu on WM_RBUTTONDOWN.
+		QL_ShowFlyoutMenu()
 	}
 	else if (msg == WM_LBUTTONDBLCLK && vFlyout.GetCurSel() != "")
 		QuickLaunch()
@@ -984,16 +1057,10 @@ QLCaretProc:
 
 QLCaretProc()
 {
-	if (InStr(A_ThisHotkey, "^"))
-	{
-		iHasCtrl := InStr(A_ThisHotkey, "^")
-		sSendStr := SubStr(A_ThisHotkey, InStr(A_ThisHotkey, "^"), 1)
-	}
-	if (InStr(A_ThisHotkey, "+"))
-	{
-		iHasShift := InStr(A_ThisHotkey, "+")
-		sSendStr .= SubStr(A_ThisHotkey, InStr(A_ThisHotkey, "+"), 1)
-	}
+	if (iHasCtrl := InStr(A_ThisHotkey, "^"))
+		sSendStr := SubStr(A_ThisHotkey, iHasCtrl, 1)
+	if (iHasShift := InStr(A_ThisHotkey, "+"))
+		sSendStr .= SubStr(A_ThisHotkey, iHasShift, 1)
 
 	iTextPos := iHasShift
 	if (iHasCtrl > iTextPos)
@@ -1031,7 +1098,7 @@ QLEditProc()
 	sCaret := "|" ; With regular fonts, this actually looks better. The actual caret -- Chr(5) -- leaves a large spacing between letters.
 
 	sTxtFromEdit := QL_GetEditText()
-	sTxtFromEditWithCaret := sTxtFromEdit sCaret
+	sTxtFromEditWithCaret := sTxtFromEdit . sCaret
 
 	if (sTxtFromEdit = "cmds:")
 	{
@@ -1048,7 +1115,7 @@ QLEditProc()
 	{
 		sLeftStr := SubStr(sTxtFromEdit, 1, iCaretPos - 1)
 		sRightStr := SubStr(sTxtFromEdit, StrLen(sLeftStr) + 1)
-		sTxtFromEditWithCaret := sLeftStr sCaret sRightStr
+		sTxtFromEditWithCaret := sLeftStr . sCaret . sRightStr
 	}
 
 	QL_SetText(sTxtFromEditWithCaret)
@@ -1223,6 +1290,58 @@ ExitProc:
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Class CustomSpeech
+*/
+class CustomSpeech extends SpeechRecognizer
+{
+	OnRecognize(sCmd)
+	{
+		this.m_bListen := false
+
+		if (StrLen(sCmd) == 1)
+			return
+
+		_SimpleOSD().PostMsg(sCmd)
+		QuickLaunch(sCmd, false)
+	}
+
+	RegisterCmd(sCmd, sAction)
+	{
+		this.Recognize([sCmd])
+		return
+	}
+
+	m_bListen := false
+}
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: 
+		Purpose: Listen whenever Ctrl and Win is pressed down.
+	Parameters
+		
+*/
+~LControl & ~LWin::
+{
+	g_vVoiceCtrl.m_bListen := true
+	g_vVoiceCtrl.Listen(true)
+
+	while (g_vVoiceCtrl.m_bListen && (GetKeyState("LCtrl", "D") && GetKeyState("LWin", "D")))
+		continue
+
+	g_vVoiceCtrl.m_bListen := false
+	g_vVoiceCtrl.Listen(false)
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 #Include %A_ScriptDir%\CFlyout.ahk
 #Include %A_ScriptDir%\HelperFunctions.ahk
 #Include %A_ScriptDir%\Classified.ahk ; This is not under source control for security reasons. It includes custom things for me.
+#Include %A_ScriptDir%\Speech Recognition.ahk
