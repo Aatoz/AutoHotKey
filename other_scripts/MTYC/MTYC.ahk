@@ -148,7 +148,6 @@ InitLogEntryGUI()
 	; Data entry
 	g_vMapSpdDataTypeToGUIDataType := {Date: "DateTime", Time: "Edit", List: "DDL", Text: "Edit"}
 	local k
-		, iTotalCols := 0
 		, vCell :=
 		, vDataEntrySpd := g_vIntSheetMap["DataEntry"]
 		, aEmployees := []
@@ -180,10 +179,7 @@ InitLogEntryGUI()
 		; Apparently you can't use iCol but you can use A_Index...
 		local sDataType := vDataEntrySpd.cells(3, A_Index).Text
 		if (iCol == 1 || sDataType = "Formula" || !sDataType)
-		{
-			iSkipCnt++
 			continue
-		}
 
 		; Careful. A_Index represents iCol in the spd but iLogEntry represents the GUI entries.
 		iLogEntry++
@@ -221,6 +217,8 @@ InitLogEntryGUI()
 		iCol2 := vDataEntrySpd.cells(1, A_Index).Column
 		GUI, Add, Text, x-10 y-10 w0 h0 Hidden Disabled vg_vIntLogEntryCol%iLogEntry%, %iCol2%
 	}
+	EndSplashProgress()
+
 	g_iTotalLogEntries := iLogEntry
 	g_iCurLogEntryNdx := 0
 	g_avRunningLog := []
@@ -412,6 +410,7 @@ InitLogEntryGUI()
 
 	LogEntry_GUIReset:
 	{
+		; TODO: Save when log entry is compelted.
 		; Move dynamically created log entry ctrls out of view again.
 		Loop % g_iTotalLogEntries
 		{
@@ -1080,7 +1079,7 @@ ValidateLogEntry(sLogEntry, iCurLogEntryNdx, sEntryType)
 				vDataCell.Interior.ColorIndex := 3 ; 3=red, 4=green, orange = 45, and 6 = yellow.
 				vDataCell.AddComment("Date other than today's date used.")
 
-				; Flag this column because we want to access it quickly and eficiently later.
+				; Flag this column because we want to access it quickly and efficiently later.
 				vFlagCell := g_vEmployeeSpd.cells(g_iLogEntryRow, g_iDataFlagCol)
 				vFlagCell.Value := vDataCell.Address(true, false) ; now we can clear out the comments so easily -- hooray!
 			}
@@ -1256,8 +1255,8 @@ MapDataEntryToDataInfo()
 {
 	global g_vIntSheetMap, g_vMapDataEntryToDataInfo := {}
 
-	asRowHeadings := []
 	vDataEntrySpd := g_vIntSheetMap["DataEntry"]
+	asRowHeadings := []
 	StartSplashProgress("Setting up data entry database"
 		, vDataEntrySpd.UsedRange.Columns.Count * vDataEntrySpd.UsedRange.Rows.Count)
 	for vRange in vDataEntrySpd.UsedRange.Columns
@@ -1269,12 +1268,12 @@ MapDataEntryToDataInfo()
 		for vRange2 in vDataEntrySpd.UsedRange.Rows
 		{
 			IncSplashProgress()
-			vCell := vDataEntrySpd.cells(A_Index, iCol)
+			vCell := vRange2.cells[iCol]
 
 			; Row headings...
 			if (iCol == 1)
 			{
-				asRowHeadings.Insert(vDataEntrySpd.cells(A_Index, 1).text)
+				asRowHeadings.Insert(vRange2.cells[1].text)
 				continue
 			}
 
@@ -1344,7 +1343,6 @@ MapIntKeysToIntVals_InEmployeeTemplate()
 		}
 	}
 
-	;~ EndSplashProgress()
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1600,9 +1598,9 @@ BackupWorkbook(vWorkbook)
 	; Backup once per day.
 	sBackupPrefix := A_YYYY . A_MM . A_DD
 
-	sBackupFile .= sBackupPrefix "_" vWorkbook.Name
+	sBackupFile := sBackupPrefix "_" vWorkbook.Name
 	; The timestamp doesn't account for HHMM, so if the app is launched more than once on the same day,
-	; we could overwrite the backup. Don't do that beacuse we want the earliest copy of the spd for the day.
+	; we could overwrite the backup. Don't do that because we want the earliest copy of the spd for the day.
 	FileCopy, % vWorkbook.Name, % A_WorkingDir "\backup\" sBackupFile, 0 ; no overwrite
 
 	return
@@ -1615,9 +1613,10 @@ BackupWorkbook(vWorkbook)
 	Function: SaveAll()
 		Purpose: To save everything
 	Parameters
-		
+		bShowErrors=false: set to false if you want to ignore errors because
+			the user is helpless to fix any and it doesn't matter if the save failed.
 */
-SaveAll()
+SaveAll(bShowErrors=true)
 {
 	global g_vMTYC_WB
 
@@ -1627,7 +1626,8 @@ SaveAll()
 	try
 		g_vMTYC_WB.Save
 	catch
-		Msgbox_Error("Unable to save. Your changes will not be saved. Sars :\")
+		if (!bInternalSave)
+			Msgbox_Error("Unable to save. Your changes will not be saved. Sars :\")
 
 	return
 }
@@ -1897,20 +1897,18 @@ DoGraph()
 	iCol := 1
 
 	; Clear out the graphs spd.
-	vGraphsSpd.UsedRange.Value := ""
-	for iChart in vGraphsSpd.ChartObjects.Count
-		vGraphsSpd.ChartObjects(1).Delete
+	ClearSpd(vGraphsSpd)
 
 	; First column should be the employee name.
-	vEmployeeHeaderCall := vGraphsSpd.cells(2, iCol)
-	vEmployeeHeaderCall.Value := "Employee"
+	vEmployeeHeaderCell := vGraphsSpd.cells(2, iCol)
+	vEmployeeHeaderCell.Value := "Employee"
 	; Format
-	vEmployeeHeaderCall.ColumnWidth := 26
-	; vEmployeeHeaderCall.Borders.LineStyle := 1 ; xlContinuous=1
-	vEmployeeHeaderCall.Borders.Weight := 4 ; xlThick
-	vEmployeeHeaderCall.HorizontalAlignment := -4108 ; xlCenter
-	vEmployeeHeaderCall.Font.Bold := true
-	vEmployeeHeaderCall.Interior.ColorIndex := 4 ; 3=red, 4=green, orange = 45, and 6 = yellow.
+	vEmployeeHeaderCell.ColumnWidth := 26
+	; vEmployeeHeaderCell.Borders.LineStyle := 1 ; xlContinuous=1
+	vEmployeeHeaderCell.Borders.Weight := 4 ; xlThick
+	vEmployeeHeaderCell.HorizontalAlignment := -4108 ; xlCenter
+	vEmployeeHeaderCell.Font.Bold := true
+	vEmployeeHeaderCell.Interior.ColorIndex := 4 ; 3=red, 4=green, orange = 45, and 6 = yellow.
 
 	iCol++
 	; Fill layout in Graphs spd using vSeriesLayoutData.
@@ -2067,12 +2065,19 @@ DoGraph()
 	; * 2 because we have to delete the series automatically added by Excel.
 	; and this turned out to be a pretty good estimate!
 	StartSplashProgress("Creating graphs", asSeriesAddr.MaxIndex() * 2 * g_avEmployeeSpds.MaxIndex())
+	EndSplashProgress()
+	Msgbox
 	for iChart, sSeriesAddr in asSeriesAddr
 	{
 		; xl3DArea=-4098
 		; xl3DClusteredColumn=54
 		; xl3DColumnStacked=55
-		vGraphsSpd.Shapes.AddChart2(286, 54)
+		try { ; excel 2013 and newer.
+			vGraphsSpd.Shapes.AddChart2(286, 54)
+		}
+		catch { ; excel 2010-2013.
+			vGraphsSpd.Shapes.AddChart(54)
+		}
 		vChartObject := vGraphsSpd.ChartObjects(iChart)
 		vChart := vChartObject.Chart
 		vChart.ChartStyle := 294
@@ -2136,6 +2141,28 @@ DoGraph()
 		. "`n`nOpen that folder now?")
 	if (bOpenFolder)
 		Run, explorer.exe %A_WorkingDir%
+
+	; Clear out the graphs spd.
+	ClearSpd(vGraphsSpd)
+
+	SaveAll(false) ; don't show errors.
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: ClearSpd
+		Purpose: To clear the spd of all data, including graphs
+	Parameters
+		vSpd
+*/
+ClearSpd(vSpd)
+{
+	vSpd.UsedRange.Clear
+	Loop % vSpd.ChartObjects.Count
+		vSpd.ChartObjects(1).Delete
 
 	return
 }
@@ -2235,6 +2262,7 @@ InitAdminGUI()
 	; Align text with groupbox
 	GUIControl, Move, g_vWelcomeText, w%iGroupBoxW%
 	GUIControl, Move, g_vHelperText, w%iGroupBoxW%
+	GUIControl, Move, g_vSheetPathText, w%iGroupBoxW%
 
 	GUI, Show
 
@@ -2320,7 +2348,7 @@ InitSplashProgress()
 	GUIControlGet, g_iOutput_, Pos, g_vSP_Output
 	GUI, Add, Picture, % "x0 y" g_iOutput_Y+g_iOutput_H+1 " vg_vSP_BkgdPic", images\Splash.png
 	GUIControlGet, g_iPic_, Pos, g_vSP_BkgdPic
-	GUI, Add, Progress, % "x0 y" g_iPic_Y+g_iPic_H+1 " w" g_iPic_W " h20 c2BB70B BackGround333333 +Border vg_vSP_Progress"
+	GUI, Add, Progress, % "x0 y" g_iPic_Y+g_iPic_H+1 " w" g_iPic_W " h20 c2BB70B Background333333 +Border vg_vSP_Progress"
 	; Resize text to span GUI
 	GUIControl, Move, g_vSP_Output, w%g_iPic_W%
 
