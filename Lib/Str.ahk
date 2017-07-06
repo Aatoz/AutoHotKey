@@ -195,7 +195,7 @@ Str_SurroundWithStr(s) ; May add Bool bUseClipboard
 		bTargetAppActive := true
 	else IfWinActive, ahk_class wndclass_desked_gsk
 		bTargetAppActive := true
-	else if (InStr(sTitle, "Microsoft Visual Studio"))
+	else if (InStr(sTitle, "Microsoft Visual Studio") || InStr(sTitle, "Invest.VS2015"))
 		bTargetAppActive := true
 
 	If (bTargetAppActive)
