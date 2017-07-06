@@ -421,6 +421,9 @@ GetSpecialCmdsIni()
 		PC=PC Scan
 		QD=QD PC Scan
 		cmds=View all saved commands
+		Wiki=Search Wiki
+		InvWiki=Search Inv Wiki
+		DevWiki=Search Dev Wiki
 		int=Internal Function
 
 		; The functions below are found in this file (or else in std lib). Just remember to add the actual function here when you make new ones.
@@ -463,6 +466,15 @@ GetSpecialCmdsIni()
 		[cmds]
 		Desc=View all saved commands
 		Func=InternalCmd
+		[Wiki]
+		Desc=Search entire wiki
+		Func=SearchWiki
+		[InvWiki]
+		Desc=Search Inv Wiki
+		Func=SearchInvWiki
+		[DevWiki]
+		Desc=Serach Dev Wiki
+		Func=SearchDevWiki
 		[int]
 		Desc=Run an internal command
 		Func=InternalCmd
@@ -500,6 +512,8 @@ GetDefaultIni()
 		Func=EditFlyout
 		[int:Set Invtools Database Paths]
 		Func=SetInvPaths
+		[int:Add Command]
+		Func=AddNewCmd_FromGUI
 		[Startup]
 		Func=Run
 		Parms=C:\Users\" A_UserName "\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup
@@ -588,7 +602,10 @@ GetDefaultIni()
 		Parms=shell:::{A8A91A66-3A7D-4424-8D24-04E180695C7A}
 		[Display]
 		Func=Run
-		Parms=shell:::{C555438B-3C23-4769-A71F-B6D3D9B6053A}
+		Parms=ms-settings:display
+		[Connect to a Wireless Network (Wifi)]
+		Func=Run
+		Parms=ms-settings:network-wifisettings
 		[Ease of Access Center]
 		Func=Run
 		Parms=shell:::{D555645E-D4F8-4c29-A827-D93C859C4F2A}
@@ -775,6 +792,9 @@ GetDefaultIni()
 		[Windows Update]
 		Func=Run
 		Parms=shell:::{36eef7db-88ad-4e81-ad49-0e313f0c35f8}
+		[OneDrive]
+		Func=Run
+		Parms=shell:::{018D5C66-4533-4307-9B53-224DE2ED1FE6}
 	)"
 }
 ;;;;;;;;;;;;;;
