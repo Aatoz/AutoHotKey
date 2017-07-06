@@ -1,4 +1,4 @@
-class_EasyCSV(sFile="", sLoadFromStr="", bHasHeader=false)
+_EasyCSV(sFile="", sLoadFromStr="", bHasHeader=false)
 {
 	return new EasyCSV(sFile, sLoadFromStr, bHasHeader)
 }
@@ -418,7 +418,7 @@ class EasyCSV
 	Reload()
 	{
 		if (FileExist(this.GetFileName()))
-			this := class_EasyCSV(this.GetFileName(), this.GetHasHeader())
+			this := _EasyCSV(this.GetFileName(), this.GetHasHeader())
 		return this ; else nothing to reload.
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
