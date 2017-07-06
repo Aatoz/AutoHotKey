@@ -191,16 +191,15 @@ DD_MouseProc(nCode, wParam, lParam)
 {
 	; Variables used to filter out clicks.
 	static s_hWndOnClick := 0, s_bTrackingClickNDrag := false, s_bIsDragging := false, s_iPrevMouseX, s_iPrevMouseY
-	Critical 5000
 
-	WM_MOUSEMOVE := 0x200
-	WM_LBUTTONDOWN := 0x201
-	WM_LBUTTONUP := 0x202
+	static WM_MOUSEMOVE := 0x200
+	static WM_LBUTTONDOWN := 0x201
+	static WM_LBUTTONUP := 0x202
 
 	CoordMode, Mouse, Screen
 	MouseGetPos, iMouseX, iMouseY, hMouseWnd
 
-	if (wParam == WM_LBUTTONDOWN:=513)
+	if (wParam == WM_LBUTTONDOWN)
 		s_hWndOnClick := hMouseWnd
 
 	vDragDrop := Object(DragDrop.ForHwnd[hMouseWnd]) ; DragDrop is a super class or super global or something...it just works, OK?
