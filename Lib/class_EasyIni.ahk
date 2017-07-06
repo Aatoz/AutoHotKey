@@ -139,6 +139,8 @@ class EasyIni
 			rsError := "Error! Could not rename section [" sOldSec "], because it does not exist."
 			return false
 		}
+		if (sOldSec = sNewSec) ; EasyIni is case-insensitve.
+			return true ; true because the rename is harmless.
 
 		this[sNewSec] := this[sOldSec]
 		this.DeleteSection(sOldSec)
