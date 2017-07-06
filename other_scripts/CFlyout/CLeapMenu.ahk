@@ -55,7 +55,7 @@ class CLeapMenu
 
 		this.MoveCircle(iNewX, iNewY)
 
-		iFocRow := this.m_rMH_c.GetRowFromPos(this.m_hCircleGUI, iFocMenu, bIsUnderTopmost)
+		iFocRow := this.m_rMH_c.GetRowFromPos(this.m_hCircleGUI, iFocMenu)
 		vFocMenu := this.m_rMH_c.GetMenu_Ref(iFocMenu)
 		iLastCall := this.TimeSinceLastCall()
 
@@ -193,8 +193,8 @@ class CLeapMenu
 		RandBackColour := 654800120.00
 		RandForeColour := 3290788387.00
 		RandBrush := 7
-		RandElipseWidth := 38
-		RandElipseHeight := 38
+		RandElipseWidth := this.m_iCircleRad
+		RandElipseHeight := this.m_iCircleRad
 
 		; Create the random brush
 		pBrush := Gdip_BrushCreateHatch(RandBackColour, RandForeColour, RandBrush)
