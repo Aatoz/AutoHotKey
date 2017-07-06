@@ -1,6 +1,7 @@
+; More stable rewrite
 class CFlyoutMenuHandler
 {
-	__New(sPathToAHKDll="AutoHotkey.dll", iX=0, iY=0, iW=0, iMaxRows=0, sIni="", sSlideFrom="Left")
+	__New(iX="", iY="", iW="", iMaxRows="", sIni="", sSlideFrom="Left")
 	{
 		global g_iLastClassID := 1
 		this.m_iClassID := g_iLastClassID
@@ -9,211 +10,78 @@ class CFlyoutMenuHandler
 		SetWorkingDir, %A_ScriptDir%
 
 		; INIs
-		if (FileExist("Flyout_config.ini"))
-			this.m_vFlyoutConfigIni := class_EasyIni("Flyout_config.ini")
-		else
-		{
-			this.m_vFlyoutConfigIni := class_EasyIni("Flyout_config.ini", GetDefaultFlyoutConfig_AsParm())
-			this.m_vFlyoutConfigIni.Save()
-		}
 		FileDelete, MenuHelper.ini
 		this.m_vMenuHelperIni := class_EasyIni("MenuHelper.ini")
 		this.m_sIni := sIni
 		this.EnsureIniLoaded()
 
-		this.m_iX := iX
-		this.m_iY := iY
-		this.m_iW := this.m_vFlyoutConfigIni.Flyout.W
-		if (this.m_iW == A_Blank)
-			this.m_iW := 400
-		; Height/Rows
-		if (iMaxRows == 0)
-			this.m_iMaxRows := this.m_vFlyoutConfigIni.Flyout.MaxRows
-		else this.m_iMaxRows := iMaxRows
-		if (this.m_iMaxRows == A_Blank)
-			this.m_iMaxRows := 10
-		; Offsets for menus.
-		if (iW == 0)
-			this.m_iXOffset := this.m_vFlyoutConfigIni.Flyout.W - 5 ; Pixels
-		else this.m_iXOffset := iW - 5 ; Pixels
-		if (this.m_iXOffset == A_Blank)
-			this.m_iXOffset := this.m_iW - 5
+		; Create tmp CFlyout for font-sensitive vars and default options.
+		vTmpFlyout := new CFlyout(["a"], "ShowOnCreate=false")
+
+		this.m_iX := vTmpFlyout.m_iX
+		this.m_iY := vTmpFlyout.m_iY
+		this.m_iW := vTmpFlyout.m_iW
+		this.m_iMaxRows := vTmpFlyout.m_iMaxRows
+
 		this.m_bRightJustify := true
 
-		; ---Menu objects---
-
-		; Create tmp CFlyout for font-sensitive vars.
-		vTmpFlyout := new CFlyout(0, ["a"], false, false, -32768, -32768, this.m_iW, this.m_iMaxRows)
 		; Set default height, then delete tmp CFlyout.
 		Str_Wrap("a", this.m_iW, vTmpFlyout.m_hFont, true, iH)
-		vTmpFlyout :=
 		this.m_iDefH := iH
+		vTmpFlyout :=
 		; End tmp CFlyout.
 
+		; ---Menu objects---
 		this.m_aFlyouts := []
 		this.m_aiMapMenuNumsToLabels := []
 		; Handle for active window before main menu activation.
 		this.m_hActiveWndBeforeMenu := 0 ; Set in FlyoutMenuHandler_MainMenu.
 
-		; Create labels for each menu and all it's items.
-		; Sections are menus
-		for sSec, aKeysAndVals in this.m_vMenuConfigIni
+		; Set up ini
+		; Now create wrapper-labels for every function within this menu
+		this.m_vActionData := new EasyIni()
+		for sSec in this.m_vMenuConfigIni
 		{
-			iMenuNum := A_Index
-			sLabel := sSec
-			this.RemoveIllegalLabelChars(sLabel)
-
-			; Set up links from parent menus to sub menus
-			sLabels .="
-				(
-
-FlyoutMenuHandler_" sLabel ":
-{
-	Critical
-	; Note ahkPostFunction should not be used because it allows users to trigger multiple hotkeys on one menu.
-	g_vExe.ahkFunction[""FlyoutMenuHandler_MenuProc"", A_ThisHotkey, """ sSec """, " this.m_iClassID "]
-	return
-}
-
-				)"
-
-			; Now create wrapper-labels for every function within this menu
-			; TODO: aKeysAndVals
 			sVals := this.m_vMenuConfigIni.GetVals(sSec)
 			Loop, Parse, sVals, `n, `r
 			{
-				if (!InStr(A_LoopField, "Func:") && !InStr(A_LoopField, "Label:") && !InStr(A_LoopField, "Internal:"))
+				iFuncPos := InStr(A_LoopField, "Func:")
+				iLabelPos := InStr(A_LoopField, "Label:")
+				if (!iFuncPos && !iLabelPos && !InStr(A_LoopField, "Internal:"))
 					continue
 
 				aPostFuncParms := """[Data]``n"
-				if (InStr(A_LoopField, "Func:"))
+				if (iFuncPos)
 				{
 					StringReplace, sFunc, A_LoopField, Func:,, All
 					sFunc := Trim(sFunc, A_Space)
+					; TODO: Verify this really is a function or label. If it isn't, fail.
 					iPosOfFirstParen := InStr(sFunc, "(") + 1
 					; Passed in parameters may contain quotations, so using StrLen instead of InStr ensures we get the closing quotations.
 					iPosOfLastParen := StrLen(sFunc)
 					sParms := SubStr(sFunc, iPosOfFirstParen, iPosOfLastParen - iPosOfFirstParen)
 					; Escape single quotes with double quotes.
-					; Note: See ThreadCallback for unescape.
-					StringReplace, sParms, sParms, `", `"`", All
+					;StringReplace, sParms, sParms, `", `"`", All
 					sFuncName  := SubStr(sFunc, 1, InStr(sFunc, "(")-1)
 					aPostFuncParms .= "Func=" sFuncName "``nParms=" sParms """"
+					this.m_vActionData[sFuncName, "Func"] := sParms
 				}
-				else if (InStr(A_LoopField, "Label:"))
+				else if (iLabelPos)
 				{
 					StringReplace, sLabel, A_LoopField, Label:,, All
 					aPostFuncParms .= "Label=" Trim(sLabel, A_Space) """"
+					this.m_vActionData[sLabel, "Label"] :=  sLabel
 				}
 				else ; this is an "internal" function, that is, used within the thread instead of the parent.
 				{
-					StringReplace, sLabel, A_LoopField, Internal:, , All
+					StringReplace, sLabel, A_LoopField, Internal:,, All
 					; For now, the only use I can think of is exiting, so I'm just implementing hard-code functionality unless the need for internal functions becomes greater.
 					if (sLabel = "ExitAllMenus")
 						continue ; This is already created.
-					aPostFuncParms := ; TODO: More internal functions.
+					aPostFuncParms := ; Add more internal functions here.
 				}
-
-				sFuncWithParmsLabel := A_LoopField
-				this.RemoveIllegalLabelChars(sFuncWithParmsLabel)
-
-				sLabels .="
-					(
-
-FlyoutMenuHandler_" sFuncWithParmsLabel ":
-{
-	Critical
-	; Note ahkPostFunction should not be used because it allows users to trigger multiple hotkeys on one menu.
-	g_vExe.ahkFunction[""FlyoutMenuHandler_ThreadCallback"", " aPostFuncParms ", " this.m_iClassID "]
-	gosub FlyoutMenuHandler_ExitAllMenus
-	return
-}
-
-					)"
 			}
 		}
-StringReplace, sIni, sIni, `", `"`", All
-		sScript:="
-			(
-
-`; Begin thread
-#Persistent
-#SingleInstance Force
-#NoTrayIcon
-SetBatchLines, -1
-SetWinDelay, -1
-Thread, interrupt, 1000
-
-return ; end auto-execute
-
-FlyoutMenuHandler_MoveDown:
-FlyoutMenuHandler_MoveUp:
-FlyoutMenuHandler_SubmitSelected:
-FlyoutMenuHandler_ExitTopmost:
-FlyoutMenuHandler_ExitAllMenus:
-FlyoutMenuHandler_ExitAllMenus_OnFocusLost:
-{
-	Critical
-	g_vExe.ahkPostFunction[A_ThisLabel, " this.m_iClassID "]
-	return
-}
-
-FlyoutMenuHandler_StartExitTimer()
-{
-	SetTimer, FlyoutMenuHandler_ExitOnFocusLost, 100
-	return
-}
-
-FlyoutMenuHandler_ExitOnFocusLost:
-{
-	Critical
-
-	WinGetClass, sClass, A
-	WinGetActiveTitle, sActiveTitle
-
-	if (sClass != ""AutoHotkeyGUI"" || !InStr(sActiveTitle, ""CFMH_""))
-	{
-		gosub FlyoutMenuHandler_ExitAllMenus_OnFocusLost
-		`; Send action on through.
-	}
-	return
-}
-
-SetHotkeys(sHK, sMenuLabel, hWnd)
-{
-	Hotkey, IfWinActive, ahk_id %hWnd%
-		Hotkey, %sHK%, %sMenuLabel%
-		Hotkey, Down, FlyoutMenuHandler_MoveDown
-		Hotkey, WheelDown, FlyoutMenuHandler_MoveDown
-		Hotkey, Up, FlyoutMenuHandler_MoveUp
-		Hotkey, WheelUp, FlyoutMenuHandler_MoveUp
-		Hotkey, Enter, FlyoutMenuHandler_SubmitSelected
-		Hotkey, NumpadEnter, FlyoutMenuHandler_SubmitSelected
-		Hotkey, MButton, FlyoutMenuHandler_SubmitSelected
-		Hotkey, Right, FlyoutMenuHandler_SubmitSelected
-		Hotkey, Left, FlyoutMenuHandler_ExitTopmost
-		Hotkey, Esc, FlyoutMenuHandler_ExitTopmost
-	return
-}
-
-Suspend(sOnOff)
-{
-	Suspend %sOnOff%
-	return
-}
-
-			)" . sLabels
-;~ if (!A_IsCompiled)
-;~ {
-	;~ FileDelete, test2.ahk
-	;~ FileAppend, %sScript%, test2.ahk
-;~ }
-
-		; Start thread
-		global g_hCFlyoutMenuHandlerThread := ; For some reason, if I do not do this initialization, then the whole thread execution fails. Will this be a problem for multiple instantiations of this class?
-		g_hCFlyoutMenuHandlerThread := CriticalObject(AhkDllThread(sPathToAHKDll))
-		g_hCFlyoutMenuHandlerThread.ahkTextDll[ "g_vExe:=CriticalObject(" . &AhkExported() . ")`n" . sScript]
-		this.m_hThread := g_hCFlyoutMenuHandlerThread
 
 		SetWorkingDir, %sOldWorkingDir%
 		CFlyoutMenuHandler[g_iLastClassID++] := &this ; for multiple menu handlers
@@ -234,7 +102,6 @@ Suspend(sOnOff)
 
 	__Delete()
 	{
-		this.m_hThread.ahkTerminate()
 		CFlyoutMenuHandler.Remove(this.m_iClassID)
 		return
 	}
@@ -244,12 +111,6 @@ Suspend(sOnOff)
 		; If this were C++, this function would be returning a const pointer.
 		; Instead we are returning the actual object, and I really don't like that.
 		return this.m_aFlyouts[iMenuNum]
-	}
-
-	Suspend(sOnOrOff)
-	{
-		this.m_hThread.ahkPostFunction["Suspend", sOnOrOff]
-		return
 	}
 
 	MainMenuExist()
@@ -311,10 +172,13 @@ Suspend(sOnOff)
 	{
 		; When used through thread callbacks, it is unnecessary to move
 		; however, when used externally, it is necessary to move.
-		this.m_vTopmostMenu.MoveTo(iRow + this.m_vTopmostMenu.m_iDrawnAtNdx) ; TODO: MoveTo should handle m_iDrawnAtNdx
+		if (this.m_vTopmostMenu.GetCurSelNdx() + 1 != iRow)
+			this.m_vTopmostMenu.MoveTo(iRow + this.m_vTopmostMenu.m_iDrawnAtNdx) ; TODO: MoveTo should handle m_iDrawnAtNdx
+
 		sSubmitted := this.m_vTopmostMenu.GetCurSel()
-		sMenuID := this.m_aiMapMenuNumsToLabels[this.m_vTopmostMenu.m_iFlyoutNum, iRow]
-		this.DoActionFromMenuID(sMenuID)
+		vAction := this.m_vTopmostMenu.m_aMapRowToAction[iRow]
+
+		this.DoMenuAction(vAction)
 
 		rbMainMenuExists := this.MainMenuExist()
 		return sSubmitted
@@ -324,41 +188,70 @@ Suspend(sOnOff)
 	{
 		this.m_bCalledFromClick := true
 
-		; If the mouse is hovering over the previous menu and the mouse is about to click what is already selected, do nothing.
-		vPrevMenu := this.GetMenu_Ref(this.m_iNumMenus - 1)
-		iFocRow := this.GetRowFromPos("", iFlyoutUnderCircle)
-
-		if (iFlyoutUnderCircle == vPrevMenu.m_iFlyoutNum && iFocRow == vPrevMenu.GetCurSelNdx()+1)
-			return
-
-		; Perform actual mouse click on flyout
-		CoordMode, Mouse, Relative
-		MouseGetPos,, iMouseY
-		vFlyout.Click(iMouseY)
+		if (vFlyout.m_hFlyout != this.m_vTopmostMenu.m_hFlyout)
+		{
+			
+		}
 
 		; Exit to the hovered menu, if needed.
 		while (this.m_iNumMenus > vFlyout.m_iFlyoutNum)
 			this.ExitTopmost()
 
-		sMenuID := this.m_aiMapMenuNumsToLabels[vFlyout.m_iFlyoutNum, vFlyout.GetCurSelNdx() + 1]
-		this.DoActionFromMenuID(sMenuID)
+		if (msg = WM_LBUTTONDOWN:=513)
+		{
+			CoordMode, Mouse, Relative
+			MouseGetPos,, iClickY
+			vFlyout.Click(iClickY)
+		}
+
+		iRow := vFlyout.GetCurSelNdx() + 1
+		vAction := vFlyout.m_aMapRowToAction[iRow]
+		this.DoMenuAction(vAction)
 
 		return true
 	}
 
-	DoActionFromMenuID(sMenuID)
+	OnKeyDown(vFlyout, wParam, lParam, msg)
 	{
-		this.RemoveIllegalLabelChars(sMenuID2:="FlyoutMenuHandler_"sMenuID)
-		; Dynamically call class functions. We can't use this.HasKey(sFuncName), so instead check this way. It seems to work well...
-		if (IsFunc(SubStr(A_ThisFunc, 1, InStr(A_ThisFunc, ".")) sMenuID))
+		static VK_ESCAPE:=27, VK_LEFT:=37, VK_RIGHT:=39, VK_UP:=38, VK_DOWN:=40, VK_Enter:=0x0D
+
+		if (wParam = VK_ESCAPE || wParam = VK_LEFT)
+			return this.ExitTopmost()
+		else if (wParam = VK_Enter || wParam = VK_RIGHT)
+			return this.SubmitSelected()
+		else if (wParam = VK_UP)
+			return this.MoveUp()
+		else if (wParam = VK_DOWN)
+			return this.MoveDown()
+
+		return true
+	}
+
+	DoMenuAction(vAction)
+	{
+		; class func call?
+		if (vAction.ClassFunc)
 		{
-			this[sMenuID]()
+			this[vAction.ClassFunc]()
+			; Don't exit all menus twice!
+			if (vAction.ClassFunc != "ExitAllMenus")
+				this.ExitAllMenus()
 		}
-		; else call an action in the thread.
-		else if (InStr(sMenuID, "Func:") || InStr(sMenuID, "Label:"))
-			this.m_hThread.ahkLabel[sMenuID2]
+		; func call?
+		else if (vAction.Func)
+		{
+			vAction.Func(vAction.Parms*)
+			this.ExitAllMenus()
+		}
+		; label call?
+		else if (vAction.Label)
+		{
+			AhkSelf().ahkLabel[vAction.Label]
+			this.ExitAllMenus()
+		}
 		; else launch a new menu.
-		else this.MenuProc("MButton", sMenuID)
+		else if (vAction.SubMenu)
+			this.MenuProc("Enter", vAction.SubMenu)
 	}
 
 	ExitTopmost(ByRef rbMainMenuExists=false)
@@ -377,10 +270,11 @@ Suspend(sOnOff)
 
 		hParent := this.m_vTopmostMenu.m_hParent
 		if (hParent != 0)
-			WinActivate, % "ahk_id" Parent
+			WinActivate, % "ahk_id" hParent
 
 		this.m_aFlyouts.Remove()
 		rbMainMenuExists := this.MainMenuExist()
+
 		return
 	}
 
@@ -392,49 +286,11 @@ Suspend(sOnOff)
 
 		this.m_aFlyouts := []
 
-		; Reloading gets around some strange issue that has to do with click vs. hotkeys.
-		; When you use hotkeys, clicks fail. I've encountered the converse, too.
-		; Reloading is fast, so let's just be happy with this workaround.
-		this.m_hThread.ahkReload()
-
 		; See comment in ExitTopmost()
 		if (bFromExitTimer && this.m_hCallbackHack)
 			this.m_hCallbackHack.()
 
-		return
-	}
-
-	ThreadCallback(sIniParms)
-	{
-		vData := class_EasyIni("", sIniParms)
-		if (vData.Data.Label)
-		{
-			gosub % vData.Data.Label
-		}
-		else if (vData.Data.Func)
-		{
-			aParms := st_split(vData.Data.Parms, ",")
-			for, iNdx, val in aParms
-			{
-				; Resolve dynamic class variables.
-				sClassVar := Trim(val) ; Trim, just in case, but don't trim actual val beacuse some function may want tabs, spaces, etc.
-				if (this.HasKey(sClassVar))
-					aParms[iNdx] := this[sClassVar]
-				else
-				{
-					; Unescape double-quotes with single quotes.
-					StringReplace, val, val, `",, All ; TODO: Just remove first and last quotes...
-					aParms[iNdx] := val
-				}
-			}
-
-			; Call function.
-			vFunc := Func(vData.Data.Func)
-			if (vFunc)
-				vFunc.(aParms*)
-			else Msgbox, 8192,, % "Error: Function " vData.Data.Func " does not exist."
-		}
-
+		this.m_bRightJustify := true
 		return
 	}
 
@@ -471,7 +327,8 @@ Suspend(sOnOff)
 		; Note: m_vTopmostMenu is now the newly created menu ( See __Get() ).
 		this.GetRectForMenu(this.m_vTopmostMenu, iX, iY, iYOffset)
 		WinMove, % "ahk_id" this.m_vTopmostMenu.m_hFlyout,, iX, iY
-		WinActivate
+		WinActivate, % "ahk_id" this.m_vTopmostMenu.m_hFlyout
+
 		return
 	}
 
@@ -486,12 +343,13 @@ Suspend(sOnOff)
 			aMenuItems.Insert(sMenuItem)
 		}
 
-		vFlyout := new CFlyout(hParent, aMenuItems, false, false, -32768, -32768, this.m_iW, this.m_iMaxRows)
-		; We need unique CFlyout titles for class functions (Like MainMenuExist() ).
-		sTitle := "CFMH_" (sMenuSec = "MainMenu" ? sMenuSec : "Submenu")
-		WinSetTitle, % "ahk_id" vFlyout.m_hFlyout,, %sTitle%
+		vFlyout := new CFlyout(aMenuItems, "Parent=" hParent, "ReadOnly="false
+			, "ShowInTaskbar="false, "ShowOnCreate=true", "ExitOnEsc=False"
+			, "Title=CFMH_" (sMenuSec = "MainMenu" ? sMenuSec : "Submenu"))
 
+		; New design: within this CFlyout, leverage CFlyout to actually map the particular menu item to the func/label it was mapped to.
 		this.m_vMenuHelperIni.AddSection(vFlyout.m_hFlyout)
+		vFlyout.m_aMapRowToAction := []
 		aiMapMenuNumsToLabels := []
 		for sMenuItem, sMenuLabel in this.m_vMenuConfigIni[sMenuSec]
 		{
@@ -500,112 +358,75 @@ Suspend(sOnOff)
 				iPosOfHK := 0
 			sHK := SubStr(sMenuItem, iPosOfHK + 1, 1)
 
-			sLabel := "FlyoutMenuHandler_" sMenuLabel
-			this.RemoveIllegalLabelChars(sLabel)
-
 			this.m_vMenuHelperIni.AddKey(vFlyout.m_hFlyout, sHK) ; TODO: Remove &s?
 			aiMapMenuNumsToLabels.Insert(sMenuLabel)
 
-			; Set hotkey for this menu item in thread
-			this.m_hThread.ahkPostFunction["SetHotkeys", sHK, sLabel, vFlyout.m_hFlyout]
+			Hotkey, IfWinActive, % "ahk_id" vFlyout.m_hFlyout
+				Hotkey, %sHK%, FlyoutMenuHandler_HotkeyProc
+
+			iPosOfFunc := InStr(sMenuLabel, "Func:")
+			iPosOfLabel := InStr(sMenuLabel, "Label:")
+			iPosOfInt := InStr(sMenuLabel, "Internal:")
+			if (iPosOfFunc)
+			{
+				; Remove Func:
+				StringReplace, sFunc, sMenuLabel, Func:,, All
+
+				sFunc := Trim(sFunc, A_Space)
+				; TODO: Verify this really is a function. If it isn't, fail.
+				iPosOfFirstParen := InStr(sFunc, "(") + 1
+				; Passed in parameters may contain quotations, so using StrLen instead of InStr ensures we get the closing quotations.
+				iPosOfLastParen := StrLen(sFunc)
+				; Get function parms.
+				sParms := SubStr(sFunc, iPosOfFirstParen, iPosOfLastParen - iPosOfFirstParen)
+				; Get functon name.
+				sFuncName  := SubStr(sFunc, 1, InStr(sFunc, "(")-1)
+
+			aParms := st_split(sParms, ",")
+			for, iNdx, val in aParms
+			{
+				; Resolve dynamic class variables.
+				sClassVar := Trim(val) ; Trim, just in case, but don't trim actual val beacuse some function may want tabs, spaces, etc.
+				if (this.HasKey(sClassVar))
+					aParms[iNdx] := this[sClassVar]
+				else
+				{
+					; Unescape double-quotes with single quotes.
+					StringReplace, val, val, `",, All ; TODO: Just remove first and last quotes...
+					aParms[iNdx] := val
+				}
+			}
+
+				vFlyout.m_aMapRowToAction.InsertAt(A_Index, {Func: sFuncName, Parms: aParms})
+			}
+			else if (iPosOfLabel)
+			{
+				; Remove Label:
+				StringReplace, sLabel, sMenuLabel, Label:,, All
+				; TODO: Verify this really is a label. If it isn't, fail.
+				vFlyout.m_aMapRowToAction.InsertAt(A_Index, {Label: sLabel})
+			}
+			else if (iPosOfInt) ; internal is always a function.
+			{
+				; Remove Internal:
+				StringReplace, sFunc, sMenuLabel, Internal:,, All
+				vFlyout.m_aMapRowToAction.InsertAt(A_Index, {ClassFunc: sFunc})
+			}
+			else ; this points to a submenu.
+				vFlyout.m_aMapRowToAction.InsertAt(A_Index, {Submenu: sMenuLabel})
 		}
 
 		this.m_aiMapMenuNumsToLabels.Insert(vFlyout.m_iFlyoutNum, aiMapMenuNumsToLabels)
 
 		static WM_LBUTTONDOWN:=513
+		static WM_KEYDOWN:=256
 		vFlyout.OnMessage(WM_LBUTTONDOWN, "FlyoutMenuHandler_OnClick")
+		OnMessage(WM_KEYDOWN, "FlyoutMenuHandler_OnKeyDown")
 
 		; Tack on class ID so we can map hotkeys and clicks back up to the appropriate CFMH class.
 		; Note: See FlyoutMenuHandler_OnClick.
 		vFlyout.m_iCFMH_ClassID := this.m_iClassID
 		this.m_aFlyouts.Insert(vFlyout)
-
-		this.m_hThread.ahkPostFunction["FlyoutMenuHandler_StartExitTimer"]
-
-		return
-	}
-
-	EnsureIniLoaded()
-	{
-		if (IsObject(this.m_vMenuConfigIni))
-			return
-
-		if (this.m_sIni)
-			this.m_vMenuConfigIni := class_EasyIni("MenuConfig", this.m_sIni)
-		else this.m_vMenuConfigIni := class_EasyIni("MenuConfig")
-
-		;~ this.m_vMenuConfigIni.Save()
-		return
-	}
-
-	AddMenu(sMenu)
-	{
-		Msgbox In AddMenu`n%sMenu%
-		this.EnsureIniLoaded()
-
-		return true
-	}
-
-	AddSubMenu(sParentMenu, sSubMenu)
-	{
-		Msgbox In AddSubMenu`nAdd %sSubMenu% to %sParentMenu%
-		this.EnsureIniLoaded()
-
-		return true
-	}
-
-	RemoveIllegalLabelChars(ByRef sLabel)
-	{
-		StringReplace, sLabel, sLabel, %A_Space%, |A_Space|,, All
-		StringReplace, sLabel, sLabel, `", |A_DoubleQuote|,, All
-		StringReplace, sLabel, sLabel, `', |A_SingleQuote|,, All
-		StringReplace, sLabel, sLabel, `(, |A_OpenParen|,, All
-		StringReplace, sLabel, sLabel, `), |A_CloseParen|,, All
-		StringReplace, sLabel, sLabel, `,, |A_Comma|,, All
-		StringReplace, sLabel, sLabel, `:, |A_Colon|,, All
-		return
-	}
-
-	GUIEditSettings(hParent=0, sGUI="", bReloadOnExit=false)
-	{
-		return CFlyout.GUIEditSettings(hParent, sGUI, bReloadOnExit)
-	}
-
-	GetRectForMenu(vFlyout, ByRef iTargetX, ByRef iTargetY, iYOffset)
-	{
-		iTargetX := iTargetY := 0
-
-		WinGetPos, iWndX, iWndY,,, % "ahk_id" vFlyout.m_hParent
-		WinGetPos,,, iWndW, iWndH, % "ahk_id" vFlyout.m_hFlyout
-
-		rect := FlyoutMenuHandler_GetMonitorRectAt(iWndX, iWndY)
-		iMonWndIsOnLeft := rect.left
-		iMonWndIsOnRight := rect.right
-		iMonWndIsOnTop := rect.top
-		iMonWndIsOnBottom := rect.bottom
-
-		if (iWndX + this.m_iXOffset + (iWndW * 2 - (this.m_iXOffset)) > iMonWndIsOnRight)
-			this.m_bRightJustify := false
-
-		if (this.m_bRightJustify)
-			iTargetX := iWndX + this.m_iXOffset
-		else iTargetX := iWndW - this.m_iXOffset
-
-		if (iTargetX + iWndW > iMonWndIsOnRight)
-		{
-			iTargetX := iWndX - iWndW
-			this.m_bRightJustify := false
-		}
-		if (iTargetX < iMonWndIsOnLeft)
-		{
-			iTargetX := iMonWndIsOnLeft
-			this.m_bRightJustify := true
-		}
-
-		iTargetY := iWndY + iYOffset
-
-		if (iTargetY + iWndH > iMonWndIsOnBottom)
-			iTargetY := iWndY - iWndH + iYOffset
 
 		return
 	}
@@ -668,7 +489,7 @@ Suspend(sOnOff)
 			rbIsUnderTopmost := vFlyout.m_hFlyout = this.m_vTopmostMenu.m_hFlyout
 
 			; Note: Click function takes coordinates relative to the window, so we need to eliminate the Y
-			return vFlyout.Click(iClickY-vFlyout.GetFlyoutY, false) ; match, return row under mouse.
+			return vFlyout.GetRowPosForClick(iClickY-vFlyout.GetFlyoutY) ; match, return row under mouse.
 		}
 
 		riFlyoutNum := -1 ; Not under any CFlyout.
@@ -676,31 +497,116 @@ Suspend(sOnOff)
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-	GetDefaultConfigIni()
+	EnsureIniLoaded()
 	{
-		return "
-			(
-[Flyout]
-AnchorAt=-99999
-Background=Default.jpg
-Font=Kozuka Mincho Pr6N R, s26 italic underline
-FontColor=0x5AAC7
-MaxRows=10
-TextAlign=Center
-W=400
-X=0
-Y=0
-ReadOnly=0
-ShowInTaskbar=0
+		if (IsObject(this.m_vMenuConfigIni))
+			return
 
-			)"
+		if (this.m_sIni)
+			this.m_vMenuConfigIni := class_EasyIni("MenuConfig", this.m_sIni)
+		else this.m_vMenuConfigIni := class_EasyIni("MenuConfig")
+
+		return
+	}
+
+	AddMenu(sMenu)
+	{
+		Msgbox In AddMenu`n%sMenu%
+		this.EnsureIniLoaded()
+
+		return true
+	}
+
+	AddSubMenu(sParentMenu, sSubMenu)
+	{
+		Msgbox In AddSubMenu`nAdd %sSubMenu% to %sParentMenu%
+		this.EnsureIniLoaded()
+
+		return true
+	}
+
+	RemoveIllegalLabelChars(ByRef sLabel)
+	{
+		StringReplace, sLabel, sLabel, %A_Space%, |A_Space|,, All
+		StringReplace, sLabel, sLabel, `", |A_DoubleQuote|,, All
+		StringReplace, sLabel, sLabel, `', |A_SingleQuote|,, All
+		StringReplace, sLabel, sLabel, `(, |A_OpenParen|,, All
+		StringReplace, sLabel, sLabel, `), |A_CloseParen|,, All
+		StringReplace, sLabel, sLabel, `,, |A_Comma|,, All
+		StringReplace, sLabel, sLabel, `:, |A_Colon|,, All
+		return
+	}
+
+	GUIEditSettings(hParent=0, sGUI="", bReloadOnExit=false)
+	{
+		return CFlyout.GUIEditSettings(hParent, sGUI, bReloadOnExit)
+	}
+
+	GetRectForMenu(vFlyout, ByRef iTargetX, ByRef iTargetY, iYOffset)
+	{
+		iTargetX := iTargetY := 0
+
+		WinGetPos, iWndX, iWndY, iParentW,, % "ahk_id" vFlyout.m_hParent
+		WinGetPos,,, iWndW, iWndH, % "ahk_id" vFlyout.m_hFlyout
+
+		rect := FlyoutMenuHandler_GetMonitorRectAt(iWndX, iWndY)
+		iMonWndIsOnLeft := rect.left
+		iMonWndIsOnRight := rect.right
+		iMonWndIsOnTop := rect.top
+		iMonWndIsOnBottom := rect.bottom
+
+		; Offsets for menus.
+		this.m_iXOffset := iParentW - 5 ; Pixels
+
+		if (iWndX + this.m_iXOffset + (iParentW + iWndW - (this.m_iXOffset)) > iMonWndIsOnRight)
+			this.m_bRightJustify := false
+
+		if (this.m_bRightJustify)
+			iTargetX := iWndX + this.m_iXOffset
+		else iTargetX := iWndW - this.m_iXOffset
+
+		if (iTargetX + iWndW > iMonWndIsOnRight)
+		{
+			iTargetX := iWndX - iWndW
+			this.m_bRightJustify := false
+		}
+		if (iTargetX < iMonWndIsOnLeft)
+		{
+			iTargetX := iMonWndIsOnLeft
+			this.m_bRightJustify := true
+		}
+
+		iTargetX := iWndX + this.m_iXOffset ; TODO: Fix L/R justification code
+		iTargetY := iWndY + iYOffset
+
+		if (iTargetY + iWndH > iMonWndIsOnBottom)
+			iTargetY := iWndY - iWndH + iYOffset
+
+		return
 	}
 }
 
-FlyoutMenuHandler_MenuProc(sThisHotkey, sMenuID, iClassID)
+FlyoutMenuHandler_HotkeyProc:
 {
-	vMH := _CFlyoutMenuHandler(iClassID)
-	return vMH.MenuProc(sThisHotkey, sMenuID)
+	vMH := _CFlyoutMenuHandler(1)
+
+	for sHK in vMH.m_vMenuHelperIni[vMH.m_vTopmostMenu.m_hFlyout]
+	{
+		if (A_ThisHotkey = sHK)
+		{
+			iRow := A_Index
+			break
+		}
+	}
+
+	if (!iRow)
+		return
+
+	vMH.m_vTopmostMenu.MoveTo(iRow)
+	vAction := vMH.m_vTopmostMenu.m_aMapRowToAction[iRow]
+	vMH.DoMenuAction(vAction)
+
+	return
 }
 
 FlyoutMenuHandler_ThreadCallback(sIniParms, iClassID)
@@ -751,6 +657,39 @@ FlyoutMenuHandler_OnClick(vFlyout, msg)
 	return vMH.OnClick(vFlyout, msg)
 }
 
+FlyoutMenuHandler_OnKeyDown(wParam, lParam, msg, vFlyout2)
+{
+	Critical
+
+	; hWnd isn't always the flyout, so we can't use that.
+	; A_GUIControl is reliably the ListBox from the Flyout,
+	; so getting the parent of that will give us the correct flyout.
+	GUIControlGet, hGUICtrl, hWnd, %A_GUIControl%
+	hFlyout := DllCall("GetParent", uint, hGUICtrl)
+	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
+	if (!IsObject(vFlyout))
+	{
+		vFlyout := Object(CFlyout.FromHwnd[WinExist("A")])
+		if (!IsObject(vFlyout))
+		{
+			WinGetActiveTitle, sTitle
+			if (InStr(sTitle, "CFMH_"))
+			{
+				vMH := _CFlyoutMenuHandler(vFlyout.m_iCFMH_ClassID)
+				vFlyout := vMH.m_vTopmostMenu
+			}
+		}
+	}
+
+	if (IsObject(vFlyout))
+	{
+		vMH := _CFlyoutMenuHandler(vFlyout.m_iCFMH_ClassID)
+		return vMH.OnKeyDown(vFlyout, wParam, lParam, msg)
+	}
+
+	return
+}
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
@@ -760,16 +699,19 @@ FlyoutMenuHandler_OnClick(vFlyout, msg)
 	Parameters
 		iClassID: Used to get the appropriate CFlyoutMenuHandler class.
 */
-_CFlyoutMenuHandler(iClassID)
+_CFlyoutMenuHandler(iClassID="")
 {
 	global g_hCFlyoutMenuHandlerThread
+
+	if (iClassID = "")
+		iClassID := 1
 
 	vMH := Object(CFlyoutMenuHandler[iClassID])
 	if (!IsObject(vMH))
 	{
 		Msgbox 8192,, Error: Could not map class ID (%iClassID%) to menu handler class object.
 		g_hCFlyoutMenuHandlerThread := ; Kill the menu
-		return
+		return Object(CFlyoutMenuHandler[1]) ; Failsafe.
 	}
 	return vMH
 }
@@ -816,15 +758,5 @@ FlyoutMenuHandler_GetMonitorRectAt(x, y, default=1)
 /*
 ===============================================================================
 */
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;
-GetDefaultFlyoutConfig_AsParm()
-{
-	return "`n(`n" this.GetDefaultConfigIni() ")"
-}
-;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 #Include %A_ScriptDir%\CFlyout.ahk
