@@ -17,11 +17,12 @@ TODO:
 #SingleInstance Force
 
 #NoEnv  ; Recommended for performance and compatibility with future AutoHotkey releases.
-SetBatchLines -1
+SetBatchLines, -1 ; Never sleep
 SetWinDelay, -1
+Thread, interrupt, 1000
 SetWorkingDir, %A_ScriptDir%
 StringCaseSense, Off
-Thread, interrupt, 1000
+SendMode, Input
 
 if (A_IsCompiled)
 	DoFileInstalls()
@@ -31,6 +32,7 @@ InitEverything()
 
 OnMessage(WM_DISPLAYCHANGE:=126, "OnDisplayChange")
 OnMessage(WM_SETTINGCHANGE:=26, "LoadQLDB") ; TODO: This may be better to split out into a separate function beacuse it's inefficient to reload everything (including the defaults)
+
 
 ; TODO: Command to reload instead of hotkey
 ^+Q::Reload
@@ -69,10 +71,14 @@ OnDisplayChange()
 {
 	global g_hQL, g_iQLX, g_iQLY, g_iQLW, g_iQLH, g_vGUIFlyout
 
+	; Reload QL globals, because the QL rect could be set by expressions,
+	; such as A_ScreenW and A_ScreenH, which have possibly just changed.
+	InitQLGlobals()
+
 	WinMove, ahk_id %g_hQL%,, g_iQLX, g_iQLY, g_iQLW, g_iQLH
 
 	iX := g_vGUIFlyout.GetFlyoutX
-	iY := g_vGUIFlyout.mGetFlyoutY
+	iY := g_vGUIFlyout.GetFlyoutY
 	iW := g_vGUIFlyout.m_vConfigIni.Flyout.W
 	iH := g_vGUIFlyout.m_vConfigIni.Flyout.H
 	WinMove, % "ahk_id" g_vGUIFlyout.m_hFlyout,, iX, iY, iW, iH
@@ -162,6 +168,7 @@ InitTrayMenu()
 InitQuickLauncher()
 {
 	global
+	local key, val, NewVal
 
 	for key, val in g_ConfigIni.QLauncher
 	{
@@ -252,6 +259,39 @@ InitQuickLauncher()
 	; Load the arrays even if we don't use a flyout, because, most of the time, we will.
 	; Also I think this may be faster than loading the arrays upon creation.
 	LoadQLDB()
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: InitQLGlobals
+		Purpose: Initialze globals specific to the Quick Launcher
+	Parameters
+		
+*/
+InitQLGlobals()
+{
+	global
+	local key, val, NewVal
+
+	for key, val in g_ConfigIni.QLauncher
+	{
+		if (InStr(val, "Expr:"))
+			NewVal := Trim(DynaExpr_EvalToVar(SubStr(val, InStr(val, "Expr:") + 5)), A_Space)
+		else NewVal := val
+
+		if (key = "Background" || key = "Font")
+			s%key% := NewVal
+
+		if (key = "SubmitSelectedIfNoMatchFound")
+			g_bQL%key% := (NewVal = "true" || NewVal = "1" ? true : false)
+		else if (key = "Hotkey")
+			g_sQL%key% := NewVal
+		else g_iQL%key% := NewVal
+	}
 
 	return
 }
@@ -364,24 +404,37 @@ QL_RenameSelectedCmd:
 		return
 
 	vCmd := g_vCommandsIni[g_vGUIFlyout.GetCurSel()]
-	sNewCmd := AddCmdProc(vCmd, false, g_vGUIFlyout.GetCurSel())
+	vNewCmd := AddCmdProc(vCmd, false, g_vGUIFlyout.GetCurSel())
 
+	sNewCmd := vNewCmd.CmdName
 	if (sNewCmd = "")
 		return
 
+	bRenameSec := !(sNewCmd = g_vGUIFlyout.GetCurSel()) ; case-insensitve comparison
 	if (g_MasterIni.HasKey(g_vGUIFlyout.GetCurSel()))
 	{
-		g_MasterIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		if (bRenameSec)
+			g_MasterIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		g_MasterIni[sNewCmd].Parms := vNewCmd.Parms
+
 		g_MasterIni.Save()
 	}
 	else if (g_RecentIni.HasKey(g_vGUIFlyout.GetCurSel()))
 	{
-		g_RecentIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		if (bRenameSec)
+			g_RecentIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		g_RecentIni[sNewCmd].Parms := vNewCmd.Parms
+
 		g_RecentIni.Save()
 	}
+
 	; Instead of reloading inis, update commands ini.
 	if (g_vCommandsIni.HasKey(g_vGUIFlyout.GetCurSel()))
-		g_vCommandsIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+	{
+		if (bRenameSec)
+			g_vCommandsIni.RenameSection(g_vGUIFlyout.GetCurSel(), sNewCmd, sError)
+		g_vCommandsIni[sNewCmd].Parms := vNewCmd.Parms
+	}
 
 	if (sError)
 		Msgbox_Error(sError, 2)
@@ -476,6 +529,23 @@ QL_SimulateDragNDrop(DDContents)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function: AddNewCmd_FromGUI
+		Purpose: To add a new command from the GUI (via shortcut)
+	Parameters
+		
+*/
+AddNewCmd_FromGUI()
+{
+	vCmd := {Func: "Run", Parms: ""}
+	AddCmdProc(vCmd)
+
+	return true
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: AddCmdProc
 		Purpose: To localize logic to add a command to the database. Returns the new command name, if any.
 	Parameters
@@ -485,31 +555,79 @@ QL_SimulateDragNDrop(DDContents)
 */
 AddCmdProc(vCmd, bSaveToDB=true, sDefaultName="")
 {
-	bContinue := true
-	while (!sAddUserCmd && bContinue)
+	static g_iMSDNStdBtnW := 75, g_iMSDNStdBtnH := 23
+		, g_iMSDNStdBtnSpacing := 6,g_iMyStdImgBtnRect := 40
+	static s_sCmdNameEdit, s_hAddCmdDlg, s_sCmdParmsEdit
+
+	; Variables won't be cleared out from GUI if this isn't the first time we have renamed a command.
+	s_sCmdNameEdit := s_hAddCmdDlg := s_sCmdParmsEdit := ""
+
+	while (!s_sCmdNameEdit)
 	{
 		if (A_Index > 1)
 		{
 			if (!Msgbox_YesNo("An invalid name was specified for this command. Do you want to try to specify a different name?`n"
-				. "`nCmd:`t"sAddUserCmd
+				. "`nCmd:`t"s_sCmdNameEdit
 				. "`nPath:`t" vCmd.Parms
 				, "Cancel adding command?"))
 				break
 		}
 
-		Inputbox, sAddUserCmd, Add Command to Quick Launcher, % "Specify a shortcut for " vCmd.Parms,,,,,,,, %sDefaultName%
-		if (ErrorLevel)
+		GUI, AddCmdDlg_:New, +hwnds_hAddCmdDlg, Add Command to Quick Launcher
+		GUI, Add, Text, xm ym w360 h100, % "Specify a shortcut and parameters for " (sDefaultName = "" ? "this new command" : sDefaultName)
+		GUI, Add, Text, xm yp+40 wp h20, &Command
+		GUI, Add, Edit, xm yp+20 wp h24 vs_sCmdNameEdit, % sDefaultName
+		GUI, Add, Text, xm yp+39 wp h20, &Parameters
+		GUI, Add, Edit, xm yp+20 wp h24 vs_sCmdParmsEdit, % vCmd.Parms
+
+		GUI, Add, Button, xp+205 yp+40 w%g_iMSDNStdBtnW% h%g_iMSDNStdBtnH% gAddCmdDlg_GUISubmit, &OK
+		GUI, Add, Button, % "xp+" g_iMSDNStdBtnW+g_iMSDNStdBtnSpacing " yp wp hp gAddCmdDlg_GUIEscape", &Cancel
+
+		Hotkey, IfWinActive, % "ahk_id" s_hAddCmdDlg
+			Hotkey, Enter, AddCmdDlg_GUISubmit
+			Hotkey, NumpadEnter, AddCmdDlg_GUISubmit
+
+		global g_bAddCmdDlg_Cancel := false
+		GUI, Show, w380 h190
+
+		while (WinExist("ahk_id" s_hAddCmdDlg))
 		{
-			bContinue := false
-			sAddUserCmd :=
+			Sleep 100
+			continue
 		}
-		else sAddUserCmd := Trim(sAddUserCmd) ; Spaces mess things up.
+
+		if (g_bAddCmdDlg_Cancel)
+		{
+			s_sCmdNameEdit :=
+			break
+		}
+		else s_sCmdNameEdit := Trim(s_sCmdNameEdit) ; Spaces mess things up.
 	}
 
-	if (bSaveToDB && sAddUserCmd) ; If a valid shortcut was specified and we need to save to the DB.
-		SaveToDB(sAddUserCmd, vCmd, "Master")
+	if (bSaveToDB && s_sCmdNameEdit) ; If a valid shortcut was specified and we need to save to the DB.
+		SaveToDB(s_sCmdNameEdit, vCmd, "Master")
 
-	return sAddUserCmd
+	return { CmdName: s_sCmdNameEdit, Parms: s_sCmdParmsEdit }
+}
+
+AddCmdDlg_GUIEscape:
+{
+	g_bAddCmdDlg_Cancel := true
+	; fall through
+}
+
+AddCmdDlg_GUIClose:
+{
+	GUI, AddCmdDlg_:Destroy
+	return
+}
+
+AddCmdDlg_GUISubmit:
+{
+	GUI, AddCmdDlg_:Submit
+	gosub AddCmdDlg_GUIClose
+
+	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -747,6 +865,7 @@ LoadQLDB()
 */
 RegisterCommandsToVoiceControl()
 {
+	return
 	global g_vCommandsIni
 
 	global g_vVoiceCtrl := new CustomSpeech
@@ -791,7 +910,7 @@ QuickLaunch(sCmd="", bFromGUI=true)
 
 	; This wasn't parsed, so try again using the currently selected item in the flyout.
 	bIsNewCmd := !g_vCommandsIni.HasKey(sCmd)
-	;~ Msgbox % st_concat("`n", !vCmd && bIsNewCmd, bIsNewCmd)
+	;~ Msgbox % st_concat("`n", !vCmd && bIsNewCmd, bIsNewCmd, sCmd)
 	if (!vCmd && bIsNewCmd)
 	{
 		if (bFromGui)
@@ -806,7 +925,7 @@ QuickLaunch(sCmd="", bFromGUI=true)
 			bCancel := false
 			CornerNotify(0.5, sValidCmd, "Press escape if you do not want to launch this command.")
 			global cornernotify_hwnd
-			Msgbox %cornernotify_hwnd%
+			;~ Msgbox %cornernotify_hwnd%
 			while (WinExist("ahk_id" cornernotify_hwnd))
 			{
 				if (bCancel := GetKeyState("Esc", "D"))
@@ -854,12 +973,15 @@ QuickLaunch(sCmd="", bFromGUI=true)
 			return
 		}
 
+		iPrevHitCnt := g_vCommandsIni[sValidCmd].HitCount
 		if (g_vCommandsIni[sValidCmd].HasKey("HitCount") && g_vCommandsIni[sValidCmd].HitCount != "")
 			g_vCommandsIni[sValidCmd].HitCount := g_vCommandsIni[sValidCmd].HitCount+1
 		else g_vCommandsIni[sValidCmd].HitCount := 1
 
 		if (g_MasterIni.HasKey(sValidCmd))
 		{
+			iPrevHitCnt := g_MasterIni[sValidCmd].HitCount
+
 			if (g_MasterIni[sValidCmd].HasKey("HitCount") && g_MasterIni[sValidCmd].HitCount != "")
 				g_MasterIni[sValidCmd].HitCount := g_MasterIni[sValidCmd].HitCount+1
 			else g_MasterIni[sValidCmd].HitCount := 1
