@@ -385,7 +385,7 @@ class PrecisionDlg
 		GUIControl,, g_vEditH,  % this.m_iOldH
 
 		GUI, Show, x-32768 AutoSize, % "Precise Window Placement - " sAppendToTitle
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 		GUIControl, Focus, g_vEditX
 
 		this.m_bIsActive := true
@@ -1099,7 +1099,7 @@ class HKDlg
 			GUIControl, Focus, g_vHKDlg_GUICancelBtn
 
 		GUI, Show, x-32768 AutoSize, %sAppendToTitle%
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 
 		this.m_bIsActive := true
 		return
@@ -1397,7 +1397,7 @@ class SequenceDlg
 		WinSet, Disable,, % "ahk_id" this.m_hOwner
 
 		GUI, Show, x-32768 AutoSize, Ratio in percent (`%)
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 
 		this.m_bIsActive := true
 		return
@@ -1512,7 +1512,7 @@ class LeapGestureDlg
 		WinSet, Disable,, ahk_id %hOwner%
 
 		GUI, Show, x-32768 AutoSize
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 
 		return
 	}
@@ -1675,7 +1675,7 @@ class WindowSetDlg
 
 		SuspendThreads("Off") ; Allow HK manipulation of this window.
 		GUI, Show, x-32768 AutoSize, Window Placement
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 		ResizeWnd("CenterThreeFourths", this.m_hDlg)
 
 		SetTimer, WindowSetDlg_WatchWnd, 100
@@ -1945,7 +1945,7 @@ class ImportDlg
 
 		GUI, Show, x-32768 AutoSize, Import Windows Master Settings
 		GUIControl, Focus, g_vImportDlg_SequencesIniEllipsis
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 
 		return
 	}
@@ -2064,7 +2064,7 @@ class CIntroDlg
 		WinSet, Disable,, ahk_id %hOwner%
 
 		GUI, Show, % "x-32768 w" this.m_iDlgW " h430", Welcome to Windows Master
-		CenterWndOnOwner(this.m_hDlg, this.m_hOwner)
+		CenterWndOnParent(this.m_hDlg, this.m_hOwner)
 
 		return
 	}

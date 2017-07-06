@@ -86,6 +86,7 @@ if (!A_IsCompiled)
 
 ; If the Leap Module is used, then an option is added to the tray menu. That is why InitEverything is called here.
 InitEverything()
+InitWC() ; TODO: Better
 
 SetStartsWithWindowsTrayIcon()
 
@@ -100,6 +101,8 @@ gosub LaunchMainDlg
 #Include %A_ScriptDir%\WM_Dlg.ahk
 #Include %A_ScriptDir%\CLeapMenu.ahk
 #Include %A_ScriptDir%\AutoLeap\AutoLeap.ahk
+#Include %A_ScriptDir%\Window Control.ahk
+; #Include %A_ScriptDir%\Control Control.ahk TODO: Combine with Window ControlR
 
 return ; End autoexecute
 
@@ -323,6 +326,7 @@ InitMonInfo()
 	g_DictMonInfo.Insert("PrimaryMonRight", iPrimaryMonRight)
 	g_DictMonInfo.Insert("PrimaryMonTop", iPrimaryMonTop)
 	g_DictMonInfo.Insert("PrimaryMonBottom", iPrimaryMonBottom)
+	g_DictMonInfo.Insert("PrimaryMonH", abs(iPrimaryMonTop-iPrimaryMonBottom))
 
 	;~ st :="
 	;~ (LTrim
@@ -406,6 +410,9 @@ InitMonInfo()
 		g_aMapOrganizedMonToSysMonNdx.Insert(aDictMonInfo[iBottomLeftMon]["Ndx"])
 		g_DictMonInfo.Insert(ObjClone(aDictMonInfo[iBottomLeftMon]))
 
+		;~ Msgbox % st_concat("`n", A_Index, iBottomLeftMon, aDictMonInfo[iBottomLeftMon].Left, aDictMonInfo[iBottomLeftMon].W
+			;~ , aDictMonInfo[iBottomLeftMon].Top, aDictMonInfo[iBottomLeftMon].Bottom, aDictMonInfo[iBottomLeftMon].H)
+
 		; Until I can figure out a better way to do this, set coordinates
 		; to blank so that we won't return the same monitor.
 		; Not the most efficient method, but this algorithm is confusing.
@@ -425,13 +432,13 @@ GetBottomLeftMon(aDictMonInfo)
 {
 	a:= []
 	Loop % aDictMonInfo.MaxIndex()
-		a.Insert(aDictMonInfo[A_Index]["Bottom"])
+		a.Insert(aDictMonInfo[A_Index]["Bottom"] + aDictMonInfo[A_Index]["Top"])
 
 	; Find bottom monitors first...
 	iBottom := max(a*) ; As monitors get lower, their bottoms increase *snickers*
 	Loop % aDictMonInfo.MaxIndex()
 	{
-		if (aDictMonInfo[A_Index]["Bottom"] == iBottom)
+		if (aDictMonInfo[A_Index]["Bottom"] + aDictMonInfo[A_Index]["Top"] == iBottom)
 			sBottomList .= sBottomList == A_Blank ? A_Index : "|" A_Index
 	}
 
@@ -447,7 +454,7 @@ GetBottomLeftMon(aDictMonInfo)
 	{
 		; Assume that there is only one leftmost monitor in the list of bottom monitors
 		;~ Msgbox % "A_Index:`t" A_Index "`nNum:`t" A_LoopField "`nLeft:`t" aDictMonInfo[A_LoopField]["MonLeft"] "`nBottom:`t" aDictMonInfo[A_LoopField]["MonBottom"] "`nTargetLeft:`t" iLeft "`nTargetBottom:`t" iBottom
-		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] == iBottom)
+		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] +  aDictMonInfo[A_LoopField]["Top"] == iBottom)
 			return A_LoopField
 	}
 	return 0
@@ -2080,7 +2087,7 @@ CreateAndShowImportDlg()
 
 	WinSet, Disable,, ahk_id %g_hWindowsMaster%
 	GUI, Show, x-32768 AutoSize
-	CenterWndOnOwner(g_hXMLImportDlg, g_hWindowsMaster)
+	CenterWndOnParent(g_hXMLImportDlg, g_hWindowsMaster)
 
 	return
 
@@ -4207,17 +4214,22 @@ Leap_MoveWindow(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 	g_vLeap.GetPalmDelta(rLeapData, iPalmXDelta, iPalmYDelta)
 	iPalmXDelta *= -1 ; Movement should be reversed, in this particular case.
 
-	WinGetPos, iCurX, iCurY,,, ahk_id %hWnd%
-
 	; TODO: When skeletal tracking becomes available, we may be able to enable this or something like it.
 	;~ bMoveAlongXOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger8"))
 	;~ bMoveAlongYOnly := (rLeapData.HasKey("Hand2") && rLeapData.HasKey("Finger7") && !rLeapData.HasKey("Finger8"))
+
+	WinGetPos, iCurX, iCurY,,, ahk_id %hWnd%
 
 	; Strip out noise from humanity's generable inability to stabilize their palms.
 	if (abs(iPalmXDelta) > 0.35)
 		iNewX := iCurX + (iPalmXDelta*(iVelocityXFactor+iMonXFactor))
 	if (abs(iPalmYDelta) > 0.35)
 		iNewY := iCurY + (iPalmYDelta*(iVelocityYFactor+iMonYFactor))
+
+	if (iNewX)
+		iNewX := Round(iNewX, 0)
+	if (iNewY)
+		iNewY := Round(iNewY, 0)
 
 	bKeepOnMon := (iVelocityX < 500 && iVelocityY < 500)
 	WndMove(iNewX, iNewY, "", "", hWnd, bKeepOnMon, false)
@@ -4507,9 +4519,9 @@ Leap_Scroll(ByRef rLeapData, ByRef rasGestures, hWnd="A")
 
 	ControlGetFocus, ActiveControl, A
 	Loop %iScrollXs%
-		SendMessage, WM_HSCROLL, %SB_LR%, 0, %ActiveControl%, A
+		PostMessage, WM_HSCROLL, %SB_LR%, 0, %ActiveControl%, A
 	Loop %iScrollYs%
-		SendMessage, WM_VSCROLL, %SB_UD%, 0, %ActiveControl%, A
+		PostMessage, WM_VSCROLL, %SB_UD%, 0, %ActiveControl%, A
 
 	return
 }
@@ -5197,6 +5209,13 @@ SnapWnd(sDir, hWnd="A")
 		WinRestore ; TODO: Toggle it without moving?
 	WinGetPos, iX, iY, iW, iH, ahk_id %hWndToSnap%
 
+	WinGetClass, sClass, ahk_id %hWndToSnap%
+	if (IsWin10() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		iW -= 14
+		iH -= 7
+	}
+
 	iXRight := 100 - ((iW * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)].W))
 	iYBottom := 100 - ((iH * 100) / (g_DictMonInfo[GetMonitorFromWindow(hWndToSnap)].H))
 
@@ -5214,6 +5233,8 @@ SnapWnd(sDir, hWnd="A")
 		GetDimFromPct(iXRight * 0.5, 0, 0, 0, iX, iY, i, i, hWndToSnap)
 	else if (sDir = "Center")
 		GetDimFromPct(iXRight * 0.5, iYBottom * 0.5, 0, 0, iX, iY, i, i, hWndToSnap)
+	else if (sDir = "Center_Parent")
+		GetDimsToCenterWndOnParent(iX, iY, i, hWndToSnap)
 	else if (sDir = "CornerLeft")
 		GetDimFromPct(0, 0, 0, 0, iX, i, i, i, hWndToSnap)
 	else if (sDir = "CornerRight")
@@ -5311,6 +5332,48 @@ ToggleWindowBorder(hWnd="A")
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
+	Function: WndHasBorder
+		Purpose:
+	Parameters
+		
+*/
+WndHasBorder(hWnd="A")
+{
+	MakeValidHwnd(hWnd)
+
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (InStr(sClass, "HwndWrapper[DefaultDomain;;"))
+		return false ; Visual studio technically has a border but scales fine in Windows 10.
+
+	iMinMaxState := GetMinMaxState(hWnd)
+	WinGet Style, Style, ahk_id %hWnd%
+	;~ Tooltip % st_concat("`n", hWnd, iMinMaxState, Style)
+
+	if (Style & 0xC40000)
+		return true
+	return false
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: VivaldiIsActive
+		Purpose: Vivaldi appears to be Chrome, to window spys.
+			This function is used to distinguish between Chrome and Vivaldi windows.
+	Parameters
+		
+*/
+VivaldiIsActive()
+{
+	WinGet, sActiveProcess, ProcessName, A
+	return (sActiveProcess = "vivaldi.exe")
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
 	Function: WndMove
 		Purpose: To move window is an intelligent fashion as outlined by bAllowCrossover and bSmartMove.
 	Parameters
@@ -5335,6 +5398,16 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	iMon := GetMonitorFromWindow(hWnd)
 	WinGetPos, iCurX, iCurY, iCurW, iCurH, ahk_id %hWnd%
 
+	Msgbox % "TODO: Fix Leap_MoveWnd from this point"
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		iCurX -= 7
+		;~ iCurW += 14
+		iCurY += 7
+		;~ iCurH += 14
+	}
+
 	if (iX == A_Blank)
 		iX := iCurX
 	if (iY == A_Blank)
@@ -5344,54 +5417,107 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	if (iH == A_Blank)
 		iH := iCurH
 
-	if (bSmartMove)
+	vMonInfo := ObjClone(g_DictMonInfo[iMon])
+	vRightmostMonInfo := ObjClone(g_DictMonInfo[g_DictMonInfo.MaxIndex()])
+	bRestoreXY := false
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
 	{
-		if (iX < g_DictMonInfo[iMon].Left)
-			iX := g_DictMonInfo[iMon].Left
-		if (iY < g_DictMonInfo[iMon].Top)
-			iY := g_DictMonInfo[iMon].Top
-
-		if (iX > g_DictMonInfo[iMon].Left && iX+iW > g_DictMonInfo[iMon].Right)
-			iX := g_DictMonInfo[iMon].Right-iW
-		if (iY > g_DictMonInfo[iMon].Top && iY+iH > g_DictMonInfo[iMon].Bottom)
-			iY := g_DictMonInfo[iMon].Bottom-iY
+		bRestoreXY := true
+		if (iX != iCurX)
+			iX -= 7
+		;~ if (iW != iCurW)
+			;~ iW += 14
+		if (iY != iCurY)
+			iY += 7
+		vMonInfo.Left -= 14
+		vMonInfo.W += 14
+		vMonInfo.Top += 7
+		vMonInfo.Bottom += 14
+		vRightmostMonInfo.Left -= 14
+		;~ vRightmostMonInfo.W += 14
+		vRightmostMonInfo.Top += 7
+		vRightmostMonInfo.Bottom += 14
 	}
 
-	if (iX + iW > g_DictMonInfo[g_DictMonInfo.MaxIndex()].Right) ; we are trying to move the right corner of the wnd past the rightmost corner of the rightmost monitor.
-		iX := g_DictMonInfo[iMon].Right-iW
-	else if (iX < g_DictMonInfo.1.Left) ; we are trying to move the left corner of the wnd past the leftmost corner of the leftmost monitor.
-		iX := g_DictMonInfo[iMon].Left
+	if (bSmartMove)
+	{
+		if (iX < vMonInfo.Left)
+			iX := vMonInfo.Left
+		if (iY < vMonInfo.Top)
+			iY := vMonInfo.Top
 
+		if (iX > vMonInfo.Left && iX+iW > vMonInfo.W)
+			iX := vMonInfo.W-iW
+		if (iY > vMonInfo.Top && iY+iH > vMonInfo.Bottom)
+			iY := vMonInfo.Bottom-iY
+	}
+
+	;~ Tooltip % st_concat("`n", "iX:`t" iX, "iW:`t" iW, "MonW:`t" vRightmostMonInfo.W, iX + iW > vRightmostMonInfo.W)
+	if (iX + iW > vRightmostMonInfo.W) ; we are trying to move the right corner of the wnd past the rightmost corner of the rightmost monitor.
+	{
+		iX := vRightmostMonInfo.W-iW
+	}
+	else if (iX < g_DictMonInfo.1.Left) ; we are trying to move the left corner of the wnd past the leftmost corner of the leftmost monitor.
+		iX := vMonInfo.Left
+
+	;~ Tooltip % st_concat("`n", "iY:`t" iY, "iH:`t" iH
+		;~ , "MonTop:`t" g_DictMonInfo.1.Top
+		;~ , "MonBottom:`t" g_DictMonInfo.1.Bottom
+		;~ , "MonH:`t" g_DictMonInfo.1.H
+		;~ , "PrimaryMonTop:`t" g_DictMonInfo["PrimaryMonTop"]
+		;~ , "PrimaryMonBottom:`t" g_DictMonInfo["PrimaryMonBottom"]
+		;~ , "PrimaryMonH:`t" g_DictMonInfo["PrimaryMonH"]
+		;~ , abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"])
+		;~ , iY < abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"]))
 	if (iY + iH > g_DictMonInfo.1.Bottom) ; we are trying to move the bottom past the bottom-most monitor
-		iY := g_DictMonInfo[iMon].Bottom-iH
-	else if (iY < g_DictMonInfo[g_DictMonInfo.MaxIndex()].Top) ; we are trying to move the top past the top-most monitor
-		iY := g_DictMonInfo[iMon].Top
+		iY := vMonInfo.Bottom-iH
+	else if (iY < abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"])) ; we are trying to move the top past the top-most monitor
+		iY := vMonInfo.Top
 
 	if (bKeepOnMon)
 	{
+		;~ Tooltip % st_concat("`n", iX, iCurX, iW, iCurW, vMonInfo.W, vMonInfo.Left, "`r`nConditions`r`n`r`n" (abs(iX-vMonInfo.Left)), (iCurX + iCurW <= vMonInfo.W))
+		;~ Tooltip % st_concat("`n", iX, iCurX, vMonInfo.Left, "Conditions`r`n`r`n" (iCurX >= vMonInfo.Left), (iX < vMonInfo.Left))
+
 		; Handle iX and iW.
-		if ((iX + iW > g_DictMonInfo[iMon].Right) ; we are trying to move the window past the right corner.
-			&& (iCurX + iCurW <= g_DictMonInfo[iMon].Right)) ; the right corner of the wnd is not already past the monitor's right corner.
+		if ((abs(iX-vMonInfo.Left) + iW > vMonInfo.W) ; we are trying to move the window past the right corner.
+			&& (abs(iCurX-vMonInfo.Left) + iCurW <= vMonInfo.W)) ; the right corner of the wnd is not already past the monitor's right corner.
 		{
-			iX := g_DictMonInfo[iMon].Right-iW
+			iX := vMonInfo.W-iW+vMonInfo.Left
 		}
-		else if ((iCurX >= g_DictMonInfo[iMon].Left) ; the left corner of the wnd is not already past the monitor's left corner.
-			&& (iX < g_DictMonInfo[iMon].Left)) ; we are trying to move the window past the left corner.
+		else if ((iCurX >= vMonInfo.Left) ; the left corner of the wnd is not already past the monitor's left corner.
+			&& (iX < vMonInfo.Left)) ; we are trying to move the window past the left corner.
 		{
-			iX := g_DictMonInfo[iMon].Left
+			iX := vMonInfo.Left
 		}
 
+		;~ Tooltip % st_concat("`n", iY, iCurY, abs(iY-vMonInfo.Top), vMonInfo.Top, vMonInfo.H
+			;~ , "Conditions`r`n`r`n" (abs(iY-vMonInfo.Top) + iH > vMonInfo.H)
+			;~ , (abs(iCurY-vMonInfo.Top) + iCurH <= vMonInfo.H))
+
 		; Handle iY and iH.
-		if ((iCurY >= g_DictMonInfo[iMon].Top) ; the top of the wnd is not already past the monitor's top corner.
-			&& (iY < g_DictMonInfo[iMon].Top)) ; we are trying to move the window past the top of the wnd.
+		if ((abs(iY-vMonInfo.Top) + iH > vMonInfo.H) ; we are trying to move the window past the bottom.
+			&& (abs(iCurY-vMonInfo.Top) + iCurH <= vMonInfo.H)) ; the bottom of the wnd is not already past the monitor's bottom.
 		{
-			iY := g_DictMonInfo[iMon].Top
+			iY := vMonInfo.H-iH+vMonInfo.Top
 		}
-		else if ((iCurY + iCurH <= g_DictMonInfo[iMon].Bottom) ; the bottom corner of the wnd is not already past the monitor's bottom corner.
-			&& (iY + iH > g_DictMonInfo[iMon].Bottom)) ; we are trying to move the window past the bottom of the wnd.
+		else if ((iCurY >= vMonInfo.Top) ; the top of the wnd is not already past the monitor's top.
+			&& (iY < vMonInfo.Top)) ; we are trying to move the window past the top.
 		{
-			iY := g_DictMonInfo[iMon].Bottom-iH
+			iY := vMonInfo.Top
 		}
+
+		;~ ; Handle iY and iH.
+		;~ if ((abs(iCurY-vMonInfo.Top) >= vMonInfo.Top) ; the top of the wnd is not already past the monitor's top corner.
+			;~ && (abs(iY-vMonInfo.Top) < vMonInfo.Top)) ; we are trying to move the window past the top of the wnd.
+		;~ {
+			;~ iY := vMonInfo.Top
+		;~ }
+		;~ else if ((abs(iCurY-vMonInfo.Top)+ iCurH <= vMonInfo.Bottom) ; the bottom corner of the wnd is not already past the monitor's bottom corner.
+			;~ && (abs(iY-vMonInfo.Top) + iH > vMonInfo.Bottom)) ; we are trying to move the window past the bottom of the wnd.
+		;~ {
+			;~ iY := vMonInfo.Bottom-iH
+		;~ }
 	}
 
 	if (bSmartMove)
@@ -5404,6 +5530,13 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 
 	; TODO: Special handling for windows that span more than one monitor.
 
+	if (bRestoreXY)
+	{
+		iX += 7
+		iY -= 7
+		;~ iW -= 14
+	}
+
 	if (bMove)
 		WinMove, ahk_id %hWnd%,, iX, iY, iW, iH
 
@@ -5414,15 +5547,57 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 /*
 	Author: Verdlin
-	Function: CenterWndOnOwner
+	Function: GetDimsToCenterWndOnParent
+		Purpose: Get dimensions to snap window to center of owner
+	Parameters
+		
+*/
+GetDimsToCenterWndOnParent(ByRef riX, ByRef riY, iMon="", hWnd = "A")
+{
+	global g_DictMonInfo
+
+	MakeValidHwnd(hWnd)
+	WinGetPos,,, iW, iH, ahk_id %hWnd%
+
+	hParent := DllCall("GetParent", UInt, hWnd)
+	hParent := (!hParent ? hWnd : hParent)
+
+	WinGetPos, iParentX, iParentY, iParentW, iParentH, ahk_id %hParent%
+	if (hParent == hWnd || iParentX == A_Blank)
+	{
+		if (!iMon)
+			iMon := GetMonitorFromWindow(hWnd)
+
+		iParentX := g_DictMonInfo[iMon]["Left"]
+		iParentY := g_DictMonInfo[iMon]["Top"]
+		iParentW := g_DictMonInfo[iMon]["W"]
+		iParentH := g_DictMonInfo[iMon]["H"]
+	}
+
+	iXPct := (100 - ((iW * 100) / (iParentW)))*0.5
+	iYPct := (100 - ((iH * 100) / (iParentH)))*0.5
+
+	riX := Round((iXPct / 100) * iParentW + iParentX)
+	riY := Round((iYPct / 100) * iParentH + iParentY)
+
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: CenterWndOnParent
 		Purpose:
 	Parameters
 		hWnd: Window to center.
 		hOwner=0: Owner of hWnd with which to center hWnd upon. If 0 or WinGetPos fails,
 			window is centered on primary monitor.
 */
-CenterWndOnOwner(hWnd, hOwner=0)
+CenterWndOnParent(hWnd, hOwner=0)
 {
+	MakeValidHwnd(hWnd)
 	WinGetPos,,, iW, iH, ahk_id %hWnd%
 
 	WinGetPos, iOwnerX, iOwnerY, iOwnerW, iOwnerH, ahk_id %hOwner%
@@ -5652,6 +5827,11 @@ SnapToCenter:
 	SnapWnd("Center")
 	return
 }
+SnapToCenterOfParentWindow:
+{
+	SnapWnd("Center_Parent")
+	return
+}
 SnapToCornerBottom:
 {
 	SnapWnd("CornerBottom")
@@ -5758,17 +5938,18 @@ NextTrack:
 
 	WinGetClass, sBeatportClass, Beatport Pro
 	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
 	{
-		WinActivate
+		WinActivate, %sChromeTitle%
 		Sleep 100
 		Send, `]
+		Sleep 50
 		WinActivate, ahk_id %hActiveWnd%
 		return
 	}
 	else if (InStr(sBeatportClass, "Beatport"))
 	{
-		WinActivate
+		WinActivate, ahk_class %sBeatportClass%
 		Send, {Right}
 		WinActivate, ahk_id %hActiveWnd%
 		return
@@ -5784,17 +5965,18 @@ PreviousTrack:
 
 	WinGetClass, sBeatportClass, Beatport Pro
 	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
 	{
-		WinActivate
+		WinActivate, %sChromeTitle%
 		Sleep 100
 		Send, `[
+		Sleep 50
 		WinActivate, ahk_id %hActiveWnd%
 		return
 	}
 	else if (InStr(sBeatportClass, "Beatport"))
 	{
-		WinActivate
+		WinActivate, ahk_class %sBeatportClass%
 		Send, {Left}
 		WinActivate, ahk_id %hActiveWnd%
 		return
@@ -5808,19 +5990,20 @@ PlayOrPauseTrack:
 	hActiveWnd := WinExist("A")
 	SetTitleMatchMode, 2
 
-	WinGetClass, sBeatportClass, Beatport Pro
+	WinGetClass, sBeatportClass, Beatport Pro  
 	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") or InStr(sChromeTitle, ("Beatport Chart")) or InStr(sChromeTitle, "Beatport.com"))
+	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
 	{
-		WinActivate
+		WinActivate, %sChromeTitle%
 		Sleep 100
 		Send, {Space}
+		Sleep 50
 		WinActivate, ahk_id %hActiveWnd%
 		return
 	}
 	else if (InStr(sBeatportClass, "Beatport"))
 	{
-		WinActivate
+		WinActivate, ahk_class %sBeatportClass%
 		Send, {Space}
 		WinActivate, ahk_id %hActiveWnd%
 		return
@@ -5976,6 +6159,17 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	iDestMonW := g_DictMonInfo[iMonToMoveTo]["W"]
 	iDestMonH := g_DictMonInfo[iMonToMoveTo]["H"]
 
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		;~ iX -= 7
+		;~ iW -= 14
+		iMonX-= 7
+		iMonW-= 14
+		iDestMonX -=7
+		iDestMonW -=14
+	}
+
 	; Use resolution difference to scale X and Y
 	iX := iDestMonX + (iX-iMonX) * (iDestMonW/iMonW)
 	iY := iDestMonY + (iY-iMonY) * (iDestMonH/iMonH)
@@ -5989,6 +6183,13 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 		; TODO: Scale W and H, somehow?
 		iNewW := iW
 		iNewH := iH
+	}
+
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		;~ iNewW -= 14
+		;~ iNewH -= 7
 	}
 
 	WinMove, ahk_id %hWnd%,, iX, iY, iNewW, iNewH
@@ -6008,6 +6209,13 @@ GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A", iMon = "")
 
 	iMonW := g_DictMonInfo[iMon]["W"]
 	iMonH := g_DictMonInfo[iMon]["H"]
+
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		iW -= 14
+		iH -= 7
+	}
 
 	riWPct := Round((iW * 100) / iMonW, 2)
 	riHPct := Round((iH * 100) / iMonH, 2)
@@ -6033,6 +6241,14 @@ GetDimFromPct(iXPct, iYPct, iWPct, iHPct, ByRef riX, ByRef riY, ByRef riW, ByRef
 	riY := Round((iYPct / 100) * iMonH + iMonY)
 	riW := Round((iWPct / 100) * iMonW)
 	riH := Round((iHPct / 100) * iMonH)
+
+	WinGetClass, sClass, ahk_id %hWnd%
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	{
+		riX -= 7
+		riW += 14
+		riH += 7
+	}
 
 	return
 }
@@ -6290,6 +6506,10 @@ VolumeOSD_Adj(EVolumeType, iHowMuch)
 		SoundSet -%iHowMuch%
 	else if (EVolumeType == EVolumeType_Mute)
 		Send {Volume_Mute}
+
+	; Only use OSD in earlier versions of Windows.
+	if (IsWin10() || SubStr(A_OSVersion, 1, 2) == "8")
+		return
 
 	SoundGet, Volume
 	Progress Show,, % (EVolumeType == EVolumeType_Mute ? "X" : "")
@@ -6778,7 +6998,7 @@ GetDefaultHotkeysIni()
 
 			[Quick Menu]
 			Activate=true
-			Hotkey=Win + A
+			Hotkey=Win + U
 			Type=Settings
 			GestureName=Launch Quick Menu
 			HelpDesc=Activates a menu which provides shortcuts for the most useful window actions.
@@ -6854,6 +7074,13 @@ GetDefaultHotkeysIni()
 			GestureName=Snap to Center
 			HelpDesc=Snaps window to the center of the monitor.
 
+			[Snap to Center of Parent Window]
+			Activate=true
+			Hotkey=Win + Alt + C
+			Type=Snap
+			GestureName=Snap to Center of Parent Window
+			HelpDesc=Snaps window to the center of the parent window. If the window has no parent, it's snapped to the center of the monitor.
+
 			[Snap to Corner Bottom]
 			Activate=true
 			Hotkey=Win + Ctrl + Alt + Down
@@ -6884,14 +7111,14 @@ GetDefaultHotkeysIni()
 
 			[Snap to Top Left]
 			Activate=true
-			Hotkey=Win + Ctrl + Left
+			Hotkey=Win + Alt+ Left
 			Type=Snap
 			GestureName=Snap to Top Left
 			HelpDesc=Snaps window to the top left corner of the monitor.
 
 			[Snap to Top Right]
 			Activate=true
-			Hotkey=Win + Ctrl + Right
+			Hotkey=Win + Alt+ Right
 			Type=Snap
 			GestureName=Snap to Top Right
 			HelpDesc=Snaps window to the top right corner of the monitor.
@@ -7579,7 +7806,7 @@ Splash()
 	Gdip_DrawImage(G, pBitmap, 0, 0, Width, Height, 0, 0, Width, Height)
 	; Update the specified window we have created (hSplash) with a handle to our bitmap (hdc)
 	UpdateLayeredWindow(hSplash, hdc, 0, 0, Width, Height)
-	CenterWndOnOwner(hSplash)
+	CenterWndOnParent(hSplash)
 
 	; Select the object back into the hdc
 	SelectObject(hdc, obm)
