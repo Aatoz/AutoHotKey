@@ -1,5 +1,3 @@
-; BIG TODO: Allow GUI style settings to be specified through __New because the constructor is just ridiculous
-
 class CFlyout
 {
 	/*
@@ -258,6 +256,30 @@ class CFlyout
 	Click(iClickY)
 	{
 		ControlClick,, % "ahk_id " this.m_hListBox,,,, y%iClickY%
+		return
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
+		Function: GetRowPosForClick
+			Purpose: For external scripts to simulate clicks from a position.
+		Parameters
+			iClickY
+	*/
+	GetRowPosForClick(iClickY)
+	{
+		iLoop := (this.m_asItems.MaxIndex() < this.m_iMaxRows ? this.m_asItems.MaxIndex() : this.m_iMaxRows)
+		Loop %iLoop% ; the flyout should never be larger than the height of this.m_iMaxRows
+		{
+			iTop := iBottom ? iBottom : 0
+			iBottom += this.m_vTLB.ItemHeight
+
+			if (iClickY < iBottom && iClickY >= iY)
+				return A_Index
+		}
+
 		return
 	}
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -632,8 +654,11 @@ class CFlyout
 			iFlyoutNum := A_Index
 			break
 		}
+
 		this.m_iFlyoutNum := iFlyoutNum
-		GUI, GUI_Flyout%iFlyoutNum%: New, +Hwndg_hFlyout, GUI_Flyout%iFlyoutNum%
+		if (this.m_sTitle == "")
+			this.m_sTitle := "GUI_Flyout" + this.m_iFlyoutNum
+		GUI, GUI_Flyout%iFlyoutNum%: New, +Hwndg_hFlyout, % this.m_sTitle
 		this.m_hFlyout := g_hFlyout
 		CFlyout.FromHwnd[g_hFlyout] := &this ; for OnMessage handlers.
 
@@ -800,6 +825,8 @@ class CFlyout
 			return this.GetCurSel()
 		if (aName = "m_iCurSel")
 			return this.GetCurSelNdx()
+		if (aName = "m_bExists")
+			return this.Exists()
 
 		return
 	}
@@ -818,7 +845,8 @@ class CFlyout
 		, FollowMouse: "bFollowMouse", DrawBelowAnchor: "bDrawBelowAnchor", ShowOnCreate: "bShowOnCreate"
 		, ExitOnEsc: "bExitOnEsc", ReadOnly: "bReadOnly", ShowInTaskbar: "bShowInTaskbar"
 		, AlwaysOnTop: "bAlwaysOnTop", Parent: "hParent", Background: "sBackground"
-		, Font: "sFont", Highlight: "sHighlightColor", Separator: "sSeparator", ShowBorder: "bShowBorder"}
+		, Font: "sFont", Highlight: "sHighlightColor", Separator: "sSeparator", ShowBorder: "bShowBorder"
+		, Title: "sTitle"}
 
 		for iParm, sParm in aParms
 		{
@@ -897,7 +925,6 @@ class CFlyout
 
 				; Dynamically set key/val pair!
 				this["m_" sClassKey] := sVal
-				
 			}
 		}
 
@@ -934,8 +961,8 @@ class CFlyout
 				this.m_iW := val
 			else if (key = "AutoSizeW")
 				this.m_bAutoSizeW := (val == true || val = "true")
-			;~ else if (key = "H")
-				;~ this.m_iH := val
+			else if (key = "Title")
+				this.m_sTitle := val
 			else if (key = "MaxRows")
 				this.m_iMaxRows := val
 			else if (key = "AnchorAt")
@@ -1079,6 +1106,21 @@ class CFlyout
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	/*
 		Author: Verdlin
+		Function: Exists
+			Purpose: Returns true if the win exists. Used by callers to keep their code stationary while the flyout exists.
+				Common use case: Flyout as dialog, while (vFlyout.Exists()) continue; then destory flyout.
+		Parameters
+			
+	*/
+	Exists()
+	{
+		return WinExist("ahk_id" this.m_hFlyout)
+	}
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	/*
+		Author: Verdlin
 		Function: AddLine
 			Purpose: To add a separator line
 		Parameters
@@ -1152,6 +1194,7 @@ class CFlyout
 				W=400
 				AutoSizeW=false
 				ShowBorder=true
+				Title=
 			)"
 	}
 
@@ -1232,7 +1275,6 @@ class CFlyout
 
 		; Control IDs
 		m_vLB :=
-		m_vSelector :=
 
 		m_iFlyoutNum := ; Needed to multiple CFlyouts
 		m_asItems := [] ; Formatted for Text control display purposes
@@ -1257,7 +1299,7 @@ CFlyout_OnMessage(wParam, lParam, msg, hWnd)
 	vFlyout := Object(CFlyout.FromHwnd[hFlyout])
 
 	if (this.m_bHandleClick && msg == WM_LBUTTONDOWN:=513)
-	{ 
+	{
 		CoordMode, Mouse, Relative
 		MouseGetPos,, iClickY
 		vFlyout.Click(iClickY)
