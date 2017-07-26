@@ -109,7 +109,7 @@ Alt_And_LButton:
 				g_bUseYThreshold := true
 
 			WinGetClass, sClass, ahk_id %hWnd%
-			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 			{
 				if (!bIgnoreX)
 				{
@@ -278,7 +278,7 @@ Alt_And_RButton:
 				g_bUseHThreshold := true
 
 			WinGetClass, sClass, ahk_id %hWnd%
-			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 			{
 				if (!bIgnoreW)
 				{

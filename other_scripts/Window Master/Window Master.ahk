@@ -398,7 +398,12 @@ InitMonInfo()
 		;~ aDictMonInfo.Insert(DictMonInfo)
 	}
 
-	Loop % aDictMonInfo.MaxIndex()
+	;~ Msgbox % st_concat("`n"
+	;~ ,	"----------Mon1----------`r`Top:`t" aDictMonInfo.1.Top, "Bottom:`t" aDictMonInfo.1.Bottom, "H:`t" aDictMonInfo.1.H, "Left:`t" aDictMonInfo.1.Left
+	;~ ,	"----------Mon2----------`r`nTop:`t" aDictMonInfo.2.Top, "Bottom:`t" aDictMonInfo.2.Bottom, "H:`t" aDictMonInfo.2.H, "Left:`t" aDictMonInfo.2.Left)
+
+	aDictMonInfoCopy := ObjClone(aDictMonInfo)
+	Loop % aDictMonInfoCopy.MaxIndex()
 	{
 		iBottomLeftMon := GetBottomLeftMon(aDictMonInfo)
 		if (iBottomLeftMon == 0)
@@ -416,8 +421,9 @@ InitMonInfo()
 		; Until I can figure out a better way to do this, set coordinates
 		; to blank so that we won't return the same monitor.
 		; Not the most efficient method, but this algorithm is confusing.
-		aDictMonInfo[iBottomLeftMon]["Left"] := ""
-		aDictMonInfo[iBottomLeftMon]["Bottom"] := ""
+		;~ aDictMonInfo[iBottomLeftMon]["Left"] := ""
+		;~ aDictMonInfo[iBottomLeftMon]["Bottom"] := ""
+		aDictMonInfo.Remove(A_Index)
 	}
 
 	;~ Loop % g_aMapOrganizedMonToSysMonNdx.MaxIndex()
@@ -432,13 +438,46 @@ GetBottomLeftMon(aDictMonInfo)
 {
 	a:= []
 	Loop % aDictMonInfo.MaxIndex()
-		a.Insert(aDictMonInfo[A_Index]["Bottom"] + aDictMonInfo[A_Index]["Top"])
+		a.Insert(aDictMonInfo[A_Index]["Left"])
+
+	; Find leftmost monitors first...
+	iLeft := min(a*)
+	Loop % aDictMonInfo.MaxIndex()
+	{
+		if (aDictMonInfo[A_Index]["Left"] == iLeft)
+			sLeftList .= (sLeftList == "" ? A_Index : "|" A_Index)
+	}
+
+	; and, of those left monitors, the bottommost monitor
+	a := []
+	Loop, Parse, sLeftList, |
+		a.Insert(aDictMonInfo[A_LoopField]["Bottom"] - aDictMonInfo[A_LoopField]["Top"])
+	iBottom := max(a*) ; As monitors get lower, their bottoms increase *snickers*
+
+	;~ Msgbox % st_concat("`n", sLeftList, iBottom, iLeft)
+
+	Loop, Parse, sLeftList, |
+	{
+		; Assume that there is only one leftmost monitor in the list of bottom monitors
+		;~ Msgbox % "A_Index:`t" A_Index "`nNum:`t" A_LoopField "`nLeft:`t" aDictMonInfo[A_LoopField]["MonLeft"] "`nBottom:`t" aDictMonInfo[A_LoopField]["MonBottom"] "`nTargetLeft:`t" iLeft "`nTargetBottom:`t" iBottom
+		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] -  aDictMonInfo[A_LoopField]["Top"] == iBottom)
+			return A_LoopField
+	}
+	return 0
+}
+
+1GetBottomLeftMon(aDictMonInfo)
+{
+	a:= []
+	Loop % aDictMonInfo.MaxIndex()
+		a.Insert(aDictMonInfo[A_Index]["Bottom"] - aDictMonInfo[A_Index]["Top"])
 
 	; Find bottom monitors first...
 	iBottom := max(a*) ; As monitors get lower, their bottoms increase *snickers*
 	Loop % aDictMonInfo.MaxIndex()
 	{
-		if (aDictMonInfo[A_Index]["Bottom"] + aDictMonInfo[A_Index]["Top"] == iBottom)
+		;~ Msgbox % st_concat("`n", aDictMonInfo[A_Index]["Bottom"], aDictMonInfo[A_Index]["Top"], iBottom)
+		if (aDictMonInfo[A_Index]["Bottom"] - aDictMonInfo[A_Index]["Top"] == iBottom)
 			sBottomList .= sBottomList == A_Blank ? A_Index : "|" A_Index
 	}
 
@@ -448,13 +487,13 @@ GetBottomLeftMon(aDictMonInfo)
 		a.Insert(aDictMonInfo[A_LoopField]["Left"])
 	iLeft := min(a*)
 
-	;~ Msgbox %sBottomList%`n%iBottom%`n%iLeft%
+	;~ Msgbox % st_concat("`n", sBottomList, iBottom, iLeft)
 
 	Loop, Parse, sBottomList, |
 	{
 		; Assume that there is only one leftmost monitor in the list of bottom monitors
 		;~ Msgbox % "A_Index:`t" A_Index "`nNum:`t" A_LoopField "`nLeft:`t" aDictMonInfo[A_LoopField]["MonLeft"] "`nBottom:`t" aDictMonInfo[A_LoopField]["MonBottom"] "`nTargetLeft:`t" iLeft "`nTargetBottom:`t" iBottom
-		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] +  aDictMonInfo[A_LoopField]["Top"] == iBottom)
+		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] -  aDictMonInfo[A_LoopField]["Top"] == iBottom)
 			return A_LoopField
 	}
 	return 0
@@ -5210,7 +5249,7 @@ SnapWnd(sDir, hWnd="A")
 	WinGetPos, iX, iY, iW, iH, ahk_id %hWndToSnap%
 
 	WinGetClass, sClass, ahk_id %hWndToSnap%
-	if (IsWin10() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		iW -= 14
 		iH -= 7
@@ -5398,9 +5437,8 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	iMon := GetMonitorFromWindow(hWnd)
 	WinGetPos, iCurX, iCurY, iCurW, iCurH, ahk_id %hWnd%
 
-	Msgbox % "TODO: Fix Leap_MoveWnd from this point"
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		iCurX -= 7
 		;~ iCurW += 14
@@ -5418,9 +5456,42 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 		iH := iCurH
 
 	vMonInfo := ObjClone(g_DictMonInfo[iMon])
-	vRightmostMonInfo := ObjClone(g_DictMonInfo[g_DictMonInfo.MaxIndex()])
+
+	; GetRightmostMon()
+	Loop % g_DictMonInfo.MaxIndex()
+	{
+		vTestMon := ObjClone(g_DictMonInfo[A_Index])
+		if (A_Index == 1 || vTestMon.W > vRightmostMonInfo.W)
+		{
+			vRightmostMonInfo := ObjClone(vTestMon)
+			continue
+		}
+	}
+
+	; GetLeftmostMon()
+	Loop % g_DictMonInfo.MaxIndex()
+	{
+		vTestMon := ObjClone(g_DictMonInfo[A_Index])
+		if (A_Index == 1 || vTestMon.Left < vLeftmostMonInfo.Left)
+		{
+			vLeftmostMonInfo := ObjClone(vTestMon)
+			continue
+		}
+	}
+
+	; GetTopmostMon()
+	Loop % g_DictMonInfo.MaxIndex()
+	{
+		vTestMon := ObjClone(g_DictMonInfo[A_Index])
+		if (A_Index == 1 || vTestMon.Top > vTopmostMonInfo.Top)
+		{
+			vTopmostMonInfo := ObjClone(vTestMon)
+			continue
+		}
+	}
+
 	bRestoreXY := false
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		bRestoreXY := true
 		if (iX != iCurX)
@@ -5433,10 +5504,15 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 		vMonInfo.W += 14
 		vMonInfo.Top += 7
 		vMonInfo.Bottom += 14
+		vMonInfo.H += 7
 		vRightmostMonInfo.Left -= 14
 		;~ vRightmostMonInfo.W += 14
 		vRightmostMonInfo.Top += 7
 		vRightmostMonInfo.Bottom += 14
+		;~ vTopmostMonInfo.Left -= 14
+		;~ vTopmostMonInfo.W += 14
+		vTopmostMonInfo.Top -= 7
+		vTopmostMonInfo.Bottom -= 14
 	}
 
 	if (bSmartMove)
@@ -5452,26 +5528,22 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 			iY := vMonInfo.Bottom-iY
 	}
 
-	;~ Tooltip % st_concat("`n", "iX:`t" iX, "iW:`t" iW, "MonW:`t" vRightmostMonInfo.W, iX + iW > vRightmostMonInfo.W)
 	if (iX + iW > vRightmostMonInfo.W) ; we are trying to move the right corner of the wnd past the rightmost corner of the rightmost monitor.
 	{
 		iX := vRightmostMonInfo.W-iW
 	}
-	else if (iX < g_DictMonInfo.1.Left) ; we are trying to move the left corner of the wnd past the leftmost corner of the leftmost monitor.
+	else if (iX < vLeftmostMonInfo.Left) ; we are trying to move the left corner of the wnd past the leftmost corner of the leftmost monitor.
 		iX := vMonInfo.Left
 
 	;~ Tooltip % st_concat("`n", "iY:`t" iY, "iH:`t" iH
-		;~ , "MonTop:`t" g_DictMonInfo.1.Top
-		;~ , "MonBottom:`t" g_DictMonInfo.1.Bottom
-		;~ , "MonH:`t" g_DictMonInfo.1.H
-		;~ , "PrimaryMonTop:`t" g_DictMonInfo["PrimaryMonTop"]
-		;~ , "PrimaryMonBottom:`t" g_DictMonInfo["PrimaryMonBottom"]
-		;~ , "PrimaryMonH:`t" g_DictMonInfo["PrimaryMonH"]
-		;~ , abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"])
-		;~ , iY < abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"]))
+		;~ , "MonTop:`t" vTopmostMonInfo.Top
+		;~ , "MonBottom:`t" vTopmostMonInfo.Bottom
+		;~ , "MonH:`t" vTopmostMonInfo.H
+		;~ , "Calc:`t" abs(iY) < abs(vTopmostMonInfo.Top - vTopmostMonInfo.Bottom)
+		;~ , abs(iY), abs(vTopmostMonInfo.Top - vTopmostMonInfo.Bottom))
 	if (iY + iH > g_DictMonInfo.1.Bottom) ; we are trying to move the bottom past the bottom-most monitor
 		iY := vMonInfo.Bottom-iH
-	else if (iY < abs(g_DictMonInfo.1.H-g_DictMonInfo["PrimaryMonH"])) ; we are trying to move the top past the top-most monitor
+	else if (abs(iY) > abs(vTopmostMonInfo.Top - vTopmostMonInfo.Bottom)) ; we are trying to move the top past the top-most monitor
 		iY := vMonInfo.Top
 
 	if (bKeepOnMon)
@@ -6160,7 +6232,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	iDestMonH := g_DictMonInfo[iMonToMoveTo]["H"]
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		;~ iX -= 7
 		;~ iW -= 14
@@ -6186,7 +6258,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	}
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		;~ iNewW -= 14
 		;~ iNewH -= 7
@@ -6211,7 +6283,7 @@ GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A", iMon = "")
 	iMonH := g_DictMonInfo[iMon]["H"]
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		iW -= 14
 		iH -= 7
@@ -6243,7 +6315,7 @@ GetDimFromPct(iXPct, iYPct, iWPct, iHPct, ByRef riX, ByRef riY, ByRef riW, ByRef
 	riH := Round((iHPct / 100) * iMonH)
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1") ; !VivaldiIsActive()
+	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
 	{
 		riX -= 7
 		riW += 14
