@@ -206,7 +206,7 @@ class AutoLeap
 		if (!FileExist("AutoLeap"))
 			FileCreateDir, AutoLeap
 
-		; v1.0
+		; v1.06
 		FileInstall, AutoLeap\Leap.ico, AutoLeap\Leap.ico, 1
 		FileInstall, AutoLeap\Exit.ico, AutoLeap\Exit.ico, 1
 		FileInstall, AutoLeap\Save.ico, AutoLeap\Save.ico, 1

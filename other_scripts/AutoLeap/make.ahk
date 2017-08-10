@@ -51,10 +51,10 @@ Loop, Parse, sFilesToInclude, `n
 }
 
 ; Copy over exes and dlls.
-aBinaries := ["M:\Documents\Visual Studio\Leap Forwarder\Release\Leap Forwarder_32.exe"
-	, "M:\Documents\Visual Studio\Leap Forwarder\Release\Leap.dll"
-	, "M:\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap Forwarder_64.exe"
-	, "M:\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap.dll"]
+aBinaries := ["M:\Data\Documents\Visual Studio\Leap Forwarder\Release\Leap Forwarder_32.exe"
+	, "M:\Data\Documents\Visual Studio\Leap Forwarder\Release\Leap.dll"
+	, "M:\Data\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap Forwarder_64.exe"
+	, "M:\Data\Documents\Visual Studio\Leap Forwarder\x64\Release\Leap.dll"]
 for i, sFullFilePath in aBinaries
 {
 	if (!FileExist(sFullFilePath))
