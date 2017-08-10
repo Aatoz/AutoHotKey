@@ -412,8 +412,16 @@ InitMonInfo()
 			return
 		}
 
-		g_aMapOrganizedMonToSysMonNdx.Insert(aDictMonInfo[iBottomLeftMon]["Ndx"])
-		g_DictMonInfo.Insert(ObjClone(aDictMonInfo[iBottomLeftMon]))
+		iTargetMonNdx := aDictMonInfo[iBottomLeftMon]["Ndx"]
+		Loop % aDictMonInfoCopy.MaxIndex()
+		{
+			if (aDictMonInfoCopy[A_Index]["Ndx"] != iTargetMonNdx)
+				continue
+
+			g_aMapOrganizedMonToSysMonNdx.Insert(aDictMonInfoCopy[A_Index]["Ndx"])
+			g_DictMonInfo.Insert(aDictMonInfoCopy[A_Index])
+		}
+		aDictMonInfo.Remove(iBottomLeftMon)
 
 		;~ Msgbox % st_concat("`n", A_Index, iBottomLeftMon, aDictMonInfo[iBottomLeftMon].Left, aDictMonInfo[iBottomLeftMon].W
 			;~ , aDictMonInfo[iBottomLeftMon].Top, aDictMonInfo[iBottomLeftMon].Bottom, aDictMonInfo[iBottomLeftMon].H)
@@ -423,7 +431,6 @@ InitMonInfo()
 		; Not the most efficient method, but this algorithm is confusing.
 		;~ aDictMonInfo[iBottomLeftMon]["Left"] := ""
 		;~ aDictMonInfo[iBottomLeftMon]["Bottom"] := ""
-		aDictMonInfo.Remove(A_Index)
 	}
 
 	;~ Loop % g_aMapOrganizedMonToSysMonNdx.MaxIndex()
@@ -459,7 +466,7 @@ GetBottomLeftMon(aDictMonInfo)
 	Loop, Parse, sLeftList, |
 	{
 		; Assume that there is only one leftmost monitor in the list of bottom monitors
-		;~ Msgbox % "A_Index:`t" A_Index "`nNum:`t" A_LoopField "`nLeft:`t" aDictMonInfo[A_LoopField]["MonLeft"] "`nBottom:`t" aDictMonInfo[A_LoopField]["MonBottom"] "`nTargetLeft:`t" iLeft "`nTargetBottom:`t" iBottom
+		;~ Msgbox % "A_Index:`t" A_Index "`nNum:`t" A_LoopField "`nLeft:`t" aDictMonInfo[A_LoopField]["Left"] "`nBottom:`t" aDictMonInfo[A_LoopField]["Bottom"] "`nTargetLeft:`t" iLeft "`nTargetBottom:`t" iBottom
 		if (aDictMonInfo[A_LoopField]["Left"] == iLeft && aDictMonInfo[A_LoopField]["Bottom"] -  aDictMonInfo[A_LoopField]["Top"] == iBottom)
 			return A_LoopField
 	}
