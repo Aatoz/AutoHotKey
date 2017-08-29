@@ -5,7 +5,9 @@ RDLaunch(sInput)
 	global g_aComputers
 	global g_aDomainNames
 	global g_aTypePrefixes
-	LoadFromServerDatabase(g_aComputers, g_aDomainNames, g_aTypePrefixes)
+
+	if (hFunc := "LoadFromServerDatabase")
+		hFunc.(g_aComputers, g_aDomainNames, g_aTypePrefixes)
 
 	; Extract Computer name from v: parameter.
 	ComputerStartPos := InStr(sInput, "v:")

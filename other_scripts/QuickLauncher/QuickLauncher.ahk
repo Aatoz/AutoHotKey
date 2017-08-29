@@ -123,7 +123,8 @@ InitGlobals()
 	global g_ConfigIni := new EasyIni("config.ini")
 	g_ConfigIni.Merge(vDefaultConfigIni)
 
-	LoadInvPaths()
+	if (hFunc := Func("LoadInvPaths"))
+		hFunc.()
 
 	return
 }
