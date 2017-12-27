@@ -1,15 +1,18 @@
-_SimpleOSD()
+_SimpleOSD(sTextColor="5C5CF0", sBgdColor="202020")
 {
-	return new SimpleOSD()
+	return new SimpleOSD(sTextColor, sBgdColor)
 }
 
 class SimpleOSD
 {
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;;;;;;;;;;;;;;
-	__New()
+	__New(sTextColor="5C5CF0", sBgdColor="202020")
 	{
 		global
+
+		this.m_sTextColor := sTextColor
+		this.m_sBgdColor := sBgdColor
 
 		; With any delay, the OSD sliding looks horrible.
 		SetWinDelay, -1
@@ -20,8 +23,9 @@ class SimpleOSD
 		GUI SimpleOSD: New, hwndg_hSimpleOSD
 		GUI, +AlwaysOnTop -Caption +Owner +LastFound +ToolWindow +E0x20
 		WinSet, Transparent, 240
-		GUI, Color, 202020
-		GUI, Font, s15 c5C5CF0 wnorm ; c0xF52C5F
+
+		GUI, Font, % "s15 wnorm c" . this.m_sTextColor ; c0xF52C5F
+		GUI, Color, % this.m_sBgdColor
 
 		GUI, Add, Text, x0 y0 hwndg_hSimpleSimpleOSD_MainOutput vg_vSimpleSimpleOSD_MainOutput Wrap Left
 		GUI, Add, Text, % "x0 y0 w" this.m_iMaxWidth " r1 vg_vSimpleSimpleOSD_PostDataOutput +Center Hidden" ; Switch out these two text controls for output
@@ -38,13 +42,16 @@ class SimpleOSD
 
 	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	;;;;;;;;;;;;;;
-	PostMsg(sMsg, iDissmissAfter=1000, hOwner="")
+	PostMsg(sMsg, iDissmissAfter=3500, hOwner="")
 	{
 		global
 		GUI, SimpleOSD:Default
 
+		; Escape ampersands.
+		StringReplace, sMsg, sMsg, &, &&, All
+
 		rect := Str_MeasureTextWrap(sMsg, this.m_iMaxWidth, this.m_hFont)
-		this.__New() ; Reset the OSD because it doesn't always stay on top, for some reason.
+		this.__New(this.m_sTextColor, this.m_sBgdColor) ; Reset the OSD because it doesn't always stay on top, for some reason.
 
 		GUIControl, Hide, g_vSimpleSimpleOSD_MainOutput
 		GUIControl, Show, g_vSimpleSimpleOSD_PostDataOutput
