@@ -190,6 +190,7 @@ Str_SurroundWithStr(s) ; May add Bool bUseClipboard
 {
 	bTargetAppActive := false
 	WinGetActiveTitle, sTitle
+	WinGetClass, sClass, A
 
 	IfWinActive, ahk_class XLMAIN
 		bTargetAppActive := true
@@ -197,6 +198,17 @@ Str_SurroundWithStr(s) ; May add Bool bUseClipboard
 		bTargetAppActive := true
 	else if (InStr(sTitle, "Microsoft Visual Studio") || InStr(sTitle, "Invest.VS2015"))
 		bTargetAppActive := true
+	else if (InStr(sTitle, "- Remote Desktop"))
+		bTargetAppActive := true
+	else if (sClass = "Chrome_WidgetWin_1" && (InStr(sTitle, "Edit Style") || InStr(sTitle, "JSFiddle"))
+		&& (s = "(" || s = """"))
+	{
+		if (s = "(" )
+			SendInput %s%)
+		else SendInput %s%`"
+		SendInput {Left}
+		return
+	}
 
 	If (bTargetAppActive)
 	{
