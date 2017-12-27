@@ -2945,3 +2945,26 @@ ControlCenterDlg_OnKeyDown(wParam, lParam, msg, hWnd)
 }
 ;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: AutoSizeAndFixWin10Bug
+		Purpose:
+	Parameters
+		
+*/
+AutoSizeAndFixWin10Bug()
+{
+	GUI, Show, x-32768 AutoSize
+
+	if (SubStr(A_OSVersion, 1, 2) == "10")
+	{
+		WinGetPos,,,, iH, A
+		GUI, Show, H%iH%
+		WinSet, Redraw,, A
+	}
+
+	return
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
