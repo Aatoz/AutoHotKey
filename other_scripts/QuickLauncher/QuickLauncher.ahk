@@ -71,6 +71,8 @@ OnDisplayChange()
 {
 	global g_hQL, g_iQLX, g_iQLY, g_iQLW, g_iQLH, g_vGUIFlyout
 
+	Sleep 5000 ; On my computer, at least, Windows take FOREVER to figure out the new display configuration.
+
 	; Reload QL globals, because the QL rect could be set by expressions,
 	; such as A_ScreenW and A_ScreenH, which have possibly just changed.
 	InitQLGlobals()
