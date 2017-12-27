@@ -34,7 +34,9 @@ FileInstall, images\Snap.ico, images\Snap.ico, 1
 FileInstall, images\Add.ico, images\Add.ico, 1
 FileInstall, images\Close.ico, images\Close.ico, 1
 FileInstall, images\Edit.ico, images\Edit.ico, 1
+FileInstall, images\Exit.ico, images\Exit.ico, 1
 FileInstall, images\Delete.ico, images\Delete.ico, 1
+FileInstall, images\Info.ico, images\info.ico, 1
 FileInstall, images\Save.ico, images\Save.ico, 1
 FileInstall, images\Refresh.ico, images\Refresh.ico, 1
 FileInstall, images\Resize.ico, images\Resize.ico, 1
@@ -91,7 +93,7 @@ InitWC() ; TODO: Better
 SetStartsWithWindowsTrayIcon()
 
 Menu, TRAY, Add, E&xit, Windows_Master_Exit
-Menu, TRAY, Icon, E&xit, AutoLeap\Exit.ico,, 16
+Menu, TRAY, Icon, E&xit, images\Exit.ico,, 16
 
 SplashOff()
 gosub LaunchMainDlg
@@ -130,7 +132,7 @@ InitEverything()
 	MakeMainDlg()
 
 	OnMessage(WM_DISPLAYCHANGE:=126, "Windows_Master_OnDisplayChange")
-	OnMessage(WM_SETTINGCHANGE:=26, "Windows_Master_OnSettingChange")
+	;~ OnMessage(WM_SETTINGCHANGE:=26, "Windows_Master_OnSettingChange")
 
 	; NOTE: If you place this call an earlier, than initial creation fails in Win8, for some strange reason.
 	VolumeOSD_Init()
@@ -152,7 +154,7 @@ InitEverything()
 */
 Windows_Master_OnDisplayChange(wParam, lParam, msg, hWnd)
 {
-	Sleep 1000 ; On my computer, at least, Windows take FOREVER to figure out the new display configuration.
+	Sleep 5000 ; On my computer, at least, Windows take FOREVER to figure out the new display configuration.
 	InitMonInfo()
 	VolumeOSD_Init()
 	return
@@ -622,7 +624,8 @@ LaunchMainDlg:
 
 		if (g_vProfilesIni[A_UserName].FirstTime)
 		{
-			g_vDlgs.IntroDlg.ShowDlg(g_hWindowsMaster, g_vLeap)
+			if (g_bHasLeap)
+				g_vDlgs.IntroDlg.ShowDlg(g_hWindowsMaster, g_vLeap)
 			g_vProfilesIni[A_UserName].FirstTime := false
 
 			; This is an internal setting, so save it now.
@@ -650,7 +653,7 @@ MakeMainDlg()
 	Menu, WM_ImportMenu, Add, &Export, WM_Menu_Export
 	Menu, WM_ImportMenu, Icon, &Export, images\Export.ico,, 16
 	Menu, WM_ImportMenu, Add, E&xit, Windows_Master_GUIClose
-	Menu, WM_ImportMenu, Icon, E&xit, AutoLeap\Exit.ico,, 16
+	Menu, WM_ImportMenu, Icon, E&xit, images\Exit.ico,, 16
 
 	Menu, WM_Menu_Settings, Add, &Revert These Settings to Defaults`tCtrl + R, Windows_Master_RevertSettingsInTab
 	Menu, WM_Menu_Settings, Icon, &Revert These Settings to Defaults`tCtrl + R, images\Revert.ico,, 16
@@ -672,9 +675,9 @@ MakeMainDlg()
 	Menu, WM_Menu_Help, Add, &Using Windows Master`tF1, Windows_Master_Help
 	Menu, WM_Menu_Help, Icon, &Using Windows Master`tF1, images\Info.ico,, 16
 	Menu, WM_Menu_Help, Add, &About, Windows_Master_About
-	Menu, WM_Menu_Help, Icon, &About, AutoLeap\Info.ico,, 16
+	Menu, WM_Menu_Help, Icon, &About, images\Info.ico,, 16
 	Menu, WM_Menu_Help, Add, Start T&utorial`tCtrl + U, Windows_Master_Tutorial
-	Menu, WM_Menu_Help, Icon, Start T&utorial`tCtrl + U, AutoLeap\Info.ico,, 16
+	Menu, WM_Menu_Help, Icon, Start T&utorial`tCtrl + U, images\Info.ico,, 16
 
 	Menu, WM_MainMenu, Add, &File, :WM_ImportMenu
 	Menu, WM_MainMenu, Add, Se&ttings, :WM_Menu_Settings
@@ -3599,7 +3602,7 @@ StartHotkeyThread()
 
 			if (sHK == A_Blank)
 			{
-				if (" g_bIsDev ")
+				if (" (g_bIsDev ? "true" : "false") ")
 					g_exe.ahkFunction[""Msgbox"", ""Hotkey is blank in function:``t"" A_ThisFunc "")""]
 				return
 			}
@@ -3627,8 +3630,31 @@ StartHotkeyThread()
 
 	if (sScript)
 	{
-		g_vDLL := CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotkey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
-		g_vDLL.ahkTextDll[CreateScript("g_exe:=CriticalObject(" . &AhkExported() . ")"sScript)]
+		if (!A_IsCompiled)
+		{
+			; g_vDLL := CriticalObject(AhkDllThread(A_IsCompiled ? "..\..\AutoHotKey.dll" : SubStr(A_AhkExe(),1,-3) "dll"))
+			g_vDLL := CriticalObject(AhkDllThread(SubStr(A_AhkExe(),1,-3) "dll"))
+			g_vDLL.ahkTextDll[CreateScript("g_exe:=CriticalObject(" . &AhkExported() . ")"sScript)]
+		}
+		else
+		{
+			;~ global oProc:=CriticalObject()
+			;~ global vThread :=AhkDllThread("..\..\AutoHotkey.dll")
+			;~ clipboard := sScript
+			;~ Msgbox ok
+			;~ global oProcScript:="oProc:=CriticalObject(" CriticalObject(oProc,1)")`n"
+			;~ vThread.ahktextdll(oProcScript CreateScript(sScript))
+
+			sScript := "g_exe:=CriticalObject(" . &AhkExported() . ")`r`n" . sScript
+			FileAppend, %sScript%, _Tmp.ahk
+			g_vDLL:=AhkThread(A_ScriptDir "\_Tmp.ahk","",true)
+			FileDelete, _Tmp.ahk
+
+			;~ oProc:=CriticalObject()
+			;~ g_vDLL :=AhkDllThread("..\..\AutoHotkey.dll")
+			;~ oProcScript:="g_exe:=CriticalObject(" CriticalObject(oProc,1)")`n"
+			;~ g_vDLL.ahktextdll(oProcScript CreateScript(sScript))
+		}
 	}
 
 	return
@@ -5046,8 +5072,11 @@ MaximizeHorizontally(hWnd="A")
 		return false
 	}
 
-	iMon := GetMonitorFromWindow(hWnd)
-	WinMove, ahk_id %hWnd%, ,% g_DictMonInfo[iMon].Left, , % g_DictMonInfo[iMon].W
+	iX := 0
+	iW := 0
+	GetDimFromPct(0, "", 100, "", iX, "", iW, "", hWnd)
+	WinMove, ahk_id %hWnd%, , %iX%, , %iW%
+
 	return
 }
 
@@ -5063,8 +5092,11 @@ MaximizeVertically(hWnd="A")
 		return false
 	}
 
-	iMon := GetMonitorFromWindow(hWnd)
-	WinMove, ahk_id %hWnd%, , , % g_DictMonInfo[iMon]["Top"], , % g_DictMonInfo[iMon]["H"]
+	iY := 0
+	iH := 0
+	GetDimFromPct("", 0, "", 100, "", iY, "", iH, hWnd)
+	WinMove, ahk_id %hWnd%, , , %iY%, , %iH%
+
 	return
 }
 
@@ -5256,7 +5288,7 @@ SnapWnd(sDir, hWnd="A")
 	WinGetPos, iX, iY, iW, iH, ahk_id %hWndToSnap%
 
 	WinGetClass, sClass, ahk_id %hWndToSnap%
-	if (IsWin10() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		iW -= 14
 		iH -= 7
@@ -5445,7 +5477,7 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	WinGetPos, iCurX, iCurY, iCurW, iCurH, ahk_id %hWnd%
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		iCurX -= 7
 		;~ iCurW += 14
@@ -5498,7 +5530,7 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	}
 
 	bRestoreXY := false
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		bRestoreXY := true
 		if (iX != iCurX)
@@ -6239,7 +6271,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	iDestMonH := g_DictMonInfo[iMonToMoveTo]["H"]
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		;~ iX -= 7
 		;~ iW -= 14
@@ -6265,7 +6297,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	}
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		;~ iNewW -= 14
 		;~ iNewH -= 7
@@ -6290,7 +6322,7 @@ GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A", iMon = "")
 	iMonH := g_DictMonInfo[iMon]["H"]
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		iW -= 14
 		iH -= 7
@@ -6322,7 +6354,7 @@ GetDimFromPct(iXPct, iYPct, iWPct, iHPct, ByRef riX, ByRef riY, ByRef riW, ByRef
 	riH := Round((iHPct / 100) * iMonH)
 
 	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 	{
 		riX -= 7
 		riW += 14
