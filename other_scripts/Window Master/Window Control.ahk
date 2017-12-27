@@ -109,7 +109,7 @@ Alt_And_LButton:
 				g_bUseYThreshold := true
 
 			WinGetClass, sClass, ahk_id %hWnd%
-			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+			if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 			{
 				if (!bIgnoreX)
 				{
@@ -278,7 +278,7 @@ Alt_And_RButton:
 				g_bUseHThreshold := true
 
 			WinGetClass, sClass, ahk_id %hWnd%
-			if (IsWin10() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN") ; !VivaldiIsActive()
+			if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
 			{
 				if (!bIgnoreW)
 				{
@@ -575,5 +575,26 @@ Send_WM_COPYDATA(ByRef StringToSend, ByRef TargetScriptTitle)  ; ByRef saves a l
 IsWin10()
 {
 	return SubStr(A_OSVersion, 1, 2) == "10"
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: ThemeIsHighContrast
+		Purpose: To tell whether the current theme is a high contrast one
+	Parameters
+		
+*/
+ThemeIsHighContrast()
+{
+	static SPI_GETHIGHCONTRAST := 66, HCF_HIGHCONTRASTON := 1
+
+	oHighContrast := Struct("UINT cbSize, DWORD dwFlags, LPTSTR lpszDefaultScheme", {cbSize:sizeof("UINT cbSize, DWORD dwFlags, LPTSTR lpszDefaultScheme")})
+	vSize := sizeof(oHighContrast)
+	DllCall("user32\SystemParametersInfo", UInt, SPI_GETHIGHCONTRAST, UInt,vSize, Ptr,oHighContrast[""], UInt,0)
+	vFlags := oHighContrast.dwFlags
+
+	return vFlags & HCF_HIGHCONTRASTON
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
