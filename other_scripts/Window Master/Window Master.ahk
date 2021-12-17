@@ -6047,23 +6047,27 @@ NextTrack:
 	hActiveWnd := WinExist("A")
 	SetTitleMatchMode, 2
 
-	WinGetClass, sBeatportClass, Beatport Pro
-	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+	WinGet, hChromeWnds, List, ahk_class Chrome_WidgetWin_1
+	Loop %hChromeWnds%
 	{
-		WinActivate, %sChromeTitle%
-		Sleep 100
-		Send, `]
-		Sleep 50
-		WinActivate, ahk_id %hActiveWnd%
-		return
-	}
-	else if (InStr(sBeatportClass, "Beatport"))
-	{
-		WinActivate, ahk_class %sBeatportClass%
-		Send, {Right}
-		WinActivate, ahk_id %hActiveWnd%
-		return
+		hWnd := hChromeWnds%A_Index%
+		WinGetTitle, sChromeTitle, ahk_id %hWnd%
+		If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+		{
+			WinActivate, %sChromeTitle%
+			Sleep 100
+			Send, `]
+			Sleep 50
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
+		else if (InStr(sBeatportClass, "Beatport"))
+		{
+			WinActivate, ahk_class %sBeatportClass%
+			Send, {Right}
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
 	}
 
 	Send {Media_Next}
@@ -6074,23 +6078,27 @@ PreviousTrack:
 	hActiveWnd := WinExist("A")
 	SetTitleMatchMode, 2
 
-	WinGetClass, sBeatportClass, Beatport Pro
-	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+	WinGet, hChromeWnds, List, ahk_class Chrome_WidgetWin_1
+	Loop %hChromeWnds%
 	{
-		WinActivate, %sChromeTitle%
-		Sleep 100
-		Send, `[
-		Sleep 50
-		WinActivate, ahk_id %hActiveWnd%
-		return
-	}
-	else if (InStr(sBeatportClass, "Beatport"))
-	{
-		WinActivate, ahk_class %sBeatportClass%
-		Send, {Left}
-		WinActivate, ahk_id %hActiveWnd%
-		return
+		hWnd := hChromeWnds%A_Index%
+		WinGetTitle, sChromeTitle, ahk_id %hWnd%
+		If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+		{
+			WinActivate, %sChromeTitle%
+			Sleep 100
+			Send, `[
+			Sleep 50
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
+		else if (InStr(sBeatportClass, "Beatport"))
+		{
+			WinActivate, ahk_class %sBeatportClass%
+			Send, {Left}
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
 	}
 
 	Send {Media_Prev}
@@ -6101,23 +6109,27 @@ PlayOrPauseTrack:
 	hActiveWnd := WinExist("A")
 	SetTitleMatchMode, 2
 
-	WinGetClass, sBeatportClass, Beatport Pro  
-	WinGetTitle, sChromeTitle, ahk_class Chrome_WidgetWin_1
-	If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+	WinGet, hChromeWnds, List, ahk_class Chrome_WidgetWin_1
+	Loop %hChromeWnds%
 	{
-		WinActivate, %sChromeTitle%
-		Sleep 100
-		Send, {Space}
-		Sleep 50
-		WinActivate, ahk_id %hActiveWnd%
-		return
-	}
-	else if (InStr(sBeatportClass, "Beatport"))
-	{
-		WinActivate, ahk_class %sBeatportClass%
-		Send, {Space}
-		WinActivate, ahk_id %hActiveWnd%
-		return
+		hWnd := hChromeWnds%A_Index%
+		WinGetTitle, sChromeTitle, ahk_id %hWnd%
+		If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+		{
+			WinActivate, %sChromeTitle%
+			Sleep 100
+			Send, {Space}
+			Sleep 50
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
+		else if (InStr(sBeatportClass, "Beatport"))
+		{
+			WinActivate, ahk_class %sBeatportClass%
+			Send, {Space}
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
 	}
 
 	Send {Media_Play_Pause}
