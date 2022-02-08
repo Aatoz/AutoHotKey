@@ -5287,8 +5287,7 @@ SnapWnd(sDir, hWnd="A")
 		WinRestore ; TODO: Toggle it without moving?
 	WinGetPos, iX, iY, iW, iH, ahk_id %hWndToSnap%
 
-	WinGetClass, sClass, ahk_id %hWndToSnap%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWndToSnap) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWndToSnap))
 	{
 		iW -= 14
 		iH -= 7
@@ -5437,7 +5436,7 @@ WndHasBorder(hWnd="A")
 /*
 	Author: Verdlin
 	Function: VivaldiIsActive
-		Purpose: Vivaldi appears to be Chrome, to window spys.
+		Purpose: Vivaldi appears to be Chrome or an electron app, to window spies.
 			This function is used to distinguish between Chrome and Vivaldi windows.
 	Parameters
 		
@@ -5446,6 +5445,57 @@ VivaldiIsActive()
 {
 	WinGet, sActiveProcess, ProcessName, A
 	return (sActiveProcess = "vivaldi.exe")
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: ChromeIsActive
+		Purpose: Check for Chrome, not electron apps, to window spies.
+			This function is used to distinguish between Chrome and Vivaldi windows.
+	Parameters
+		
+*/
+ChromeIsActive()
+{
+	WinGet, sActiveProcess, ProcessName, A
+	return (sActiveProcess = "chrome.exe")
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: VisualStudioIsActive
+		Purpose: Check for Visual Studio, not electron apps, to window spies.
+			This function is used to tell if Visual Studio is Active
+	Parameters
+		
+*/
+VisualStudioIsActive()
+{
+	WinGet, sActiveProcess, ProcessName, A
+	return (sActiveProcess = "devenv.exe")
+}
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+/*
+	Author: Verdlin
+	Function: ShouldAccountForVirtualWndBorder
+		Purpose:
+	Parameters
+		
+*/
+ShouldAccountForVirtualWndBorder(hWnd)
+{
+	WinGetClass, sClass, ahk_id %hWnd%
+
+	return IsWin10() && (ChromeIsActive() || VisualStudioIsActive()
+				|| (!ThemeIsHighContrast() && WndHasBorder(hWnd)
+				&& sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN"
+				&& sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass"))
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -5476,8 +5526,7 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	iMon := GetMonitorFromWindow(hWnd)
 	WinGetPos, iCurX, iCurY, iCurW, iCurH, ahk_id %hWnd%
 
-	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		iCurX -= 7
 		;~ iCurW += 14
@@ -5530,7 +5579,7 @@ WndMove(iX="", iY="", iW="", iH="", hWnd="A", bKeepOnMon=true, bSmartMove=true, 
 	}
 
 	bRestoreXY := false
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		bRestoreXY := true
 		if (iX != iCurX)
@@ -6042,6 +6091,30 @@ BrowserRefresh:
 	Send {Browser_Refresh}
 	return
 }
+PlayOrPauseTrack:
+{
+	hActiveWnd := WinExist("A")
+	SetTitleMatchMode, 2
+
+	WinGet, hChromeWnds, List, ahk_class Chrome_WidgetWin_1
+	Loop %hChromeWnds%
+	{
+		hWnd := hChromeWnds%A_Index%
+		WinGetTitle, sChromeTitle, ahk_id %hWnd%
+		If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
+		{
+			WinActivate, %sChromeTitle%
+			Sleep 100
+			Send, {Space}
+			Sleep 50
+			WinActivate, ahk_id %hActiveWnd%
+			return
+		}
+	}
+
+	Send {Media_Play_Pause}
+	return
+}
 NextTrack:
 {
 	hActiveWnd := WinExist("A")
@@ -6061,10 +6134,27 @@ NextTrack:
 			WinActivate, ahk_id %hActiveWnd%
 			return
 		}
-		else if (InStr(sBeatportClass, "Beatport"))
+	}
+
+	Send {Media_Next}
+	return
+}
+SeekTrackForward:
+{
+	hActiveWnd := WinExist("A")
+	SetTitleMatchMode, 2
+
+	WinGet, hChromeWnds, List, ahk_class Chrome_WidgetWin_1
+	Loop %hChromeWnds%
+	{
+		hWnd := hChromeWnds%A_Index%
+		WinGetTitle, sChromeTitle, ahk_id %hWnd%
+		If (WinExist("Beatport - Google Chrome") || InStr(sChromeTitle, "Beatport"))
 		{
-			WinActivate, ahk_class %sBeatportClass%
-			Send, {Right}
+			WinActivate, %sChromeTitle%
+			Sleep 100
+			Send, `>
+			Sleep 50
 			WinActivate, ahk_id %hActiveWnd%
 			return
 		}
@@ -6092,19 +6182,12 @@ PreviousTrack:
 			WinActivate, ahk_id %hActiveWnd%
 			return
 		}
-		else if (InStr(sBeatportClass, "Beatport"))
-		{
-			WinActivate, ahk_class %sBeatportClass%
-			Send, {Left}
-			WinActivate, ahk_id %hActiveWnd%
-			return
-		}
 	}
 
 	Send {Media_Prev}
 	return
 }
-PlayOrPauseTrack:
+SeekTrackBackward:
 {
 	hActiveWnd := WinExist("A")
 	SetTitleMatchMode, 2
@@ -6118,21 +6201,14 @@ PlayOrPauseTrack:
 		{
 			WinActivate, %sChromeTitle%
 			Sleep 100
-			Send, {Space}
+			Send, `<
 			Sleep 50
-			WinActivate, ahk_id %hActiveWnd%
-			return
-		}
-		else if (InStr(sBeatportClass, "Beatport"))
-		{
-			WinActivate, ahk_class %sBeatportClass%
-			Send, {Space}
 			WinActivate, ahk_id %hActiveWnd%
 			return
 		}
 	}
 
-	Send {Media_Play_Pause}
+	Send {Media_Prev}
 	return
 }
 ToggleMuteVolume:
@@ -6282,8 +6358,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 	iDestMonW := g_DictMonInfo[iMonToMoveTo]["W"]
 	iDestMonH := g_DictMonInfo[iMonToMoveTo]["H"]
 
-	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		;~ iX -= 7
 		;~ iW -= 14
@@ -6308,8 +6383,7 @@ MoveWndToMonitor(sDir, hWnd="A", iMonToMoveTo=0)
 		iNewH := iH
 	}
 
-	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		;~ iNewW -= 14
 		;~ iNewH -= 7
@@ -6333,8 +6407,7 @@ GetWndPct(ByRef riWPct, ByRef riHPct, hWnd = "A", iMon = "")
 	iMonW := g_DictMonInfo[iMon]["W"]
 	iMonH := g_DictMonInfo[iMon]["H"]
 
-	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		iW -= 14
 		iH -= 7
@@ -6365,8 +6438,7 @@ GetDimFromPct(iXPct, iYPct, iWPct, iHPct, ByRef riX, ByRef riY, ByRef riW, ByRef
 	riW := Round((iWPct / 100) * iMonW)
 	riH := Round((iHPct / 100) * iMonH)
 
-	WinGetClass, sClass, ahk_id %hWnd%
-	if (IsWin10() && !ThemeIsHighContrast() && WndHasBorder(hWnd) && sClass != "Chrome_WidgetWin_1" && sClass != "XLMAIN" && sClass != "LyncTabFrameHostWindowClass" && sClass != "CommunicatorMainWindowClass") ; !VivaldiIsActive()
+	if (ShouldAccountForVirtualWndBorder(hWnd))
 	{
 		riX -= 7
 		riW += 14
@@ -6699,20 +6771,6 @@ IsDesktop(hWnd)
 	WinGetClass, sClass, ahk_id %hwnd%
 
 	return IsInLinearArray(s_aDesktops_c, sClass)
-}
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-/*
-	Author: Verdlin
-	Function: ChromeIsActive
-		Purpose:
-	Parameters
-		
-*/
-ChromeIsActive()
-{
-	return WinActive("ahk_class Chrome_XPFrame") || WinActive("ahk_class Chrome_WidgetWin_1")
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -7098,13 +7156,6 @@ GetDefaultHotkeysIni()
 			GestureName=Minimize Window
 			HelpDesc=Minimizes window.
 
-			[Next Track]
-			Activate=true
-			Hotkey=Shift + Alt + Right
-			Type=Settings
-			GestureName=Next Track
-			HelpDesc=Goes forward one track.
-
 			[Play or Pause Track]
 			Activate=true
 			Hotkey=Shift + Alt + P
@@ -7112,12 +7163,33 @@ GetDefaultHotkeysIni()
 			GestureName=Play/Pause Track
 			HelpDesc=Toggles playing/pausing the track.
 
+			[Next Track]
+			Activate=true
+			Hotkey=Shift + Alt + Right
+			Type=Settings
+			GestureName=Next Track
+			HelpDesc=Goes forward one track.
+
+			[Seek Track Forward]
+			Activate=true
+			Hotkey=Ctrl+ Shift + Alt + Right
+			Type=Settings
+			GestureName=Seek Track Forward
+			HelpDesc=Seek track forward.
+
 			[Previous Track]
 			Activate=true
 			Hotkey=Shift + Alt + Left
 			Type=Settings
 			GestureName=Previous Track
 			HelpDesc=Goes backward one track.
+
+			[Seek Track Backward]
+			Activate=true
+			Hotkey=Ctrl+ Shift + Alt + Left
+			Type=Settings
+			GestureName=Seek Track Backward
+			HelpDesc=Seeks track backward.
 
 			[Quick Menu]
 			Activate=true
@@ -7447,12 +7519,16 @@ GetDefaultLeapGesturesIni()
 			Gesture=Swipe Forward, Swipe Backward
 			[Mute/Unmute Volume]
 			Gesture=Swipe Backward, Swipe Down
-			[Next Track]
-			Gesture=Swipe Backward, Swipe Right
 			[Play/Pause Track]
 			Gesture=Swipe Backward, KeyTap
+			[Next Track]
+			Gesture=Swipe Backward, Swipe Right
+			[Seek Track Forward]
+			Gesture=Swipe Backward, Swipe Right, Swipe Left
 			[Previous Track]
 			Gesture=Swipe Backward, Swipe Left
+			[Seek Track Backward]
+			Gesture=Swipe Backward, Swipe Swipe Left, Swipe Right
 			[Resize Window]
 			Gesture=Swipe Backward, Circle Left
 			[Scroll]
