@@ -200,10 +200,10 @@ Str_SurroundWithStr(s) ; May add Bool bUseClipboard
 		bTargetAppActive := true
 	else if (InStr(sTitle, "- Remote Desktop"))
 		bTargetAppActive := true
-	else if (sClass = "Chrome_WidgetWin_1" && (InStr(sTitle, "Edit Style") || InStr(sTitle, "JSFiddle") || InStr(sTitle, "MariaDB 10") || InStr(sTitle, " - Visual Studio Code"))
+	else if (sClass = "Chrome_WidgetWin_1" && (InStr(sTitle, "Edit Style") || InStr(sTitle, " - Stylus") || InStr(sTitle, "JSFiddle") || InStr(sTitle, "MariaDB 10") || InStr(sTitle, " - Visual Studio Code"))
 		&& (s = "(" || s = """"))
 	{
-		if (s = "(" )
+		if (s = "(")
 			SendInput %s%)
 		else SendInput %s%`"
 		SendInput {Left}
