@@ -125,9 +125,6 @@ InitGlobals()
 	global g_ConfigIni := new EasyIni("config.ini")
 	g_ConfigIni.Merge(vDefaultConfigIni)
 
-	if (hFunc := Func("LoadInvPaths"))
-		hFunc.()
-
 	return
 }
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -189,8 +186,8 @@ InitQuickLauncher()
 		else g_iQL%key% := NewVal
 	}
 
-	;~ if (!FileExist(sBackground))
-		;~ sBackground := "" ; TODO: Standard pic?
+	if (!FileExist(sBackground))
+		sBackground := "images/background.jpg"
 
 	GUI, QuickLauncher:New, +Hwndg_hQL +LastFound -Caption, Quick Launcher
 	GUI, Color, Black
@@ -575,6 +572,16 @@ AddCmdProc(vCmd, bSaveToDB=true, sDefaultName="")
 				, "Cancel adding command?"))
 				break
 		}
+
+	iFileNamePos := InStr(vCmd.Parms, "\", False, 0)+1
+	iFileExtPos := InStr(vCmd.Parms, ".", False, 0)
+	; This could be a folder and not a file
+	if (iFileExtPos < 1)
+		iFileExtPos := iFileNamePos+iFileNamePos
+
+	sFileName := SubStr(vCmd.Parms, iFileNamePos , iFileExtPos-iFileNamePos)
+	if (sDefaultName = "")
+		sDefaultName := sFileName
 
 		GUI, AddCmdDlg_:New, +hwnds_hAddCmdDlg, Add Command to Quick Launcher
 		GUI, Add, Text, xm ym w360 h100, % "Specify a shortcut and parameters for " (sDefaultName = "" ? "this new command" : sDefaultName)
@@ -1468,5 +1475,4 @@ class CustomSpeech extends SpeechRecognizer
 
 #Include %A_ScriptDir%\CFlyout.ahk
 #Include %A_ScriptDir%\HelperFunctions.ahk
-#Include %A_ScriptDir%\Classified.ahk ; This is not under source control for security reasons. It includes custom things for me.
 #Include %A_ScriptDir%\Speech Recognition.ahk

@@ -379,9 +379,6 @@ GetDefaultConfigIni()
 		Y=Expr:A_ScreenHeight - 175
 
 		[Variables]
-		OfficialSourceDir=Z:\Source
-		INVDBDir=C:\Invtools\Databases
-		LocationOfInvest=C:\Invtools\Databases\PFO\Invest.exe
 	)"
 }
 
@@ -417,15 +414,7 @@ GetSpecialCmdsIni()
 		AHK=AutoHotKey
 		RD=Remote Desktop
 		ex=Expression
-		i=Invest
-		ca=Catalog
-		[[=CLS Lookup
-		PC=PC Scan
-		QD=QD PC Scan
 		cmds=View all saved commands
-		Wiki=Search Wiki
-		InvWiki=Search Inv Wiki
-		DevWiki=Search Dev Wiki
 		int=Internal Function
 
 		; The functions below are found in this file (or else in std lib). Just remember to add the actual function here when you make new ones.
@@ -450,33 +439,9 @@ GetSpecialCmdsIni()
 		[ex]
 		Func=DynaExpr_Eval
 		Desc=Eval AutoHotKey expression
-		[i]
-		Func=InvLaunch
-		Desc=Open an Invtools system
-		[ca]
-		Func=LaunchCatalog
-		Desc=Open an Invtools catalog
-		[[[]
-		Func=CLSLookup
-		Desc=Open any type of CLS page
-		[PC]
-		Func=PCScan
-		Desc=Scan product changes
-		[QD]
-		Func=QDPCScan
-		Desc=Scan queued product changes
 		[cmds]
 		Desc=View all saved commands
 		Func=InternalCmd
-		[Wiki]
-		Desc=Search entire wiki
-		Func=SearchWiki
-		[InvWiki]
-		Desc=Search Inv Wiki
-		Func=SearchInvWiki
-		[DevWiki]
-		Desc=Serach Dev Wiki
-		Func=SearchDevWiki
 		[int]
 		Desc=Run an internal command
 		Func=InternalCmd
@@ -512,8 +477,6 @@ GetDefaultIni()
 		Parms=DllCall(""PowrProf\SetSuspendState"", ""int"", 0, ""int"", 1, ""int"", 0)
 		[int:Edit Flyout]
 		Func=EditFlyout
-		[int:Set Invtools Database Paths]
-		Func=SetInvPaths
 		[int:Add Command]
 		Func=AddNewCmd_FromGUI
 		[Startup]
