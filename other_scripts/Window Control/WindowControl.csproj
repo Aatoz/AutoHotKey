@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>WindowControl</AssemblyName>
+    <RootNamespace>WindowControl</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <!--
+      Global hooks only see windows at the same or lower UAC integrity level
+      as this process (User Interface Privilege Isolation). If you need to
+      move/resize an elevated (Run as Administrator) window, this app also
+      needs to run elevated -- add an app.manifest with
+      requestedExecutionLevel="requireAdministrator" for that case.
+    -->
+  </PropertyGroup>
+
+</Project>
