@@ -9,7 +9,7 @@ namespace WindowControl.WindowOps;
 /// hotkeys, or the tray UI -- it just operates on window handles, so it can be
 /// exercised independently of the global hooks that drive it.
 /// </summary>
-public sealed class WindowController
+internal sealed class WindowController
 {
     private const int MinWidth = 50;
     private const int MinHeight = 50;
@@ -28,7 +28,11 @@ public sealed class WindowController
     // original style rather than guessing at "the standard" border styles.
     private readonly Dictionary<nint, int> _savedStyles = new();
 
-    public static nint WindowUnderPoint(int x, int y) => WindowFromPoint(new POINT { X = x, Y = y });
+    public static nint WindowUnderPoint(int x, int y)
+    {
+        nint hWnd = WindowFromPoint(new POINT { X = x, Y = y });
+        return hWnd == 0 ? 0 : GetAncestor(hWnd, GA_ROOT);
+    }
 
     public bool IsApprovedWindow(nint hWnd)
     {
