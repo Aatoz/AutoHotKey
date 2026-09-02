@@ -12,7 +12,7 @@ namespace WindowControl.UI;
 /// ends it. This is the closest analogue to the original script's
 /// auto-execute section plus its ~Alt:: dispatcher.
 /// </summary>
-public sealed class TrayApplicationContext : ApplicationContext
+internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly KeyboardHook _keyboard = new();
     private readonly MouseHook _mouse = new();
@@ -112,6 +112,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             {
                 bool nowEnabled = _controller.ToggleEnabled(hWnd);
                 ShowStatus(nowEnabled ? "Window Enabled!" : "Window Disabled!", e.X, e.Y);
+                _keyboard.MarkWinConsumed();
                 e.Handled = true;
             }
         }
@@ -151,6 +152,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             {
                 bool hasBorder = _controller.ToggleBorder(hWnd);
                 ShowStatus(hasBorder ? "Border Restored" : "Border Removed", e.X, e.Y);
+                _keyboard.MarkWinConsumed();
                 e.Handled = true;
             }
         }
@@ -211,7 +213,11 @@ public sealed class TrayApplicationContext : ApplicationContext
             _controller.Resize(_dragTarget, newW, newH);
         }
 
-        e.Handled = true;
+        // Deliberately not setting e.Handled here: blocking WM_MOUSEMOVE in a
+        // low-level mouse hook also freezes the on-screen cursor, since cursor
+        // rendering is driven by the same input event this hook intercepts.
+        // Blocking the button-down already stopped any native drag/selection
+        // from starting, so letting move events continue through is safe.
     }
 
     private void StartDrag(DragMode mode, nint hWnd, int cursorX, int cursorY, bool lockPrimary, bool lockSecondary)
@@ -246,6 +252,7 @@ public sealed class TrayApplicationContext : ApplicationContext
             if (_controller.IsApprovedWindow(hWnd))
             {
                 e.Handled = true;
+                _keyboard.MarkWinConsumed();
                 _syncForm.BeginInvoke(() => RenamePrompt(hWnd));
             }
         }
@@ -266,6 +273,7 @@ public sealed class TrayApplicationContext : ApplicationContext
         else if (MatchesPauseCombo(e))
         {
             e.Handled = true;
+            _keyboard.MarkWinConsumed();
             _syncForm.BeginInvoke(TogglePause);
         }
     }
