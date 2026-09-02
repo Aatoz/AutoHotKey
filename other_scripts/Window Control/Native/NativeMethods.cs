@@ -47,6 +47,7 @@ internal static class NativeMethods
     public const uint SWP_FRAMECHANGED = 0x0020;
 
     public const int GWL_STYLE = -16;
+    public const uint GA_ROOT = 2;
     public const long WS_CAPTION = 0x00C00000;
     public const long WS_THICKFRAME = 0x00040000;
     public const long WS_SYSMENU = 0x00080000;
@@ -108,6 +109,9 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern nint WindowFromPoint(POINT Point);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetAncestor(nint hWnd, uint gaFlags);
 
     [DllImport("user32.dll")]
     public static extern nint RealChildWindowFromPoint(nint hwndParent, POINT ptParentClientCoords);
