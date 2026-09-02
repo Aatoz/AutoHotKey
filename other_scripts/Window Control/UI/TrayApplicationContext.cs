@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using WindowControl.Config;
 using WindowControl.Hooks;
 using WindowControl.WindowOps;
 using static WindowControl.Native.NativeMethods;
@@ -7,18 +8,26 @@ using static WindowControl.Native.NativeMethods;
 namespace WindowControl.UI;
 
 /// <summary>
-/// Composition root: owns the keyboard/mouse hooks, the tray icon, and the
-/// small bit of drag-state that ties a button-down to the button-up that
-/// ends it. This is the closest analogue to the original script's
-/// auto-execute section plus its ~Alt:: dispatcher.
+/// Composition root: owns the keyboard/mouse hooks, the tray icon, the
+/// config-driven action registry, and the small bit of drag-state that ties
+/// a button-down to the button-up that ends it. This is the closest analogue
+/// to the original script's auto-execute section plus its ~Alt:: dispatcher.
 /// </summary>
 internal sealed class TrayApplicationContext : ApplicationContext
 {
     private readonly KeyboardHook _keyboard = new();
     private readonly MouseHook _mouse = new();
     private readonly WindowController _controller = new();
+    private readonly ActionRegistry _registry;
     private readonly NotifyIcon _trayIcon;
     private readonly ToolStripMenuItem _pauseMenuItem;
+
+    // Rebuilt after every settings save; maps a hotkey to whichever enabled
+    // action currently claims it. Config-driven actions (the legacy-ini port
+    // plus the numpad remaps) dispatch through here. The three hotkeys that
+    // predate this system (rename, control-info, pause) stay hardcoded below
+    // since they need cursor position rather than a resolved target window.
+    private Dictionary<HotkeyCombo, ActionDefinition> _hotkeyMap = new();
 
     // Invisible, never-shown form that exists purely so hook callbacks can
     // marshal work onto the UI thread via BeginInvoke. Low-level hooks run
@@ -39,6 +48,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _dragLockPrimary;   // Ctrl:  locks X (move) / width (resize)
     private bool _dragLockSecondary; // Shift: locks Y (move) / height (resize)
 
+    // The main (non-modifier) key of whichever combo we last dispatched on
+    // key-down, so its key-up can be swallowed reliably. Re-matching the full
+    // combo (including modifiers) at key-up time is fragile, since modifiers
+    // are often released in a different order than they were pressed.
+    private int? _lastDispatchedVk;
+
     private bool _hooksPaused;
 
     public TrayApplicationContext()
@@ -55,9 +70,14 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
         _ = _syncForm.Handle; // force native handle creation now, so BeginInvoke works immediately
 
+        _registry = new ActionRegistry(_controller, OpenSettings, ExitApp, ShowQuickMenu);
+        ConfigStore.Load(_registry.Actions);
+
         _pauseMenuItem = new ToolStripMenuItem("Pause", null, (_, _) => TogglePause());
+        var settingsItem = new ToolStripMenuItem("Settings...", null, (_, _) => OpenSettings());
         var exitItem = new ToolStripMenuItem("Exit", null, (_, _) => ExitApp());
         var menu = new ContextMenuStrip();
+        menu.Items.Add(settingsItem);
         menu.Items.Add(_pauseMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exitItem);
@@ -71,6 +91,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
 
         WireHooks();
+        RebuildHotkeyMap();
         _keyboard.Install();
         _mouse.Install();
     }
@@ -238,7 +259,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     }
 
     // --- Keyboard: Alt+Win+C = rename; Alt+Shift+C = copy control info;
-    //     Win+Shift+S = pause/resume ------------------------------------------
+    //     Win+Shift+S = pause/resume; everything else = the config-driven
+    //     action registry (legacy-ini port + numpad remaps) --------------------
 
     private void OnKeyDown(KeyEventArgsLL e)
     {
@@ -252,38 +274,57 @@ internal sealed class TrayApplicationContext : ApplicationContext
             if (_controller.IsApprovedWindow(hWnd))
             {
                 e.Handled = true;
+                _lastDispatchedVk = e.VirtualKeyCode;
                 _keyboard.MarkWinConsumed();
                 _syncForm.BeginInvoke(() => RenamePrompt(hWnd));
             }
+            return;
         }
-        else if (MatchesControlInfoCombo(e))
+
+        if (MatchesControlInfoCombo(e))
         {
             GetCursorPos(out var pt);
             var info = WindowController.DescribeControlUnderCursor(pt.X, pt.Y);
             if (info != null)
             {
                 e.Handled = true;
+                _lastDispatchedVk = e.VirtualKeyCode;
                 _syncForm.BeginInvoke(() =>
                 {
                     Clipboard.SetText(info);
                     ShowStatus("Control info copied", pt.X, pt.Y);
                 });
             }
+            return;
         }
-        else if (MatchesPauseCombo(e))
+
+        if (MatchesPauseCombo(e))
         {
             e.Handled = true;
+            _lastDispatchedVk = e.VirtualKeyCode;
             _keyboard.MarkWinConsumed();
             _syncForm.BeginInvoke(TogglePause);
+            return;
+        }
+
+        var combo = new HotkeyCombo(e.Alt, e.Ctrl, e.Shift, e.Win, e.VirtualKeyCode);
+        if (_hotkeyMap.TryGetValue(combo, out var action) && action.Enabled)
+        {
+            e.Handled = true;
+            _lastDispatchedVk = e.VirtualKeyCode;
+            if (combo.Win)
+                _keyboard.MarkWinConsumed();
+            DispatchAction(action);
         }
     }
 
     private void OnKeyUp(KeyEventArgsLL e)
     {
-        // Swallow the matching key-up too, so releasing 'C' or 'S' doesn't
-        // leak a stray keystroke into whatever app has focus.
-        if (MatchesRenameCombo(e) || MatchesControlInfoCombo(e) || MatchesPauseCombo(e))
+        if (_lastDispatchedVk == e.VirtualKeyCode)
+        {
             e.Handled = true;
+            _lastDispatchedVk = null;
+        }
     }
 
     private static bool MatchesRenameCombo(KeyEventArgsLL e) =>
@@ -294,6 +335,34 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private static bool MatchesPauseCombo(KeyEventArgsLL e) =>
         e.VirtualKeyCode == VK_S && e.Win && e.Shift && !e.Alt && !e.Ctrl;
+
+    /// <summary>
+    /// Resolves the action's target (if any) and runs it. Window/Navigation/
+    /// Remap actions are all fast, non-blocking Win32 calls, so they run
+    /// inline; App actions may show a dialog (Settings) or a popup menu
+    /// (Quick Menu), so those are marshaled off the hook thread like the
+    /// mouse-driven actions above.
+    /// </summary>
+    private void DispatchAction(ActionDefinition action)
+    {
+        nint target = action.Target == ActionTarget.ForegroundWindow ? GetForegroundWindow() : 0;
+
+        if (action.Category == ActionCategory.App)
+            _syncForm.BeginInvoke(() => action.Execute(target));
+        else
+            action.Execute(target);
+    }
+
+    private void RebuildHotkeyMap()
+    {
+        var map = new Dictionary<HotkeyCombo, ActionDefinition>();
+        foreach (var action in _registry.Actions)
+        {
+            if (action.Enabled && !action.Hotkey.IsEmpty && !map.ContainsKey(action.Hotkey))
+                map[action.Hotkey] = action;
+        }
+        _hotkeyMap = map;
+    }
 
     // --- Shared actions -------------------------------------------------------
 
@@ -308,6 +377,31 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void ShowStatus(string text, int screenX, int screenY)
     {
         _syncForm.BeginInvoke(() => TransientTooltip.Show(text, screenX, screenY));
+    }
+
+    /// <summary>Popup menu of the currently-enabled Window actions, applied to the given target when clicked.</summary>
+    private void ShowQuickMenu(nint hWnd)
+    {
+        var menu = new ContextMenuStrip();
+        foreach (var action in _registry.Actions.Where(a => a.Category == ActionCategory.Window && a.Enabled))
+            menu.Items.Add(action.DisplayName, null, (_, _) => action.Execute(hWnd));
+
+        if (menu.Items.Count == 0)
+            menu.Items.Add("(no window actions enabled)").Enabled = false;
+
+        menu.Show(Cursor.Position);
+    }
+
+    private void OpenSettings()
+    {
+        using var form = new SettingsForm(_registry.Actions, _keyboard);
+        if (form.ShowDialog() == DialogResult.OK)
+        {
+            ConfigStore.Save(_registry.Actions);
+            RebuildHotkeyMap();
+        }
+        // On Cancel, SettingsForm has already reverted the shared action
+        // objects to their pre-dialog state, so there's nothing to undo here.
     }
 
     private void TogglePause()

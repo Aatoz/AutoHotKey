@@ -6,7 +6,7 @@ namespace WindowControl.UI;
 /// <summary>Small borderless popup used in place of AHK's Tooltip()/SetTimer combo for brief status messages.</summary>
 internal sealed class TransientTooltip : Form
 {
-    private readonly Timer _timer = new() { Interval = 1500 };
+    private readonly System.Windows.Forms.Timer _timer = new() { Interval = 1500 };
 
     private TransientTooltip(string text, Point screenLocation)
     {

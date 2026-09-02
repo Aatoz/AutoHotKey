@@ -47,12 +47,39 @@ internal static class NativeMethods
     public const uint SWP_FRAMECHANGED = 0x0020;
 
     public const int GWL_STYLE = -16;
+    public const int GWL_EXSTYLE = -20;
     public const uint GA_ROOT = 2;
     public const long WS_CAPTION = 0x00C00000;
     public const long WS_THICKFRAME = 0x00040000;
     public const long WS_SYSMENU = 0x00080000;
     public const long WS_MINIMIZEBOX = 0x00020000;
     public const long WS_MAXIMIZEBOX = 0x00010000;
+    public const long WS_EX_TOPMOST = 0x00000008;
+    public const long WS_EX_LAYERED = 0x00080000;
+
+    public const int WM_CLOSE = 0x0010;
+
+    public const int SW_RESTORE = 9;
+    public const int SW_MAXIMIZE = 3;
+    public const int SW_MINIMIZE = 6;
+
+    public static readonly nint HWND_TOPMOST = -1;
+    public static readonly nint HWND_NOTOPMOST = -2;
+
+    public const uint GW_OWNER = 4;
+
+    public const byte LWA_ALPHA = 0x2;
+
+    public const uint INPUT_KEYBOARD = 1;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
+
+    public const int VK_TAB = 0x09;
+    public const int VK_ESCAPE = 0x1B;
+    public const int VK_BROWSER_BACK = 0xA6;
+    public const int VK_BROWSER_FORWARD = 0xA7;
+    public const int VK_BROWSER_REFRESH = 0xA8;
+    public const int VK_NUMPAD0 = 0x60;
+    public const int VK_0 = 0x30;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct POINT
@@ -87,6 +114,50 @@ internal static class NativeMethods
         public uint flags;
         public uint time;
         public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct HARDWAREINPUT
+    {
+        public uint uMsg;
+        public ushort wParamL;
+        public ushort wParamH;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct InputUnion
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+        [FieldOffset(0)] public HARDWAREINPUT hi;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT
+    {
+        public uint type;
+        public InputUnion U;
     }
 
     public delegate nint HookProc(int nCode, nint wParam, nint lParam);
@@ -145,4 +216,33 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", CharSet = CharSet.Auto)]
     public static extern bool SetWindowText(nint hWnd, string lpString);
+
+    [DllImport("user32.dll")]
+    public static extern bool PostMessage(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(nint hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern nint GetWindow(nint hWnd, uint uCmd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetLayeredWindowAttributes(nint hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetLayeredWindowAttributes(nint hWnd, out uint crKey, out byte bAlpha, out uint dwFlags);
+
+    public delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(nint hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 }

@@ -9,7 +9,7 @@ namespace WindowControl.Hooks;
 /// the event system-wide (used while dragging, so the click doesn't also
 /// land on the window underneath).
 /// </summary>
-public sealed class MouseHook : IDisposable
+internal sealed class MouseHook : IDisposable
 {
     private readonly HookProc _proc;
     private nint _hookHandle;
@@ -70,7 +70,7 @@ public sealed class MouseHook : IDisposable
     }
 }
 
-public sealed class MouseEventArgsLL(int x, int y)
+internal sealed class MouseEventArgsLL(int x, int y)
 {
     public int X { get; } = x;
     public int Y { get; } = y;
