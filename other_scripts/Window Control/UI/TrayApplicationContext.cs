@@ -19,14 +19,19 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly MouseHook _mouse = new();
     private readonly WindowController _controller = new();
     private readonly ActionRegistry _registry;
+    private readonly AppConfig _appConfig;
+    private readonly List<SequenceDefinition> _sequences;
+    private readonly SequenceRunner _sequenceRunner;
     private readonly NotifyIcon _trayIcon;
+    private Icon? _ownedTrayIcon;
     private readonly ToolStripMenuItem _pauseMenuItem;
 
-    // Rebuilt after every settings save; maps a hotkey to whichever enabled
-    // action currently claims it. Config-driven actions (the legacy-ini port
-    // plus the numpad remaps) dispatch through here. The three hotkeys that
-    // predate this system (rename, control-info, pause) stay hardcoded below
-    // since they need cursor position rather than a resolved target window.
+    // Rebuilt after every settings/sequence save; maps a hotkey to whichever
+    // enabled action or sequence currently claims it. Config-driven actions
+    // (the legacy-ini port, the numpad remaps, and user-defined Sequences)
+    // dispatch through here. The three hotkeys that predate this system
+    // (rename, control-info, pause) stay hardcoded below since they need
+    // cursor position rather than a resolved target window.
     private Dictionary<HotkeyCombo, ActionDefinition> _hotkeyMap = new();
 
     // Invisible, never-shown form that exists purely so hook callbacks can
@@ -48,11 +53,25 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _dragLockPrimary;   // Ctrl:  locks X (move) / width (resize)
     private bool _dragLockSecondary; // Shift: locks Y (move) / height (resize)
 
+    // Snap resistance for DragMode.Move only (see SnapResistance). Insets are
+    // captured once at drag start -- a window's DWM border padding doesn't
+    // change mid-drag.
+    private AxisSnapState _snapX;
+    private AxisSnapState _snapY;
+    private WindowInsets _dragInsets;
+
     // The main (non-modifier) key of whichever combo we last dispatched on
     // key-down, so its key-up can be swallowed reliably. Re-matching the full
     // combo (including modifiers) at key-up time is fragile, since modifiers
     // are often released in a different order than they were pressed.
-    private int? _lastDispatchedVk;
+    // The main (non-modifier) keys we've dispatched on key-down and are
+    // still waiting to see the matching key-up for, so it can be swallowed
+    // reliably. Re-matching the full combo (including modifiers) at key-up
+    // time is fragile, since modifiers are often released in a different
+    // order than they were pressed. A set rather than a single slot: if two
+    // hotkeys fire in quick succession, the first one's key-up must still be
+    // recognized even after the second has been recorded.
+    private readonly HashSet<int> _pendingKeyUps = new();
 
     private bool _hooksPaused;
 
@@ -70,8 +89,12 @@ internal sealed class TrayApplicationContext : ApplicationContext
         };
         _ = _syncForm.Handle; // force native handle creation now, so BeginInvoke works immediately
 
-        _registry = new ActionRegistry(_controller, OpenSettings, ExitApp, ShowQuickMenu);
-        ConfigStore.Load(_registry.Actions);
+        _appConfig = ConfigStore.Load();
+        _registry = new ActionRegistry(_controller, _appConfig, OpenSettings, ExitApp, ShowQuickMenu);
+        ConfigStore.ApplyActionOverrides(_appConfig, _registry.Actions);
+        _sequences = _appConfig.Sequences.Count > 0 ? _appConfig.Sequences : SequenceDefaults.Create();
+        _appConfig.Sequences = _sequences; // keep them the same list, even when defaults were just seeded
+        _sequenceRunner = new SequenceRunner(_controller);
 
         _pauseMenuItem = new ToolStripMenuItem("Pause", null, (_, _) => TogglePause());
         var settingsItem = new ToolStripMenuItem("Settings...", null, (_, _) => OpenSettings());
@@ -84,16 +107,38 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
             Visible = true,
             Text = "Window Control",
             ContextMenuStrip = menu,
         };
+        ApplyTrayIcon();
+        ThemeDetector.StartWatching();
+        ThemeDetector.ThemeChanged += OnThemeChanged;
 
         WireHooks();
         RebuildHotkeyMap();
         _keyboard.Install();
         _mouse.Install();
+    }
+
+    /// <summary>Loads and applies the tray icon matching the current Windows theme, disposing whichever one we'd loaded previously.</summary>
+    private void ApplyTrayIcon()
+    {
+        string fileName = ThemeDetector.IsLightTheme() ? "icon-light.ico" : "icon-dark.ico";
+        string path = Path.Combine(AppContext.BaseDirectory, "Resources", fileName);
+
+        var newIcon = File.Exists(path) ? new Icon(path) : SystemIcons.Application;
+        _trayIcon.Icon = newIcon;
+
+        _ownedTrayIcon?.Dispose(); // never dispose SystemIcons.Application -- it's shared/cached, not ours
+        _ownedTrayIcon = ReferenceEquals(newIcon, SystemIcons.Application) ? null : newIcon;
+    }
+
+    private void OnThemeChanged()
+    {
+        // SystemEvents fires from its own hidden-window thread, not
+        // necessarily ours -- marshal before touching the NotifyIcon.
+        _syncForm.BeginInvoke(ApplyTrayIcon);
     }
 
     private void WireHooks()
@@ -133,7 +178,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             {
                 bool nowEnabled = _controller.ToggleEnabled(hWnd);
                 ShowStatus(nowEnabled ? "Window Enabled!" : "Window Disabled!", e.X, e.Y);
-                _keyboard.MarkWinConsumed();
+                KeyboardHook.SuppressMenuActivation();
                 e.Handled = true;
             }
         }
@@ -173,7 +218,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             {
                 bool hasBorder = _controller.ToggleBorder(hWnd);
                 ShowStatus(hasBorder ? "Border Restored" : "Border Removed", e.X, e.Y);
-                _keyboard.MarkWinConsumed();
+                KeyboardHook.SuppressMenuActivation();
                 e.Handled = true;
             }
         }
@@ -223,8 +268,21 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         if (_dragMode == DragMode.Move)
         {
-            int newX = _dragLockPrimary ? _dragStartRect.Left : _dragStartRect.Left + dx;
-            int newY = _dragLockSecondary ? _dragStartRect.Top : _dragStartRect.Top + dy;
+            int naiveX = _dragLockPrimary ? _dragStartRect.Left : _dragStartRect.Left + dx;
+            int naiveY = _dragLockSecondary ? _dragStartRect.Top : _dragStartRect.Top + dy;
+
+            int newX = naiveX, newY = naiveY;
+            var work = Screen.FromHandle((IntPtr)_dragTarget).WorkingArea;
+
+            // A locked axis (Ctrl/Shift) doesn't move at all, so there's
+            // nothing to snap on it.
+            if (!_dragLockPrimary)
+                (newX, _snapX) = SnapResistance.Apply(naiveX, _dragInsets.Left, _dragInsets.Right,
+                    _dragStartRect.Width, work.Left, work.Right, _snapX);
+            if (!_dragLockSecondary)
+                (newY, _snapY) = SnapResistance.Apply(naiveY, _dragInsets.Top, _dragInsets.Bottom,
+                    _dragStartRect.Height, work.Top, work.Bottom, _snapY);
+
             _controller.Move(_dragTarget, newX, newY);
         }
         else
@@ -250,6 +308,10 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _dragStartCursorY = cursorY;
         _dragLockPrimary = lockPrimary;
         _dragLockSecondary = lockSecondary;
+
+        _snapX = default;
+        _snapY = default;
+        _dragInsets = mode == DragMode.Move ? WindowController.GetBorderInsets(hWnd) : default;
     }
 
     private void EndDrag()
@@ -274,8 +336,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
             if (_controller.IsApprovedWindow(hWnd))
             {
                 e.Handled = true;
-                _lastDispatchedVk = e.VirtualKeyCode;
-                _keyboard.MarkWinConsumed();
+                _pendingKeyUps.Add(e.VirtualKeyCode);
+                KeyboardHook.SuppressMenuActivation();
                 _syncForm.BeginInvoke(() => RenamePrompt(hWnd));
             }
             return;
@@ -288,7 +350,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             if (info != null)
             {
                 e.Handled = true;
-                _lastDispatchedVk = e.VirtualKeyCode;
+                _pendingKeyUps.Add(e.VirtualKeyCode);
                 _syncForm.BeginInvoke(() =>
                 {
                     Clipboard.SetText(info);
@@ -301,8 +363,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (MatchesPauseCombo(e))
         {
             e.Handled = true;
-            _lastDispatchedVk = e.VirtualKeyCode;
-            _keyboard.MarkWinConsumed();
+            _pendingKeyUps.Add(e.VirtualKeyCode);
+            KeyboardHook.SuppressMenuActivation();
             _syncForm.BeginInvoke(TogglePause);
             return;
         }
@@ -311,20 +373,17 @@ internal sealed class TrayApplicationContext : ApplicationContext
         if (_hotkeyMap.TryGetValue(combo, out var action) && action.Enabled)
         {
             e.Handled = true;
-            _lastDispatchedVk = e.VirtualKeyCode;
+            _pendingKeyUps.Add(e.VirtualKeyCode);
             if (combo.Win)
-                _keyboard.MarkWinConsumed();
+                KeyboardHook.SuppressMenuActivation();
             DispatchAction(action);
         }
     }
 
     private void OnKeyUp(KeyEventArgsLL e)
     {
-        if (_lastDispatchedVk == e.VirtualKeyCode)
-        {
+        if (_pendingKeyUps.Remove(e.VirtualKeyCode))
             e.Handled = true;
-            _lastDispatchedVk = null;
-        }
     }
 
     private static bool MatchesRenameCombo(KeyEventArgsLL e) =>
@@ -356,11 +415,32 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private void RebuildHotkeyMap()
     {
         var map = new Dictionary<HotkeyCombo, ActionDefinition>();
+
         foreach (var action in _registry.Actions)
         {
             if (action.Enabled && !action.Hotkey.IsEmpty && !map.ContainsKey(action.Hotkey))
                 map[action.Hotkey] = action;
         }
+
+        foreach (var seq in _sequences)
+        {
+            if (!seq.Enabled || seq.Hotkey.IsEmpty || map.ContainsKey(seq.Hotkey))
+                continue;
+
+            map[seq.Hotkey] = new ActionDefinition
+            {
+                Id = $"sequence:{seq.Id}",
+                DisplayName = seq.DisplayName,
+                Category = ActionCategory.Window,
+                HelpText = $"Cycles through {seq.Steps.Count} saved position(s) on repeated presses.",
+                DefaultHotkey = seq.Hotkey,
+                Target = ActionTarget.ForegroundWindow,
+                Execute = hWnd => _sequenceRunner.Apply(seq, hWnd),
+                Hotkey = seq.Hotkey,
+                Enabled = true,
+            };
+        }
+
         _hotkeyMap = map;
     }
 
@@ -394,14 +474,28 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void OpenSettings()
     {
-        using var form = new SettingsForm(_registry.Actions, _keyboard);
+        using var form = new SettingsForm(_registry.Actions, _keyboard, _appConfig, ManageSequences);
         if (form.ShowDialog() == DialogResult.OK)
         {
-            ConfigStore.Save(_registry.Actions);
+            ConfigStore.Save(_appConfig, _registry.Actions);
             RebuildHotkeyMap();
         }
         // On Cancel, SettingsForm has already reverted the shared action
-        // objects to their pre-dialog state, so there's nothing to undo here.
+        // objects (and the cycle-option) to their pre-dialog state, so
+        // there's nothing to undo here.
+    }
+
+    /// <summary>
+    /// Opens the sequence manager. Unlike OpenSettings, edits there take
+    /// effect immediately (no Cancel-discards-everything), so this always
+    /// saves and rebuilds when it closes.
+    /// </summary>
+    private void ManageSequences()
+    {
+        using var form = new SequenceManagerForm(_sequences, _keyboard);
+        form.ShowDialog();
+        ConfigStore.Save(_appConfig, _registry.Actions);
+        RebuildHotkeyMap();
     }
 
     private void TogglePause()
@@ -415,7 +509,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     private void ExitApp()
     {
+        ThemeDetector.ThemeChanged -= OnThemeChanged;
         _trayIcon.Visible = false;
+        _ownedTrayIcon?.Dispose();
         _keyboard.Dispose();
         _mouse.Dispose();
         _syncForm.Dispose();

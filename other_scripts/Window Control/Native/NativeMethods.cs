@@ -61,7 +61,11 @@ internal static class NativeMethods
 
     public const int SW_RESTORE = 9;
     public const int SW_MAXIMIZE = 3;
+    public const int SW_SHOWMAXIMIZED = 3; // same value as SW_MAXIMIZE; named separately since it's read from WINDOWPLACEMENT.showCmd rather than passed to ShowWindow
     public const int SW_MINIMIZE = 6;
+    public const int SW_SHOWMINIMIZED = 2; // WINDOWPLACEMENT.showCmd's minimized value -- NOT the same constant as SW_MINIMIZE
+
+    public const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
 
     public static readonly nint HWND_TOPMOST = -1;
     public static readonly nint HWND_NOTOPMOST = -2;
@@ -72,6 +76,12 @@ internal static class NativeMethods
 
     public const uint INPUT_KEYBOARD = 1;
     public const uint KEYEVENTF_KEYUP = 0x0002;
+
+    /// <summary>"No mapping" -- permanently reserved to correspond to no real key, unlike merely-"currently unassigned" codes (e.g. vk07, safe for years until Windows 10 1909 claimed it for Game Bar). Used as an inert masking keystroke.</summary>
+    public const int VK_MASK_NONE = 0xFF;
+
+    /// <summary>KBDLLHOOKSTRUCT.flags bit set on synthetic input generated via SendInput.</summary>
+    public const uint LLKHF_INJECTED = 0x00000010;
 
     public const int VK_TAB = 0x09;
     public const int VK_ESCAPE = 0x1B;
@@ -104,6 +114,17 @@ internal static class NativeMethods
         public uint flags;
         public uint time;
         public nint dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WINDOWPLACEMENT
+    {
+        public int length;
+        public int flags;
+        public int showCmd;
+        public POINT ptMinPosition;
+        public POINT ptMaxPosition;
+        public RECT rcNormalPosition;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -245,4 +266,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetWindowPlacement(nint hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPlacement(nint hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+    /// <summary>Returns an HRESULT; 0 (S_OK) on success.</summary>
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(nint hWnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
 }

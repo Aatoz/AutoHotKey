@@ -24,6 +24,7 @@ internal sealed class ActionRegistry
 
     public ActionRegistry(
         WindowController controller,
+        AppConfig appConfig,
         Action openSettings,
         Action quitApp,
         Action<nint> showQuickMenu)
@@ -53,9 +54,13 @@ internal sealed class ActionRegistry
         // ---- Window: maximize / minimize --------------------------------------
 
         list.Add(Window("maximize-window", "Maximize Window",
-            "Maximizes the focused window.",
+            "Maximizes the focused window (or cycles Maximize -> Minimize -> Restore if that option is enabled).",
             H(ctrl: true, alt: true, key: Keys.PageUp),
-            hWnd => WindowController.Maximize(hWnd)));
+            hWnd =>
+            {
+                if (appConfig.CycleMinimizeMaximize) WindowController.CycleMaximize(hWnd);
+                else WindowController.Maximize(hWnd);
+            }));
 
         list.Add(Window("maximize-horizontally", "Maximize Horizontally",
             "Stretches the focused window to the full width of its monitor.",
@@ -73,9 +78,13 @@ internal sealed class ActionRegistry
             hWnd => controller.MaximizeAcrossAllMonitors(hWnd)));
 
         list.Add(Window("minimize-window", "Minimize Window",
-            "Minimizes the focused window.",
+            "Minimizes the focused window (or cycles Minimize -> Maximize -> Restore if that option is enabled).",
             H(ctrl: true, alt: true, key: Keys.PageDown),
-            hWnd => WindowController.Minimize(hWnd)));
+            hWnd =>
+            {
+                if (appConfig.CycleMinimizeMaximize) WindowController.CycleMinimize(hWnd);
+                else WindowController.Minimize(hWnd);
+            }));
 
         // ---- Window: half / quarter resize --------------------------------------
 
@@ -112,22 +121,22 @@ internal sealed class ActionRegistry
         // ---- Window: snap ---------------------------------------------------------
 
         list.Add(Window("snap-top-left", "Snap to Top Left",
-            "Snaps the focused window to the top left corner of its monitor.",
+            "Moves the focused window to the top left corner of its monitor, without resizing it.",
             H(win: true, alt: true, key: Keys.Left),
             hWnd => controller.SnapToCorner(hWnd, Corner.TopLeft)));
 
         list.Add(Window("snap-top-right", "Snap to Top Right",
-            "Snaps the focused window to the top right corner of its monitor.",
+            "Moves the focused window to the top right corner of its monitor, without resizing it.",
             H(win: true, alt: true, key: Keys.Right),
             hWnd => controller.SnapToCorner(hWnd, Corner.TopRight)));
 
         list.Add(Window("snap-bottom-left", "Snap to Bottom Left",
-            "Snaps the focused window to the bottom left corner of its monitor.",
+            "Moves the focused window to the bottom left corner of its monitor, without resizing it.",
             H(win: true, ctrl: true, alt: true, key: Keys.Left),
             hWnd => controller.SnapToCorner(hWnd, Corner.BottomLeft)));
 
         list.Add(Window("snap-bottom-right", "Snap to Bottom Right",
-            "Snaps the focused window to the bottom right corner of its monitor.",
+            "Moves the focused window to the bottom right corner of its monitor, without resizing it.",
             H(win: true, ctrl: true, alt: true, key: Keys.Right),
             hWnd => controller.SnapToCorner(hWnd, Corner.BottomRight)));
 

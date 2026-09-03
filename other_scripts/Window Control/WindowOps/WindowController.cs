@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using static WindowControl.Native.NativeMethods;
@@ -7,6 +8,10 @@ namespace WindowControl.WindowOps;
 internal enum Edge { Left, Right, Top, Bottom }
 internal enum Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 internal enum MonitorDirection { Left, Right }
+internal enum WindowShowState { Normal, Minimized, Maximized }
+
+/// <summary>How much bigger a window's GetWindowRect is than its true visible bounds, per edge.</summary>
+internal readonly record struct WindowInsets(int Left, int Top, int Right, int Bottom);
 
 /// <summary>
 /// All the actual window-manipulation operations (move, resize, enable/disable,
@@ -58,6 +63,36 @@ internal sealed class WindowController
     {
         GetWindowRect(hWnd, out var rect);
         return rect;
+    }
+
+    /// <summary>
+    /// The window's true visible bounds, excluding the invisible resize
+    /// border DWM adds around most classic Win32 windows (GetWindowRect
+    /// includes that padding, which varies by app framework -- WPF/UWP and
+    /// many Electron/Chromium apps have little or none, while classic
+    /// resizable Win32 windows typically have several pixels on each side).
+    /// Falls back to GetWindowRect if DWM can't answer (e.g. the window was
+    /// never shown). Not affected by high-contrast themes: unlike Windows
+    /// 7/8, Windows 10/11 no longer has a DWM-composition-disabled "classic"
+    /// mode, so this stays reliable regardless of theme.
+    /// </summary>
+    public static RECT GetVisualRect(nint hWnd)
+    {
+        if (DwmGetWindowAttribute(hWnd, DWMWA_EXTENDED_FRAME_BOUNDS, out var rect, Marshal.SizeOf<RECT>()) == 0)
+            return rect;
+        return GetRect(hWnd);
+    }
+
+    /// <summary>How much bigger GetWindowRect is than the window's true visible bounds, per edge.</summary>
+    public static WindowInsets GetBorderInsets(nint hWnd)
+    {
+        var raw = GetRect(hWnd);
+        var visual = GetVisualRect(hWnd);
+        return new WindowInsets(
+            visual.Left - raw.Left,
+            visual.Top - raw.Top,
+            raw.Right - visual.Right,
+            raw.Bottom - visual.Bottom);
     }
 
     public void Move(nint hWnd, int newX, int newY)
@@ -136,9 +171,64 @@ internal sealed class WindowController
 
     public static void Minimize(nint hWnd) => ShowWindow(hWnd, SW_MINIMIZE);
 
+    public static void Restore(nint hWnd) => ShowWindow(hWnd, SW_RESTORE);
+
+    public static WindowShowState GetShowState(nint hWnd)
+    {
+        var placement = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
+        GetWindowPlacement(hWnd, ref placement);
+        return placement.showCmd switch
+        {
+            SW_SHOWMAXIMIZED => WindowShowState.Maximized,
+            SW_SHOWMINIMIZED => WindowShowState.Minimized,
+            _ => WindowShowState.Normal,
+        };
+    }
+
+    /// <summary>Minimize -> Maximize -> Restore -> Minimize -> ... (the opt-in WinSplit-style cycling).</summary>
+    public static void CycleMinimize(nint hWnd)
+    {
+        switch (GetShowState(hWnd))
+        {
+            case WindowShowState.Normal: Minimize(hWnd); break;
+            case WindowShowState.Minimized: Maximize(hWnd); break;
+            case WindowShowState.Maximized: Restore(hWnd); break;
+        }
+    }
+
+    /// <summary>Maximize -> Minimize -> Restore -> Maximize -> ... (the opt-in WinSplit-style cycling).</summary>
+    public static void CycleMaximize(nint hWnd)
+    {
+        switch (GetShowState(hWnd))
+        {
+            case WindowShowState.Normal: Maximize(hWnd); break;
+            case WindowShowState.Maximized: Minimize(hWnd); break;
+            case WindowShowState.Minimized: Restore(hWnd); break;
+        }
+    }
+
+    /// <summary>
+    /// Places the window at a rect given as fractions (0..1) of its current
+    /// monitor's work area -- what a Sequence step applies. Restores the
+    /// window first if it's minimized/maximized, since the requested size
+    /// wouldn't otherwise take visible effect.
+    /// </summary>
+    public void SetFractionalRect(nint hWnd, double xFrac, double yFrac, double widthFrac, double heightFrac)
+    {
+        if (GetShowState(hWnd) != WindowShowState.Normal)
+            Restore(hWnd);
+
+        var work = Screen.FromHandle((IntPtr)hWnd).WorkingArea;
+        int x = work.Left + (int)Math.Round(work.Width * xFrac);
+        int y = work.Top + (int)Math.Round(work.Height * yFrac);
+        int w = (int)Math.Round(work.Width * widthFrac);
+        int h = (int)Math.Round(work.Height * heightFrac);
+        SetWindowPos(hWnd, 0, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
     public void MaximizeHorizontally(nint hWnd)
     {
-        RestoreIfMaximized(hWnd);
+        Restore(hWnd);
         var work = Screen.FromHandle((IntPtr)hWnd).WorkingArea;
         var rect = GetRect(hWnd);
         SetWindowPos(hWnd, 0, work.Left, rect.Top, work.Width, rect.Height, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -146,7 +236,7 @@ internal sealed class WindowController
 
     public void MaximizeVertically(nint hWnd)
     {
-        RestoreIfMaximized(hWnd);
+        Restore(hWnd);
         var work = Screen.FromHandle((IntPtr)hWnd).WorkingArea;
         var rect = GetRect(hWnd);
         SetWindowPos(hWnd, 0, rect.Left, work.Top, rect.Width, work.Height, SWP_NOZORDER | SWP_NOACTIVATE);
@@ -155,12 +245,11 @@ internal sealed class WindowController
     /// <summary>Stretches the window across the combined bounds of every monitor.</summary>
     public void MaximizeAcrossAllMonitors(nint hWnd)
     {
-        RestoreIfMaximized(hWnd);
+        Restore(hWnd);
         var v = SystemInformation.VirtualScreen;
         SetWindowPos(hWnd, 0, v.Left, v.Top, v.Width, v.Height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    private static void RestoreIfMaximized(nint hWnd) => ShowWindow(hWnd, SW_RESTORE);
 
     // --- Half / quarter resize -------------------------------------------------
 
@@ -188,21 +277,21 @@ internal sealed class WindowController
         SetWindowPos(hWnd, 0, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    /// <summary>Quarter-size snap into a literal corner of the current monitor's work area.</summary>
+    /// <summary>Moves the window so it touches the given corner of its monitor's work area, preserving its current size.</summary>
     public void SnapToCorner(nint hWnd, Corner corner)
     {
         var work = Screen.FromHandle((IntPtr)hWnd).WorkingArea;
-        int w = work.Width / 2;
-        int h = work.Height / 2;
+        var rect = GetRect(hWnd);
+
         var (x, y) = corner switch
         {
             Corner.TopLeft => (work.Left, work.Top),
-            Corner.TopRight => (work.Left + work.Width - w, work.Top),
-            Corner.BottomLeft => (work.Left, work.Top + work.Height - h),
-            Corner.BottomRight => (work.Left + work.Width - w, work.Top + work.Height - h),
+            Corner.TopRight => (work.Right - rect.Width, work.Top),
+            Corner.BottomLeft => (work.Left, work.Bottom - rect.Height),
+            Corner.BottomRight => (work.Right - rect.Width, work.Bottom - rect.Height),
             _ => (work.Left, work.Top),
         };
-        SetWindowPos(hWnd, 0, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+        Move(hWnd, x, y);
     }
 
     /// <summary>
@@ -281,17 +370,33 @@ internal sealed class WindowController
 
         var fromWork = current.WorkingArea;
         var toWork = screens[targetIndex].WorkingArea;
-        var rect = GetRect(hWnd);
 
-        // Preserve the window's offset from its current monitor's work-area
-        // corner, translated onto the target monitor, clamped so it can't end
-        // up hanging off the edge of a smaller target monitor.
-        int offsetX = rect.Left - fromWork.Left;
-        int offsetY = rect.Top - fromWork.Top;
-        int newX = Math.Clamp(toWork.Left + offsetX, toWork.Left, Math.Max(toWork.Left, toWork.Right - rect.Width));
-        int newY = Math.Clamp(toWork.Top + offsetY, toWork.Top, Math.Max(toWork.Top, toWork.Bottom - rect.Height));
+        var placement = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
+        GetWindowPlacement(hWnd, ref placement);
 
-        Move(hWnd, newX, newY);
+        // rcNormalPosition is the window's *restored* bounds -- unlike
+        // GetWindowRect, which for a maximized window returns the current,
+        // monitor-covering bounds (already stretched/DPI-adjusted for
+        // whichever monitor it's maximized on). Translating rcNormalPosition
+        // and leaving showCmd untouched is what lets a maximized window land
+        // maximized on the target monitor, at that monitor's own scaling,
+        // instead of straddling both monitors or landing at the wrong size.
+        // (This process is declared Per-Monitor-V2 DPI aware in the csproj,
+        // which is what makes these coordinates real physical pixels that
+        // are safe to translate directly between monitors of different
+        // scale factors -- a DPI-unaware process would need extra scaling
+        // math here.)
+        var normal = placement.rcNormalPosition;
+        int width = normal.Right - normal.Left;
+        int height = normal.Bottom - normal.Top;
+        int offsetX = normal.Left - fromWork.Left;
+        int offsetY = normal.Top - fromWork.Top;
+
+        int newLeft = Math.Clamp(toWork.Left + offsetX, toWork.Left, Math.Max(toWork.Left, toWork.Right - width));
+        int newTop = Math.Clamp(toWork.Top + offsetY, toWork.Top, Math.Max(toWork.Top, toWork.Bottom - height));
+
+        placement.rcNormalPosition = new RECT { Left = newLeft, Top = newTop, Right = newLeft + width, Bottom = newTop + height };
+        SetWindowPlacement(hWnd, ref placement);
     }
 
     // --- Always on top -----------------------------------------------------------

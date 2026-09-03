@@ -20,26 +20,31 @@ internal sealed class SettingsForm : Form
 {
     private readonly IReadOnlyList<ActionDefinition> _actions;
     private readonly KeyboardHook _keyboard;
+    private readonly AppConfig _appConfig;
+    private readonly bool _originalCycleMinimizeMaximize;
     private readonly Dictionary<string, (bool Enabled, HotkeyCombo Hotkey)> _snapshot = new();
 
     private readonly ListView _list;
     private readonly Button _recordButton;
     private readonly Button _resetButton;
+    private readonly CheckBox _cycleMinMaxCheckBox;
     private readonly Label _statusLabel;
 
     private ActionDefinition? Selected =>
         _list.SelectedItems.Count > 0 ? (ActionDefinition)_list.SelectedItems[0].Tag! : null;
 
-    public SettingsForm(IReadOnlyList<ActionDefinition> actions, KeyboardHook keyboard)
+    public SettingsForm(IReadOnlyList<ActionDefinition> actions, KeyboardHook keyboard, AppConfig appConfig, Action manageSequences)
     {
         _actions = actions;
         _keyboard = keyboard;
+        _appConfig = appConfig;
+        _originalCycleMinimizeMaximize = appConfig.CycleMinimizeMaximize;
 
         Text = "Window Control Settings";
         StartPosition = FormStartPosition.CenterScreen;
         MinimizeBox = false;
-        ClientSize = new Size(720, 520);
-        MinimumSize = new Size(560, 360);
+        ClientSize = new Size(720, 560);
+        MinimumSize = new Size(560, 400);
 
         _list = new ListView
         {
@@ -87,7 +92,11 @@ internal sealed class SettingsForm : Form
         okButton.Click += OnOkClick;
 
         var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, AutoSize = true };
-        cancelButton.Click += (_, _) => RevertToSnapshot();
+        cancelButton.Click += (_, _) =>
+        {
+            RevertToSnapshot();
+            _appConfig.CycleMinimizeMaximize = _originalCycleMinimizeMaximize;
+        };
 
         var buttonPanel = new FlowLayoutPanel
         {
@@ -101,8 +110,30 @@ internal sealed class SettingsForm : Form
         buttonPanel.Controls.Add(_resetButton);
         buttonPanel.Controls.Add(_recordButton);
 
+        var sequencesButton = new Button { Text = "Manage Sequences...", AutoSize = true };
+        sequencesButton.Click += (_, _) => manageSequences();
+
+        _cycleMinMaxCheckBox = new CheckBox
+        {
+            Text = "Minimize/Maximize hotkeys cycle through states (Minimize \u2192 Maximize \u2192 Restore)",
+            AutoSize = true,
+            Checked = appConfig.CycleMinimizeMaximize,
+        };
+        _cycleMinMaxCheckBox.CheckedChanged += (_, _) => _appConfig.CycleMinimizeMaximize = _cycleMinMaxCheckBox.Checked;
+
+        var optionsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.LeftToRight,
+            Height = 36,
+            Padding = new Padding(8, 6, 8, 0),
+        };
+        optionsPanel.Controls.Add(sequencesButton);
+        optionsPanel.Controls.Add(_cycleMinMaxCheckBox);
+
         Controls.Add(_list);
         Controls.Add(buttonPanel);
+        Controls.Add(optionsPanel);
         Controls.Add(_statusLabel);
 
         AcceptButton = okButton;
