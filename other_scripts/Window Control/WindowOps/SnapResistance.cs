@@ -67,4 +67,37 @@ internal static class SnapResistance
 
         return (naiveValue, default);
     }
+
+    /// <summary>
+    /// Same idea as <see cref="Apply"/>, but for resizing from a fixed
+    /// top-left anchor: <paramref name="fixedLow"/> (the window's Left or
+    /// Top) never moves, so only the growing edge -- Left+Width or
+    /// Top+Height -- can approach a monitor boundary, and it can only
+    /// approach the *far* line (Right or Bottom), never the near one.
+    /// </summary>
+    /// <param name="naiveSize">Where this axis's size would land with no snapping.</param>
+    /// <param name="fixedLow">The window's unmoving Left (for width) or Top (for height).</param>
+    /// <param name="trailingInset">Border inset on the growing side (Right for width, Bottom for height).</param>
+    /// <param name="highLine">The monitor work area's far edge for this axis (Right for width, Bottom for height).</param>
+    public static (int Size, AxisSnapState State) ApplySize(
+        int naiveSize, int fixedLow, int trailingInset, int highLine, AxisSnapState state)
+    {
+        if (state.Snapped)
+        {
+            if (Math.Abs(naiveSize - state.SnappedValue) <= ReleaseThreshold)
+                return (state.SnappedValue, state);
+
+            state.Snapped = false;
+        }
+
+        int visualHigh = fixedLow + naiveSize - trailingInset;
+
+        if (Math.Abs(visualHigh - highLine) <= SnapThreshold)
+        {
+            int snappedSize = highLine + trailingInset - fixedLow;
+            return (snappedSize, new AxisSnapState { Snapped = true, SnappedValue = snappedSize });
+        }
+
+        return (naiveSize, default);
+    }
 }

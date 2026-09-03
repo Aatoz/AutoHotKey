@@ -53,9 +53,9 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private bool _dragLockPrimary;   // Ctrl:  locks X (move) / width (resize)
     private bool _dragLockSecondary; // Shift: locks Y (move) / height (resize)
 
-    // Snap resistance for DragMode.Move only (see SnapResistance). Insets are
-    // captured once at drag start -- a window's DWM border padding doesn't
-    // change mid-drag.
+    // Snap resistance for both drag modes (see SnapResistance -- Apply for
+    // move, ApplySize for resize). Insets are captured once at drag start --
+    // a window's DWM border padding doesn't change mid-drag.
     private AxisSnapState _snapX;
     private AxisSnapState _snapY;
     private WindowInsets _dragInsets;
@@ -287,8 +287,20 @@ internal sealed class TrayApplicationContext : ApplicationContext
         }
         else
         {
-            int newW = _dragLockPrimary ? _dragStartRect.Width : _dragStartRect.Width + dx;
-            int newH = _dragLockSecondary ? _dragStartRect.Height : _dragStartRect.Height + dy;
+            int naiveW = _dragLockPrimary ? _dragStartRect.Width : _dragStartRect.Width + dx;
+            int naiveH = _dragLockSecondary ? _dragStartRect.Height : _dragStartRect.Height + dy;
+
+            int newW = naiveW, newH = naiveH;
+            var work = Screen.FromHandle((IntPtr)_dragTarget).WorkingArea;
+
+            // Only the growing edge can ever cross a monitor boundary here --
+            // the window's top-left is fixed for the whole resize -- so a
+            // locked axis (Ctrl/Shift) needs no resistance either way.
+            if (!_dragLockPrimary)
+                (newW, _snapX) = SnapResistance.ApplySize(naiveW, _dragStartRect.Left, _dragInsets.Right, work.Right, _snapX);
+            if (!_dragLockSecondary)
+                (newH, _snapY) = SnapResistance.ApplySize(naiveH, _dragStartRect.Top, _dragInsets.Bottom, work.Bottom, _snapY);
+
             _controller.Resize(_dragTarget, newW, newH);
         }
 
@@ -311,7 +323,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
         _snapX = default;
         _snapY = default;
-        _dragInsets = mode == DragMode.Move ? WindowController.GetBorderInsets(hWnd) : default;
+        _dragInsets = WindowController.GetBorderInsets(hWnd); // needed for resistance on both move and resize
     }
 
     private void EndDrag()
