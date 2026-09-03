@@ -10,7 +10,7 @@ namespace WindowControl.Config;
 /// corner to resize it. StepRect is always normalized (0..1) against the
 /// proxy's own bounds, so it's resolution-independent.
 /// </summary>
-internal sealed class MonitorProxyControl : Control
+internal sealed class MonitorProxyControl : Panel
 {
     private const int GripSize = 10;
     private const float MinFraction = 0.05f;
