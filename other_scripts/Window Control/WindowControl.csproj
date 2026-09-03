@@ -10,6 +10,7 @@
     <AssemblyName>WindowControl</AssemblyName>
     <RootNamespace>WindowControl</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <ApplicationIcon>Resources\icon-light.ico</ApplicationIcon>
     <!--
       Global hooks only see windows at the same or lower UAC integrity level
       as this process (User Interface Privilege Isolation). If you need to
@@ -18,5 +19,20 @@
       requestedExecutionLevel="requireAdministrator" for that case.
     -->
   </PropertyGroup>
+
+  <ItemGroup>
+    <!--
+      Tray icon assets. icon-light.ico is used when Windows is in light mode,
+      icon-dark.ico in dark mode (see UI/ThemeDetector.cs) -- the exe's own
+      static file icon (ApplicationIcon above) always uses the light version,
+      since that can't be theme-reactive.
+    -->
+    <Content Include="Resources\icon-light.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Resources\icon-dark.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
 </Project>
